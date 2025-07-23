@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/doc/pdf-samples/*", "destination": "/doc/pdf-samples/$1" },
+    { "source": "**", "destination": "/index.html" }
+  ]
+} 

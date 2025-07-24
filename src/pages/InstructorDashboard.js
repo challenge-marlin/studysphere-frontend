@@ -31,8 +31,19 @@ const InstructorDashboard = () => {
       navigate('/');
       return;
     }
+
+    // 初期の拠点情報を設定
+    const initialLocation = {
+      id: 'office001',
+      name: '東京教育渋谷校',
+      type: '就労移行支援事業所',
+      organization: 'スタディスフィア株式会社'
+    };
     
-    setCurrentUser(userData);
+    setCurrentUser({
+      ...userData,
+      location: userData.location || initialLocation
+    });
     
     // URLパラメータからタブを設定
     const initialTab = location.search.split('tab=')[1];
@@ -131,13 +142,29 @@ const InstructorDashboard = () => {
     }
   };
 
+  const handleLocationChange = (newLocation) => {
+    // 新しい拠点情報でユーザー情報を更新
+    const updatedUser = {
+      ...currentUser,
+      location: newLocation
+    };
+    setCurrentUser(updatedUser);
+    
+    // LocalStorageも更新
+    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+  };
+
   if (!currentUser) {
     return <div>Loading...</div>;
   }
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
-      <InstructorHeader user={currentUser} onLogout={handleLogout} />
+      <InstructorHeader 
+        user={currentUser} 
+        onLogout={handleLogout} 
+        onLocationChange={handleLocationChange}
+      />
       
       <div className="flex flex-col flex-1 h-[calc(100vh-80px)] overflow-hidden">
         <aside className="w-full bg-white text-gray-800 flex-shrink-0 overflow-y-auto border-b border-gray-200">

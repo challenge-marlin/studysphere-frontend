@@ -6,9 +6,11 @@ const StudentManagement = ({ teacherId }) => {
   
   // タグ管理用のstate
   const [showTagModal, setShowTagModal] = useState(false);
+  const [showTodayActiveModal, setShowTodayActiveModal] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [tagsToAdd, setTagsToAdd] = useState([]);
+  const [todayActiveMessage, setTodayActiveMessage] = useState('');
   const [customTags, setCustomTags] = useState([
     '優秀', '要フォロー', '積極的', '消極的', '欠席が多い', '質問が多い', '理解度高い', '理解度低い'
   ]);
@@ -385,16 +387,13 @@ const StudentManagement = ({ teacherId }) => {
   // フィルタリングされた生徒リストを取得
   const getFilteredStudents = () => {
     let filteredStudents = students;
-    
-    // ロールベースのフィルタリング（管理者は全生徒、指導員は拠点内生徒）
-    if (currentInstructor.role !== 'admin') {
-      filteredStudents = filteredStudents.filter(student => 
-        student.instructorId === currentInstructor.id || // 自分の生徒
-        student.locationId === currentInstructor.locationId // 同一拠点の生徒
-      );
-    }
-    
-    // 検索キーワードでフィルタリング
+    // ロールベースのフィルタを削除
+    // if (currentInstructor.role !== 'admin') {
+    //   filteredStudents = filteredStudents.filter(student => 
+    //     student.instructorId === currentInstructor.id || // 自分の生徒
+    //     student.locationId === currentInstructor.locationId // 同一拠点の生徒
+    //   );
+    // }
     if (searchTerm) {
       filteredStudents = filteredStudents.filter(student =>
         student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -403,21 +402,16 @@ const StudentManagement = ({ teacherId }) => {
         student.instructorName.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-    
-    // タグでフィルタリング
     if (selectedTags.length > 0) {
       filteredStudents = filteredStudents.filter(student =>
         selectedTags.every(tag => student.tags?.includes(tag))
       );
     }
-    
-    // ステータスでフィルタリング
     if (statusFilter !== 'all') {
       filteredStudents = filteredStudents.filter(student =>
         student.status === statusFilter
       );
     }
-    
     return filteredStudents;
   };
 
@@ -425,15 +419,13 @@ const StudentManagement = ({ teacherId }) => {
   const [newStudent, setNewStudent] = useState({
     name: '',
     email: '',
-    locationId: '',
-    canStudyAtHome: false
+    locationId: ''
   });
   
   // 一括入力用のstate
   const [bulkInputMode, setBulkInputMode] = useState(false);
   const [bulkInputText, setBulkInputText] = useState('');
   const [bulkLocationId, setBulkLocationId] = useState('');
-  const [bulkCanStudyAtHome, setBulkCanStudyAtHome] = useState(false);
   
   // 検索・フィルター関連のstate
   const [searchTerm, setSearchTerm] = useState('');
@@ -512,15 +504,15 @@ const StudentManagement = ({ teacherId }) => {
       status: 'active',
       loginToken: generateLoginToken(),
       joinDate: new Date().toISOString().split('T')[0],
-      canStudyAtHome: newStudent.canStudyAtHome,
+      canStudyAtHome: false, // デフォルトでfalseに設定
       tags: generateTags('ITリテラシー・AIの基本', currentInstructor.name, selectedLocation ? selectedLocation.name : '', 0)
     };
     
     setStudents([...students, student]);
-    setNewStudent({ name: '', email: '', locationId: '', canStudyAtHome: false });
+    setNewStudent({ name: '', email: '', locationId: '' });
     setShowAddForm(false);
     
-    alert('生徒を追加しました。');
+    alert('利用者を追加しました。');
   };
 
   // 一括入力で生徒を追加する関数
@@ -561,7 +553,7 @@ const StudentManagement = ({ teacherId }) => {
             status: 'active',
             loginToken: generateLoginToken(),
             joinDate: new Date().toISOString().split('T')[0],
-            canStudyAtHome: bulkCanStudyAtHome,
+            canStudyAtHome: false, // デフォルトでfalseに設定
             tags: generateTags('ITリテラシー・AIの基本', currentInstructor.name, selectedLocation ? selectedLocation.name : '', 0)
           };
           newStudents.push(student);
@@ -573,13 +565,12 @@ const StudentManagement = ({ teacherId }) => {
       setStudents([...students, ...newStudents]);
       setBulkInputText('');
       setBulkLocationId('');
-      setBulkCanStudyAtHome(false);
       setBulkInputMode(false);
       setShowAddForm(false);
       
-      alert(`${newStudents.length}名の生徒を追加しました。`);
+      alert(`${newStudents.length}名の利用者を追加しました。`);
     } else {
-      alert('有効な生徒情報が見つかりませんでした。\n形式: 生徒名,メールアドレス');
+      alert('有効な利用者情報が見つかりませんでした。\n形式: 利用者名,メールアドレス');
     }
   };
 
@@ -630,13 +621,13 @@ const StudentManagement = ({ teacherId }) => {
   };
 
   const deleteStudent = (studentId) => {
-    if (window.confirm('この生徒を削除してもよろしいですか？')) {
+    if (window.confirm('この利用者を削除してもよろしいですか？')) {
       setStudents(students.filter(student => student.id !== studentId));
     }
   };
 
   const handleViewStudentDetail = (studentId) => {
-    // 生徒詳細画面に遷移
+    // 利用者詳細画面に遷移
     window.location.href = `/instructor/student/${studentId}`;
   };
 
@@ -644,21 +635,56 @@ const StudentManagement = ({ teacherId }) => {
     alert(`${studentId}の在宅記録画面を開きます（実装予定）`);
   };
 
-  // 本日有効ボタン：アクティブな生徒全員にメール送信
-  const sendTodayActiveEmails = () => {
+    // 本日有効ボタン：選択した利用者にメール送信
+  const openTodayActiveModal = () => {
     const activeStudents = getFilteredStudents().filter(student => student.status === 'active');
     
     if (activeStudents.length === 0) {
-      alert('送信対象の生徒がいません。');
+      alert('送信対象の利用者がいません。');
       return;
     }
     
-    const confirmMessage = `${activeStudents.length}名の生徒に本日のログインURLをメール送信しますか？\n\n対象生徒:\n${activeStudents.map(s => s.name).join('\n')}`;
+    setShowTodayActiveModal(true);
+  };
+
+  // 本日有効メール送信実行
+  const sendTodayActiveEmails = () => {
+    const selectedActiveStudents = getFilteredStudents().filter(student => 
+      student.status === 'active' && selectedStudents.includes(student.id)
+    );
     
-    if (window.confirm(confirmMessage)) {
-      // 実際の実装では、ここでバックエンドAPIを呼び出してメール送信
-      alert(`${activeStudents.length}名の生徒にログインURLを送信しました。\n\n送信済み:\n${activeStudents.map(s => `${s.name} (${s.email})`).join('\n')}`);
+    if (selectedActiveStudents.length === 0) {
+      alert('送信対象の利用者を選択してください。');
+      return;
     }
+    
+    // VoiceCareSystemのアナウンスメッセージに追加
+    if (todayActiveMessage.trim()) {
+      const announcement = {
+        id: Date.now(),
+        message: todayActiveMessage,
+        sentDate: new Date().toLocaleString('ja-JP'),
+        recipients: selectedActiveStudents.map(s => s.name),
+        replies: []
+      };
+      
+      // ローカルストレージから既存のアナウンスを取得
+      const existingAnnouncements = JSON.parse(localStorage.getItem('voiceCareAnnouncements') || '[]');
+      const updatedAnnouncements = [announcement, ...existingAnnouncements];
+      localStorage.setItem('voiceCareAnnouncements', JSON.stringify(updatedAnnouncements));
+    }
+    
+    // メール送信処理（実際の実装では、ここでバックエンドAPIを呼び出してメール送信）
+    const message = todayActiveMessage.trim() 
+      ? `本日のログインURLをお送りします。\n\n${todayActiveMessage}\n\nログインURL: http://localhost:3000/student/login/`
+      : '本日のログインURLをお送りします。\n\nログインURL: http://localhost:3000/student/login/';
+    
+    alert(`${selectedActiveStudents.length}名の利用者にメールを送信しました。\n\n送信済み:\n${selectedActiveStudents.map(s => `${s.name} (${s.email})`).join('\n')}\n\nメッセージ: ${todayActiveMessage.trim() || 'なし'}`);
+    
+    // モーダルを閉じて状態をリセット
+    setShowTodayActiveModal(false);
+    setSelectedStudents([]);
+    setTodayActiveMessage('');
   };
 
   // 個別メール再送信
@@ -692,14 +718,14 @@ const StudentManagement = ({ teacherId }) => {
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div className="flex-1">
             <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
-              👥 生徒管理
+              👥 利用者一覧
             </h2>
             {(currentInstructor.role === 'instructor' || currentInstructor.role === 'teacher') && (
               <div className="flex items-center gap-2 text-gray-600">
                 <span className="text-lg">📍</span>
                 <div>
                   <p className="font-medium">{currentInstructor.locationName} ({currentInstructor.facilityName})</p>
-                  <p className="text-sm text-gray-500">※同一拠点の他の指導員の生徒も管理できます</p>
+                  <p className="text-sm text-gray-500">※同一拠点の他の指導員の利用者も管理できます</p>
                 </div>
               </div>
             )}
@@ -713,7 +739,7 @@ const StudentManagement = ({ teacherId }) => {
             </button>
             <button 
               className="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2"
-              onClick={sendTodayActiveEmails}
+              onClick={openTodayActiveModal}
             >
               📧 本日有効
             </button>
@@ -721,7 +747,7 @@ const StudentManagement = ({ teacherId }) => {
               className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2"
               onClick={() => setShowAddForm(true)}
             >
-              + 新しい生徒を追加
+              + 新しい利用者を追加
             </button>
           </div>
         </div>
@@ -736,7 +762,7 @@ const StudentManagement = ({ teacherId }) => {
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="生徒名、メール、クラス、指導員名で検索..."
+                  placeholder="利用者名、メール、クラス、指導員名で検索..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full px-4 py-3 pl-12 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
@@ -821,7 +847,6 @@ const StudentManagement = ({ teacherId }) => {
                     setBulkInputMode(false);
                     setBulkInputText('');
                     setBulkLocationId('');
-                    setBulkCanStudyAtHome(false);
                   }}
                 >
                   ×
@@ -859,7 +884,7 @@ const StudentManagement = ({ teacherId }) => {
                   <>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">生徒名</label>
+                        <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">利用者名</label>
                         <input
                           type="text"
                           id="name"
@@ -867,7 +892,7 @@ const StudentManagement = ({ teacherId }) => {
                           value={newStudent.name}
                           onChange={handleInputChange}
                           required
-                          placeholder="生徒の名前を入力"
+                          placeholder="利用者の名前を入力"
                           className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
                         />
                       </div>
@@ -907,36 +932,24 @@ const StudentManagement = ({ teacherId }) => {
                         </select>
                       </div>
                       
-                      <div className="flex items-center">
-                        <label htmlFor="canStudyAtHome" className="flex items-center gap-3 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            id="canStudyAtHome"
-                            name="canStudyAtHome"
-                            checked={newStudent.canStudyAtHome}
-                            onChange={handleInputChange}
-                            className="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                          />
-                          <span className="text-sm font-semibold text-gray-700">在宅学習可能</span>
-                        </label>
-                      </div>
+
                     </div>
                   </>
                 ) : (
                   // 一括入力モード
                   <>
                     <div>
-                      <label htmlFor="bulkInput" className="block text-sm font-semibold text-gray-700 mb-2">生徒情報（1行に1人）</label>
+                      <label htmlFor="bulkInput" className="block text-sm font-semibold text-gray-700 mb-2">利用者情報（1行に1人）</label>
                       <textarea
                         id="bulkInput"
                         value={bulkInputText}
                         onChange={(e) => setBulkInputText(e.target.value)}
-                        placeholder="生徒名,メールアドレス&#10;例:&#10;田中太郎,tanaka@example.com&#10;佐藤花子,sato@example.com"
+                        placeholder="利用者名,メールアドレス&#10;例:&#10;田中太郎,tanaka@example.com&#10;佐藤花子,sato@example.com"
                         rows={8}
                         required
                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
                       />
-                      <p className="text-sm text-gray-500 mt-2">形式: 生徒名,メールアドレス（カンマ区切り）</p>
+                      <p className="text-sm text-gray-500 mt-2">形式: 利用者名,メールアドレス（カンマ区切り）</p>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -958,18 +971,7 @@ const StudentManagement = ({ teacherId }) => {
                         </select>
                       </div>
                       
-                      <div className="flex items-center">
-                        <label htmlFor="bulkCanStudyAtHome" className="flex items-center gap-3 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            id="bulkCanStudyAtHome"
-                            checked={bulkCanStudyAtHome}
-                            onChange={(e) => setBulkCanStudyAtHome(e.target.checked)}
-                            className="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                          />
-                          <span className="text-sm font-semibold text-gray-700">在宅学習可能</span>
-                        </label>
-                      </div>
+
                     </div>
                   </>
                 )}
@@ -983,7 +985,6 @@ const StudentManagement = ({ teacherId }) => {
                       setBulkInputMode(false);
                       setBulkInputText('');
                       setBulkLocationId('');
-                      setBulkCanStudyAtHome(false);
                     }}
                   >
                     キャンセル
@@ -1025,7 +1026,6 @@ const StudentManagement = ({ teacherId }) => {
                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">メール送信</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">一時停止/再開</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">削除</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">在宅記録</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -1044,7 +1044,7 @@ const StudentManagement = ({ teacherId }) => {
                       <button 
                         className="text-left font-semibold text-indigo-600 hover:text-indigo-800 transition-colors duration-200"
                         onClick={() => handleViewStudentDetail(student.id)}
-                        title="生徒詳細を表示"
+                        title="利用者詳細を表示"
                       >
                         {student.name}
                       </button>
@@ -1164,20 +1164,6 @@ const StudentManagement = ({ teacherId }) => {
                       削除
                     </button>
                   </td>
-                  <td className="px-6 py-4">
-                    {student.canStudyAtHome ? (
-                      <button 
-                        className="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-200 transition-all duration-200"
-                        onClick={() => openRecordModal(student.id)}
-                      >
-                        在宅学習
-                      </button>
-                    ) : (
-                      <span className="px-3 py-1 bg-gray-100 text-gray-500 rounded-lg text-sm">
-                        在宅不可
-                      </span>
-                    )}
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1206,11 +1192,11 @@ const StudentManagement = ({ teacherId }) => {
             </div>
             
             <div className="p-6 space-y-8">
-              {/* 生徒選択セクション */}
+              {/* 利用者選択セクション */}
               <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-6">
-                <h4 className="text-lg font-semibold text-gray-800 mb-4">📋 生徒選択</h4>
+                <h4 className="text-lg font-semibold text-gray-800 mb-4">📋 利用者選択</h4>
                 <div className="flex items-center justify-between mb-4">
-                  <p className="text-gray-700">選択中の生徒: <strong className="text-indigo-600">{selectedStudents.length}名</strong></p>
+                  <p className="text-gray-700">選択中の利用者: <strong className="text-indigo-600">{selectedStudents.length}名</strong></p>
                   <button 
                     className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg font-medium hover:bg-indigo-200 transition-all duration-200"
                     onClick={toggleAllStudents}
@@ -1299,6 +1285,111 @@ const StudentManagement = ({ teacherId }) => {
                   onClick={applyTagsToStudents}
                 >
                   タグを適用
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 本日有効モーダル */}
+      {showTodayActiveModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-2xl font-bold text-gray-800">📧 本日有効メール送信</h3>
+                <button 
+                  className="text-gray-400 hover:text-gray-600 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-all duration-200"
+                  onClick={() => {
+                    setShowTodayActiveModal(false);
+                    setSelectedStudents([]);
+                    setTodayActiveMessage('');
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-8">
+              {/* 利用者選択セクション */}
+              <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl p-6">
+                <h4 className="text-lg font-semibold text-gray-800 mb-4">📋 送信対象利用者選択</h4>
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-gray-700">選択中の利用者: <strong className="text-green-600">{selectedStudents.length}名</strong></p>
+                  <button 
+                    className="px-4 py-2 bg-green-100 text-green-700 rounded-lg font-medium hover:bg-green-200 transition-all duration-200"
+                    onClick={toggleAllStudents}
+                  >
+                    {selectedStudents.length === getFilteredStudents().filter(s => s.status === 'active').length ? '全選択解除' : '全選択'}
+                  </button>
+                </div>
+                
+                <div className="max-h-40 overflow-y-auto space-y-2">
+                  {getFilteredStudents().filter(student => student.status === 'active').map(student => (
+                    <div key={student.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200">
+                      <input
+                        type="checkbox"
+                        checked={selectedStudents.includes(student.id)}
+                        onChange={() => toggleStudentSelection(student.id)}
+                        className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                      />
+                      <div className="flex-1">
+                        <span className="font-medium text-gray-800">{student.name}</span>
+                        <span className="text-sm text-gray-500 ml-2">担当: {student.instructorName}</span>
+                        <span className="text-sm text-gray-500 ml-2">メール: {student.email}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* メッセージ入力セクション */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6">
+                <h4 className="text-lg font-semibold text-gray-800 mb-4">💬 アナウンスメッセージ（オプション）</h4>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">メッセージ内容:</label>
+                    <textarea
+                      value={todayActiveMessage}
+                      onChange={(e) => setTodayActiveMessage(e.target.value)}
+                      placeholder="本日の学習に関する連絡事項や励ましのメッセージを入力してください（空欄でも送信可能）..."
+                      rows={4}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none"
+                    />
+                  </div>
+                  <div className="bg-blue-100 rounded-lg p-3">
+                    <p className="text-sm text-blue-800">
+                      <strong>💡 ヒント:</strong> このメッセージは以下の場所に追加されます：
+                    </p>
+                    <ul className="text-sm text-blue-700 mt-2 space-y-1">
+                      <li>• メール本文に含まれます</li>
+                      <li>• VoiceCareSystemのアナウンスメッセージとして保存されます</li>
+                      <li>• 選択した利用者全員に送信されます</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* アクションボタン */}
+              <div className="flex gap-4 pt-6 border-t border-gray-200">
+                <button 
+                  className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-all duration-200"
+                  onClick={() => {
+                    setShowTodayActiveModal(false);
+                    setSelectedStudents([]);
+                    setTodayActiveMessage('');
+                  }}
+                >
+                  キャンセル
+                </button>
+                <button 
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+                  onClick={sendTodayActiveEmails}
+                  disabled={selectedStudents.length === 0}
+                >
+                  📧 メール送信
                 </button>
               </div>
             </div>

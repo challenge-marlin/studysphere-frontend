@@ -11,7 +11,7 @@ import AdvancedLearningPage from './pages/AdvancedLearningPage';
 import TestPage from './pages/TestPage';
 import TestResultPage from './pages/TestResultPage';
 import CertificatePage from './pages/CertificatePage';
-import StudentDetailPage from './pages/StudentDetailPage';
+import HomeSupportUserDetailPage from './pages/HomeSupportUserDetailPage';
 import DailyRecordsPage from './pages/DailyRecordsPage';
 import HomeSupportDailyRecordsPage from './pages/HomeSupportDailyRecordsPage';
 import HomeSupportEvaluationsPage from './pages/HomeSupportEvaluationsPage';
@@ -44,8 +44,8 @@ function App() {
           <Route path="/student/test" element={<TestPage />} />
           <Route path="/student/test-result" element={<TestResultPage />} />
           <Route path="/student/certificate" element={<CertificatePage />} />
-          {/* 指導員用生徒詳細画面 */}
-          <Route path="/instructor/student/:studentId" element={<StudentDetailPage />} />
+          {/* 指導員用利用者詳細画面 */}
+          <Route path="/instructor/student/:studentId" element={<HomeSupportUserDetailPage />} />
           {/* 在宅支援：日々の記録ページ */}
           <Route path="/instructor/student/:studentId/daily-records" element={<DailyRecordsPage />} />
           {/* 在宅支援管理：日々の記録管理 */}
@@ -53,8 +53,8 @@ function App() {
           {/* 在宅支援管理：達成度評価管理 */}
           <Route path="/instructor/evaluations" element={<HomeSupportEvaluationsPage />} />
           <Route path="/instructor/home-support-evaluations" element={<HomeSupportEvaluationsPage />} />
-          {/* 在宅支援管理：生徒詳細画面 */}
-          <Route path="/instructor/student-detail/:studentId" element={<StudentDetailPage />} />
+          {/* 在宅支援管理：利用者詳細画面 */}
+          <Route path="/instructor/student-detail/:studentId" element={<HomeSupportUserDetailPage />} />
         </Routes>
       </div>
     </Router>

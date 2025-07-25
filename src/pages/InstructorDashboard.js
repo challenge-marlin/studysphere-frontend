@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import InstructorHeader from '../components/InstructorHeader';
-import ClassOverview from '../components/ClassOverview';
+import VoiceCareSystem from '../components/VoiceCareSystem';
 import StudentManagement from '../components/StudentManagement';
 import LocationManagementForInstructor from '../components/LocationManagementForInstructor';
 import HomeSupportEvaluationsPage from './HomeSupportEvaluationsPage';
@@ -173,13 +173,13 @@ const InstructorDashboard = () => {
               className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'overview' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
               onClick={() => setActiveTab('overview')}
             >
-              📊 クラス概要
+              💬 声かけ
             </button>
             <button 
               className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'students' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
               onClick={() => setActiveTab('students')}
             >
-              👥 生徒管理
+              👥 利用者一覧
             </button>
             <button 
               className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'location' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
@@ -220,7 +220,7 @@ const InstructorDashboard = () => {
         </aside>
 
         <main className="flex-1 p-8 overflow-y-auto bg-white">
-          {activeTab === 'overview' && <ClassOverview instructorId={currentUser.id} />}
+          {activeTab === 'overview' && <VoiceCareSystem instructorId={currentUser.id} />}
           {activeTab === 'students' && <StudentManagement instructorId={currentUser.id} />}
           {activeTab === 'location' && <LocationManagementForInstructor currentUser={currentUser} />}
           {activeTab === 'home-support' && <HomeSupportEvaluationsPage />}

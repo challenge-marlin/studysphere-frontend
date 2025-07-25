@@ -4,7 +4,7 @@ import { generateDailyReportPDF, generateWeeklyReportPDF, generateMonthlyReportP
 import DailyReportTab from '../components/DailyReportTab';
 import UnifiedReportsList from '../components/UnifiedReportsList';
 
-const StudentDetailPage = () => {
+const HomeSupportUserDetailPage = () => {
   const { studentId } = useParams();
   const navigate = useNavigate();
   const [student, setStudent] = useState(null);
@@ -112,12 +112,10 @@ const StudentDetailPage = () => {
       id: reportData.id || `${type}_${Date.now()}`,
       ...reportData
     };
-    
     setReports(prev => ({
       ...prev,
       [type]: prev[type].filter(r => r.id !== newReport.id).concat(newReport)
     }));
-    
     console.log(`${type}報告書を保存:`, newReport);
   };
 
@@ -140,7 +138,6 @@ const StudentDetailPage = () => {
       ...prev,
       [type]: prev[type].filter(r => r.id !== reportId)
     }));
-    
     console.log(`${type}報告書を削除:`, reportId);
   };
 
@@ -170,7 +167,6 @@ const StudentDetailPage = () => {
   };
 
   const handleDownloadPDF = (type, reportId) => {
-    // PDFダウンロード機能
     let report;
     switch (type) {
       case 'daily':
@@ -223,10 +219,10 @@ const StudentDetailPage = () => {
                 className="px-4 py-2 bg-white bg-opacity-10 border border-white border-opacity-30 rounded-lg hover:bg-opacity-20 transition-all duration-200 font-medium"
                 onClick={handleBack}
               >
-                ← 在宅支援評価一覧に戻る
+                ← 在宅支援管理に戻る
               </button>
               <div>
-                <h1 className="text-2xl font-bold">生徒詳細</h1>
+                <h1 className="text-2xl font-bold">在宅支援利用者詳細</h1>
                 <span className="text-indigo-100 text-sm">{student.name}さんの詳細情報</span>
               </div>
             </div>
@@ -356,4 +352,4 @@ const StudentDetailPage = () => {
   );
 };
 
-export default StudentDetailPage; 
+export default HomeSupportUserDetailPage; 

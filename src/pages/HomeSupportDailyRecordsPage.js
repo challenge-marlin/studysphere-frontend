@@ -292,12 +292,6 @@ const HomeSupportDailyRecordsPage = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <button 
-                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all duration-200 hover:shadow-lg transform hover:-translate-y-0.5"
-                onClick={() => navigate('/instructor/home-support-evaluations')}
-              >
-                📊 評価一覧
-              </button>
               <span className="px-4 py-2 bg-white bg-opacity-20 rounded-full text-sm font-semibold">
                 {filteredStudents.length}名の在宅学習者
               </span>

@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import RecentActivity from '../components/RecentActivity';
+import StudentVoiceCareView from '../components/StudentVoiceCareView';
 
 const Dashboard = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [enrolledCourses, setEnrolledCourses] = useState([]);
-  const [completedCourses, setCompletedCourses] = useState([]);
-  const [nextLesson, setNextLesson] = useState(null);
-  const [pendingApprovals, setPendingApprovals] = useState([]);
+  const [lastLesson, setLastLesson] = useState(null);
 
   useEffect(() => {
     const user = localStorage.getItem('currentUser');
@@ -41,99 +39,60 @@ const Dashboard = () => {
             title: 'AIの活用例',
             courseTitle: 'ITリテラシー・AIの基本'
           }
-        }
-      ];
-      
-      // 修了コース（モックデータ）
-      const mockCompletedCourses = [
+        },
         {
           id: 'course003',
           title: 'SNS運用の基礎・画像生成編集',
           category: '必修科目',
-          completedDate: '2024-01-10',
-          finalScore: 92
+          progress: 100,
+          totalLessons: 4,
+          completedLessons: 4,
+          nextLesson: null
+        },
+        {
+          id: 'course004',
+          title: 'ビジネスマナー基礎',
+          category: '選択科目',
+          progress: 25,
+          totalLessons: 8,
+          completedLessons: 2,
+          nextLesson: {
+            id: 'lesson004-3',
+            title: '電話応対の基本',
+            courseTitle: 'ビジネスマナー基礎'
+          }
         }
       ];
       
       setEnrolledCourses(mockEnrolledCourses);
-      setCompletedCourses(mockCompletedCourses);
       
-      // 次に受講すべきレッスンを設定
-      if (mockEnrolledCourses.length > 0) {
-        setNextLesson(mockEnrolledCourses[0].nextLesson);
-      }
-
-      // 判定依頼中のテスト（モックデータ）
-      const mockPendingApprovals = [
-        {
-          id: 'approval001',
-          courseTitle: 'ITリテラシー・AIの基本',
-          lessonTitle: '第3回　AIの仕組みや基本用語を学ぶ',
-          testScore: 85,
-          submittedDate: '2024-01-15',
-          status: 'pending',
-          instructorName: '山田 指導員'
-        },
-        {
-          id: 'approval002',
-          courseTitle: 'オフィスソフトの操作・文書作成',
-          lessonTitle: '第2回　Microsoft Wordでの文書作成',
-          testScore: 92,
-          submittedDate: '2024-01-14',
-          status: 'pending',
-          instructorName: '田中 指導員'
-        }
-      ];
-      
-      setPendingApprovals(mockPendingApprovals);
+      // 最後に学習したレッスンを設定（モックデータ）
+      const mockLastLesson = {
+        id: 'lesson002-3',
+        title: 'AIの仕組みや基本用語を学ぶ',
+        courseTitle: 'ITリテラシー・AIの基本',
+        completedDate: '2024-01-15 16:30',
+        score: 85,
+        status: 'completed'
+      };
+      setLastLesson(mockLastLesson);
     }
   }, []);
 
-  // 最新の活動データ
-  const recentActivities = [
-    { 
-      title: 'Microsoft Excelを使用したデータ分析', 
-      date: '2024-01-15', 
-      type: 'lesson',
-      course: 'オフィスソフトの操作・文書作成',
-      status: '完了'
-    },
-    { 
-      title: '課題: Excelデータ分析レポート', 
-      date: '2024-01-14', 
-      type: 'assignment',
-      course: 'オフィスソフトの操作・文書作成',
-      status: '提出済み'
-    },
-    { 
-      title: 'AIの基本概念', 
-      date: '2024-01-13', 
-      type: 'lesson',
-      course: 'ITリテラシー・AIの基本',
-      status: '進行中'
-    },
-    { 
-      title: 'テスト: インターネットの基礎', 
-      date: '2024-01-12', 
-      type: 'test',
-      course: 'ITリテラシー・AIの基本',
-      status: '95点'
-    },
-  ];
-
-  const handleStartNextLesson = () => {
-    if (nextLesson) {
-      alert(`レッスン「${nextLesson.title}」の学習を開始します。\nコース: ${nextLesson.courseTitle}`);
+  const handleViewLastLesson = () => {
+    if (lastLesson) {
+      alert(`最後に学習したレッスン「${lastLesson.title}」の詳細を表示します。\nコース: ${lastLesson.courseTitle}\n完了日時: ${lastLesson.completedDate}\nスコア: ${lastLesson.score}点`);
     }
   };
 
   const handleViewCourse = (courseId) => {
-    alert(`コース「${enrolledCourses.find(c => c.id === courseId)?.title}」の詳細を表示します。`);
+    const course = enrolledCourses.find(c => c.id === courseId);
+    alert(`コース「${course?.title}」の詳細を表示します。`);
   };
 
-  const handleViewCompletedCourse = (courseId) => {
-    const course = completedCourses.find(c => c.id === courseId);
-    alert(`修了コース「${course?.title}」の詳細を表示します。\n修了日: ${course?.completedDate}\n最終スコア: ${course?.finalScore}点`);
+  const handleStartCourse = (courseId) => {
+    const course = enrolledCourses.find(c => c.id === courseId);
+    alert(`コース「${course?.title}」の学習を開始します。`);
   };
 
   if (!currentUser) {
@@ -154,19 +113,32 @@ const Dashboard = () => {
           </h2>
           <p className="text-lg text-gray-600">おかえりなさい、{currentUser.name}さん！学習を続けましょう。</p>
         </div>
+
+        {/* 声かけセクション */}
+        <StudentVoiceCareView 
+          studentId={currentUser.id} 
+          studentName={currentUser.name} 
+        />
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* 現在利用コースセクション */}
+          {/* 受講可能なカリキュラムセクション */}
           <section className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-            <h3 className="text-xl font-bold text-gray-800 mb-6">📚 現在利用コース</h3>
+            <h3 className="text-xl font-bold text-gray-800 mb-6">📚 受講可能なカリキュラム</h3>
             <div className="space-y-4">
               {enrolledCourses.map((course) => (
                 <div key={course.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-all duration-200">
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="font-semibold text-gray-800">{course.title}</h4>
-                    <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                      {course.category}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                        {course.category}
+                      </span>
+                      {course.progress === 100 && (
+                        <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
+                          ✅ 修了
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="mb-4">
                     <div className="flex justify-between text-sm text-gray-600 mb-2">
@@ -175,108 +147,85 @@ const Dashboard = () => {
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div 
-                        className="bg-gradient-to-r from-blue-400 to-cyan-600 h-2 rounded-full transition-all duration-300"
+                        className={`h-2 rounded-full transition-all duration-300 ${
+                          course.progress === 100 
+                            ? 'bg-gradient-to-r from-green-400 to-green-600' 
+                            : 'bg-gradient-to-r from-blue-400 to-cyan-600'
+                        }`}
                         style={{ width: `${course.progress}%` }}
                       ></div>
                     </div>
                   </div>
-                  <button 
-                    className="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all duration-200"
-                    onClick={() => handleViewCourse(course.id)}
-                  >
-                    詳細を見る
-                  </button>
+                  <div className="flex gap-2">
+                    <button 
+                      className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all duration-200"
+                      onClick={() => handleViewCourse(course.id)}
+                    >
+                      詳細を見る
+                    </button>
+                    {course.progress === 0 && (
+                      <button 
+                        className="flex-1 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-lg font-medium transition-all duration-200"
+                        onClick={() => handleStartCourse(course.id)}
+                      >
+                        開始
+                      </button>
+                    )}
+                    {course.progress > 0 && course.progress < 100 && (
+                      <button 
+                        className="flex-1 px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg font-medium transition-all duration-200"
+                        onClick={() => handleViewCourse(course.id)}
+                      >
+                        続きから
+                      </button>
+                    )}
+                    {course.progress === 100 && (
+                      <button 
+                        className="flex-1 px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-lg font-medium transition-all duration-200"
+                        onClick={() => handleViewCourse(course.id)}
+                      >
+                        復習
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
           </section>
 
-          {/* 最新学習へのリンク */}
-          {nextLesson && (
+          {/* 最後に学習したもの */}
+          {lastLesson && (
             <section className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-              <h3 className="text-xl font-bold text-gray-800 mb-6">🎯 次に学習するレッスン</h3>
+              <h3 className="text-xl font-bold text-gray-800 mb-6">📚 最後に学習したもの</h3>
               <div className="border border-gray-200 rounded-xl p-4">
                 <div className="mb-4">
-                  <h4 className="font-semibold text-gray-800 mb-2">{nextLesson.title}</h4>
-                  <p className="text-sm text-blue-600 font-medium mb-2">{nextLesson.courseTitle}</p>
-                  <p className="text-sm text-gray-600">
-                    このレッスンでは、PDF資料の閲覧、動画の視聴、テストの受講を行います。
-                  </p>
+                  <h4 className="font-semibold text-gray-800 mb-2">{lastLesson.title}</h4>
+                  <p className="text-sm text-blue-600 font-medium mb-2">{lastLesson.courseTitle}</p>
+                  <div className="space-y-1 text-sm text-gray-600 mb-3">
+                    <div>完了日時: {lastLesson.completedDate}</div>
+                    <div className="flex items-center gap-2">
+                      <span>スコア: {lastLesson.score}点</span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        lastLesson.score >= 80 
+                          ? 'bg-green-100 text-green-800' 
+                          : lastLesson.score >= 60 
+                          ? 'bg-yellow-100 text-yellow-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {lastLesson.score >= 80 ? '優秀' : lastLesson.score >= 60 ? '合格' : '要復習'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
                 <button 
-                  className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
-                  onClick={handleStartNextLesson}
+                  className="w-full px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+                  onClick={handleViewLastLesson}
                 >
-                  📖 学習を開始
+                  📖 詳細を見る
                 </button>
               </div>
             </section>
           )}
-
-          {/* 判定依頼中セクション */}
-          {pendingApprovals.length > 0 && (
-            <section className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-              <h3 className="text-xl font-bold text-gray-800 mb-6">⏳ 判定依頼中</h3>
-              <div className="space-y-4">
-                {pendingApprovals.map((approval) => (
-                  <div key={approval.id} className="border border-yellow-200 bg-yellow-50 rounded-xl p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-semibold text-gray-800">{approval.lessonTitle}</h4>
-                      <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">
-                        判定待ち
-                      </span>
-                    </div>
-                    <div className="mb-3">
-                      <p className="text-sm text-blue-600 font-medium mb-2">{approval.courseTitle}</p>
-                      <div className="space-y-1 text-sm text-gray-600">
-                        <div>テストスコア: {approval.testScore}点</div>
-                        <div>提出日: {approval.submittedDate}</div>
-                        <div>担当指導員: {approval.instructorName}</div>
-                      </div>
-                    </div>
-                    <div className="p-3 bg-white rounded-lg border border-yellow-200">
-                      <p className="text-sm text-gray-700">テストに合格しました。指導員の承認をお待ちしています。</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* 修了コースセクション */}
-          {completedCourses.length > 0 && (
-            <section className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-              <h3 className="text-xl font-bold text-gray-800 mb-6">🏆 修了コース</h3>
-              <div className="space-y-4">
-                {completedCourses.map((course) => (
-                  <div key={course.id} className="border border-green-200 bg-green-50 rounded-xl p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-semibold text-gray-800">{course.title}</h4>
-                      <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                        {course.category}
-                      </span>
-                    </div>
-                    <div className="space-y-1 text-sm text-gray-600 mb-3">
-                      <div>修了日: {course.completedDate}</div>
-                      <div>最終スコア: {course.finalScore}点</div>
-                    </div>
-                    <button 
-                      className="w-full px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-all duration-200"
-                      onClick={() => handleViewCompletedCourse(course.id)}
-                    >
-                      詳細を見る
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* 最近の活動 */}
-          <section className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100 lg:col-span-2">
-            <h3 className="text-xl font-bold text-gray-800 mb-6">📈 最近の活動</h3>
-            <RecentActivity activities={recentActivities} />
-          </section>
         </div>
       </div>
     </div>

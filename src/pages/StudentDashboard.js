@@ -47,7 +47,7 @@ const StudentDashboard = () => {
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-bold text-white">Study Sphere</h1>
                 <span className="px-3 py-1 bg-white bg-opacity-20 rounded-full text-sm font-semibold">
-                  生徒
+                  利用者
                 </span>
               </div>
             </div>

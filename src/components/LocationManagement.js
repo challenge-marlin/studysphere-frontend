@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import SanitizedInput from './SanitizedInput';
+import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 
 const LocationManagement = () => {
   // デフォルトの事業所タイプ
@@ -1390,7 +1392,7 @@ const LocationManagement = () => {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">事業所名 *</label>
-                <input type="text" className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg" value={newOffice.name} onChange={e => setNewOffice({ ...newOffice, name: e.target.value })} required />
+                <SanitizedInput type="text" className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg" value={newOffice.name} onChange={e => setNewOffice({ ...newOffice, name: e.target.value })} required sanitizeMode={SANITIZE_OPTIONS.LIGHT} />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">事業所タイプ *</label>
@@ -1400,11 +1402,11 @@ const LocationManagement = () => {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">住所</label>
-                <input type="text" className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg" value={newOffice.address} onChange={e => setNewOffice({ ...newOffice, address: e.target.value })} />
+                <SanitizedInput type="text" className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg" value={newOffice.address} onChange={e => setNewOffice({ ...newOffice, address: e.target.value })} sanitizeMode={SANITIZE_OPTIONS.LIGHT} />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">電話番号</label>
-                <input type="text" className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg" value={newOffice.phone} onChange={e => setNewOffice({ ...newOffice, phone: e.target.value })} />
+                <SanitizedInput type="text" className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg" value={newOffice.phone} onChange={e => setNewOffice({ ...newOffice, phone: e.target.value })} sanitizeMode={SANITIZE_OPTIONS.LIGHT} />
               </div>
               <div className="flex gap-4 pt-4 border-t border-gray-200">
                 <button type="button" onClick={() => setShowOfficeForm(false)} className="flex-1 bg-gray-100 text-gray-700 border-2 border-gray-200 px-6 py-3 rounded-lg font-semibold">キャンセル</button>

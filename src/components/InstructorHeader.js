@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
+import { useAuth } from './contexts/AuthContext';
+import { logAdminAccountOperation } from '../utils/adminLogger';
 import LocationSwitchModal from './LocationSwitchModal';
 
-const InstructorHeader = ({ user, onLogout, onLocationChange }) => {
+const InstructorHeader = ({ user, onLocationChange }) => {
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+  const { logout } = useAuth();
 
   // LocationManagement.jsのデータを基にした初期拠点情報
   const defaultLocation = {
@@ -48,7 +51,13 @@ const InstructorHeader = ({ user, onLogout, onLocationChange }) => {
             拠点切り替え
           </button>
           <button 
-            onClick={onLogout} 
+            onClick={() => {
+              // ログアウト時の操作ログを記録（指導員の場合）
+              if (user && user.role === 'instructor') {
+                logAdminAccountOperation('logout', user);
+              }
+              logout();
+            }} 
             className="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-2 rounded-lg cursor-pointer text-sm transition-all duration-300 hover:-translate-y-0.5 backdrop-blur-sm"
           >
             ログアウト

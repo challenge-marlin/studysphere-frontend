@@ -1,11 +1,33 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../components/contexts/AuthContext';
 
 const StudentLogin = () => {
   const { token } = useParams();
   const navigate = useNavigate();
+  const { login, isAuthenticated, currentUser } = useAuth();
   const [isValidating, setIsValidating] = useState(true);
   const [error, setError] = useState('');
+
+  // 認証済みユーザーが生徒ログインページにアクセスした場合のリダイレクト
+  useEffect(() => {
+    if (isAuthenticated && currentUser) {
+      switch (currentUser.role) {
+        case 'admin':
+          navigate('/admin/dashboard');
+          break;
+        case 'instructor':
+          navigate('/instructor/dashboard');
+          break;
+        case 'student':
+          navigate('/student/dashboard');
+          break;
+        default:
+          // デフォルトは生徒ログインページに留まる
+          break;
+      }
+    }
+  }, [isAuthenticated, currentUser, navigate]);
 
   useEffect(() => {
     // モック学生データ
@@ -41,13 +63,13 @@ const StudentLogin = () => {
       const studentData = studentTokens[token];
       
       if (studentData) {
-        // 学生情報をlocalStorageに保存
+        // 学生情報を保存（モックログイン）
         const studentUser = {
           ...studentData,
           role: 'student',
           loginToken: token
         };
-        localStorage.setItem('currentUser', JSON.stringify(studentUser));
+        login(studentUser);
         
         // 学生ダッシュボードにリダイレクト
         navigate('/student/dashboard');

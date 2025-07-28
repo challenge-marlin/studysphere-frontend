@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAdminGuard } from '../utils/hooks/useAuthGuard';
 import AdminHeader from '../components/AdminHeader';
 import LocationManagement from '../components/LocationManagement';
 import InstructorManagement from '../components/InstructorManagement';
@@ -10,39 +11,22 @@ import AdminManagement from '../components/AdminManagement';
 import { logAdminAccountOperation } from '../utils/adminLogger';
 
 const AdminDashboard = () => {
-  const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('locations');
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const user = localStorage.getItem('currentUser');
-    if (!user) {
-      navigate('/');
-      return;
-    }
-    
-    const userData = JSON.parse(user);
-    if (userData.role !== 'admin') {
-      navigate('/');
-      return;
-    }
-    
-    setCurrentUser(userData);
-  }, [navigate]);
+  const { currentUser, logout } = useAdminGuard();
 
   const handleLogout = () => {
     // ログアウト時の操作ログを記録
     if (currentUser) {
       logAdminAccountOperation('logout', currentUser);
     }
-    localStorage.removeItem('currentUser');
-    navigate('/');
+    logout();
   };
 
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600 text-lg">Loading...</div>
+        <div className="text-gray-600 text-lg">認証中...</div>
       </div>
     );
   }

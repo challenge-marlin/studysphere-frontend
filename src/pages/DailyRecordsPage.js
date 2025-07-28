@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import SanitizedInput from '../components/SanitizedInput';
+import SanitizedTextarea from '../components/SanitizedTextarea';
+import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 
 const DailyRecordsPage = () => {
   const { studentId } = useParams();
@@ -228,31 +231,34 @@ const DailyRecordsPage = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">実施日 *</label>
-                  <input 
+                  <SanitizedInput 
                     type="date" 
                     value={recordForm.date}
                     onChange={(e) => setRecordForm({...recordForm, date: e.target.value})}
                     required 
+                    sanitizeMode={SANITIZE_OPTIONS.NONE}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">開始時間 *</label>
-                  <input 
+                  <SanitizedInput 
                     type="time" 
                     value={recordForm.startTime}
                     onChange={(e) => setRecordForm({...recordForm, startTime: e.target.value})}
                     required 
+                    sanitizeMode={SANITIZE_OPTIONS.NONE}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">終了時間 *</label>
-                  <input 
+                  <SanitizedInput 
                     type="time" 
                     value={recordForm.endTime}
                     onChange={(e) => setRecordForm({...recordForm, endTime: e.target.value})}
                     required 
+                    sanitizeMode={SANITIZE_OPTIONS.NONE}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   />
                 </div>
@@ -275,36 +281,39 @@ const DailyRecordsPage = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">作業・訓練内容 *</label>
-                <textarea
+                <SanitizedTextarea
                   value={recordForm.workContent}
                   onChange={(e) => setRecordForm({...recordForm, workContent: e.target.value})}
                   placeholder="実施した作業や訓練の内容を記載してください"
                   required
                   rows="4"
+                  sanitizeMode={SANITIZE_OPTIONS.FULL}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">支援内容（1日2回以上） *</label>
-                <textarea
+                <SanitizedTextarea
                   value={recordForm.supportContent}
                   onChange={(e) => setRecordForm({...recordForm, supportContent: e.target.value})}
                   placeholder="具体的な支援内容を時間順に記載してください"
                   required
                   rows="6"
+                  sanitizeMode={SANITIZE_OPTIONS.FULL}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">対象者の心身の状況及びそれに対する助言の内容 *</label>
-                <textarea
+                <SanitizedTextarea
                   value={recordForm.healthStatus}
                   onChange={(e) => setRecordForm({...recordForm, healthStatus: e.target.value})}
                   placeholder="体調や精神状態、それに対する助言を記載してください"
                   required
                   rows="4"
+                  sanitizeMode={SANITIZE_OPTIONS.FULL}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
                 />
               </div>

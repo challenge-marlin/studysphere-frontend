@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+import SanitizedInput from './SanitizedInput';
+import SanitizedTextarea from './SanitizedTextarea';
+import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 
 const InstructorManagement = () => {
   // LocationManagement.jsと同じ拠点データを使用

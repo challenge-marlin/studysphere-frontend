@@ -1,38 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useStudentGuard } from '../utils/hooks/useAuthGuard';
 import Dashboard from './Dashboard';
 import LessonList from './LessonList';
 
 const StudentDashboard = () => {
-  const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const user = localStorage.getItem('currentUser');
-    if (!user) {
-      navigate('/');
-      return;
-    }
-    
-    const userData = JSON.parse(user);
-    if (userData.role !== 'student') {
-      navigate('/');
-      return;
-    }
-    
-    setCurrentUser(userData);
-  }, [navigate]);
+  const { currentUser, logout } = useStudentGuard();
 
   const handleLogout = () => {
-    localStorage.removeItem('currentUser');
-    navigate('/');
+    logout();
   };
 
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex items-center justify-center">
-        <div className="text-blue-600 text-xl font-semibold">Loading...</div>
+        <div className="text-blue-600 text-xl font-semibold">認証中...</div>
       </div>
     );
   }

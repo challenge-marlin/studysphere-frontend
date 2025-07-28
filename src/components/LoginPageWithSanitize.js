@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../components/contexts/AuthContext';
+import { useAuth } from './contexts/AuthContext';
 import { logAdminAccountOperation } from '../utils/adminLogger';
-import SanitizedInput from '../components/SanitizedInput';
+import SanitizedInput from './SanitizedInput';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 
-const LoginPage = () => {
+/**
+ * サニタイズ機能付きLoginPageの例
+ * 既存のLoginPageにサニタイズ機能を追加したバージョン
+ */
+const LoginPageWithSanitize = () => {
   const [credentials, setCredentials] = useState({ id: '', password: '' });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -105,47 +109,40 @@ const LoginPage = () => {
     setError('');
 
     try {
-      // 管理者アカウントの認証（データベース認証）
-      if (credentials.id === 'admin001') {
-        try {
-          const adminData = await adminLoginAPI('admin001', credentials.password);
-          
-          if (adminData.success) {
-            const userData = {
-              id: adminData.data.user_id,
-              name: adminData.data.user_name,
-              email: adminData.data.login_code,
-              role: 'admin',
-              access_token: adminData.data.access_token,
-              refresh_token: adminData.data.refresh_token
-            };
-            
-            // 認証コンテキストを使用してログイン
-            login(userData, adminData.data.access_token, adminData.data.refresh_token);
-            
-            navigate('/admin/dashboard');
-          } else {
-            setError(adminData.message || 'ログインに失敗しました');
-          }
-        } catch (apiError) {
-          setError(apiError.message || 'データベース認証に失敗しました');
+      // 管理者ログインの試行
+      try {
+        const adminData = await adminLoginAPI(credentials.id, credentials.password);
+        
+        if (adminData.user) {
+          // 管理者ログイン成功
+          await login(adminData.user, adminData.token);
+          logAdminAccountOperation('login', credentials.id, '管理者ログイン成功');
+          navigate('/admin/dashboard');
+          return;
         }
-      } else {
-        // 通常のユーザー認証（モックデータ）
-        const user = Object.values(users).find(
-          u => u.id === credentials.id && u.password === credentials.password
-        );
+      } catch (adminError) {
+        // 管理者ログイン失敗 - 指導員ログインを試行
+        console.log('Admin login failed, trying instructor login...');
+      }
 
-        if (user) {
-          // 指導員でログイン（モックログイン）
-          login(user);
-          navigate('/instructor/dashboard');
-        } else {
-          setError('ユーザーIDまたはパスワードが正しくありません。');
-        }
+      // 指導員ログインの試行
+      const user = Object.values(users).find(u => 
+        u.id === credentials.id && u.password === credentials.password
+      );
+
+      if (user) {
+        // 指導員ログイン成功
+        await login(user, 'mock-token-for-instructor');
+        logAdminAccountOperation('login', credentials.id, '指導員ログイン成功');
+        navigate('/instructor/dashboard');
+      } else {
+        // ログイン失敗
+        setError('ユーザーIDまたはパスワードが正しくありません');
+        logAdminAccountOperation('login_failed', credentials.id, 'ログイン失敗');
       }
     } catch (error) {
-      setError(error.message || 'ログイン処理中にエラーが発生しました');
+      console.error('Login error:', error);
+      setError('ログイン処理中にエラーが発生しました');
     } finally {
       setIsLoading(false);
     }
@@ -165,6 +162,11 @@ const LoginPage = () => {
             <label htmlFor="id" className="block text-sm font-medium text-gray-700 mb-2">
               ユーザーID
             </label>
+            {/* 
+              サニタイズ機能付きinputの使用例
+              - ユーザーIDは軽量サニタイズで十分
+              - デバウンス時間は200msに設定
+            */}
             <SanitizedInput
               type="text"
               id="id"
@@ -183,6 +185,11 @@ const LoginPage = () => {
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
               パスワード
             </label>
+            {/* 
+              パスワードフィールドはサニタイズなし
+              - パスワードは特殊文字を含む可能性があるため
+              - セキュリティは別途ハッシュ化で対応
+            */}
             <SanitizedInput
               type="password"
               id="password"
@@ -251,4 +258,4 @@ const LoginPage = () => {
   );
 };
 
-export default LoginPage; 
+export default LoginPageWithSanitize; 

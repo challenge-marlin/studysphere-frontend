@@ -4,6 +4,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import mermaid from 'mermaid';
 import LessonVideoPlayer from '../components/LessonVideoPlayer';
+import SanitizedInput from '../components/SanitizedInput';
+import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 
 const AdvancedLearningPage = () => {
   const navigate = useNavigate();
@@ -449,12 +451,14 @@ graph TD
                 ))}
               </div>
               <div className="flex gap-2">
-                <input
+                <SanitizedInput
                   type="text"
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                   placeholder="質問を入力..."
+                  sanitizeMode={SANITIZE_OPTIONS.FULL}
+                  debounceMs={300}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 <button 
@@ -588,10 +592,11 @@ graph TD
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   ファイルを選択してください
                 </label>
-                <input
+                <SanitizedInput
                   type="file"
                   multiple
                   onChange={handleFileUpload}
+                  sanitizeMode={SANITIZE_OPTIONS.NONE}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                 />
               </div>

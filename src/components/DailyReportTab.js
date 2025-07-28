@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import SanitizedInput from './SanitizedInput';
+import SanitizedTextarea from './SanitizedTextarea';
+import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 
 const DailyReportTab = ({ student, reports = [], onSave, onEdit, onDelete, onDownloadPDF }) => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);

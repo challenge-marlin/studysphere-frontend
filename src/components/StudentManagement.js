@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import SanitizedInput from './SanitizedInput';
+import SanitizedTextarea from './SanitizedTextarea';
+import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 
 const StudentManagement = ({ teacherId }) => {
   // 管理者画面で作成されたコースデータを取得

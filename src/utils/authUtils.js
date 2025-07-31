@@ -100,8 +100,25 @@ export const handleLogout = (navigate) => {
   navigate('/');
 };
 
-// トークン更新が必要かどうかを判定（残り120秒以下で更新）
+// トークン無効時の即座リダイレクト処理
+export const handleTokenInvalid = (navigate, reason = 'トークンが無効になりました') => {
+  console.warn('Token invalid, redirecting to login:', reason);
+  clearStoredTokens();
+  localStorage.removeItem('currentUser');
+  
+  // 即座にログインページにリダイレクト
+  navigate('/', { replace: true });
+  
+  // 必要に応じてユーザーに通知
+  if (typeof window !== 'undefined' && window.alert) {
+    setTimeout(() => {
+      alert(`${reason}\nログインページに戻ります。`);
+    }, 100);
+  }
+};
+
+// トークン更新が必要かどうかを判定（残り190秒以下で更新）
 export const shouldRefreshToken = (token) => {
   const remainingTime = getTokenExpiryTime(token);
-  return remainingTime <= 120; // 120秒以下で更新
+  return remainingTime <= 190; // 190秒以下で更新
 }; 

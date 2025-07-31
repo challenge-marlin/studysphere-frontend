@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import SanitizedInput from './SanitizedInput';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
+import { authenticatedFetch } from '../utils/httpInterceptor';
 
 const LocationManagement = () => {
   // 事業所タイプ（DBから取得）
@@ -9,6 +10,7 @@ const LocationManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
+  const [alertShown, setAlertShown] = useState(false); // アラート表示済みフラグ
 
   // 企業一覧（DBから取得）
   const [companies, setCompanies] = useState([]);
@@ -23,7 +25,7 @@ const LocationManagement = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
       
-      const response = await fetch('http://localhost:5000/office-types', {
+      const response = await authenticatedFetch('http://localhost:5000/office-types', {
         signal: controller.signal
       });
       
@@ -69,7 +71,7 @@ const LocationManagement = () => {
       setCompaniesLoading(true);
       console.log('企業一覧取得開始');
       
-      const response = await fetch('http://localhost:5000/companies');
+      const response = await authenticatedFetch('http://localhost:5000/companies');
       console.log('企業一覧取得レスポンス:', response.status, response.statusText);
       
       if (!response.ok) {
@@ -95,12 +97,39 @@ const LocationManagement = () => {
     }
   };
 
+  // 事業所の有効期限をチェックしてアラートを表示
+  const checkExpirationAlerts = (satellites) => {
+    // 既にアラートを表示済みの場合はスキップ
+    if (alertShown) return;
+    
+    const twoWeeksFromNow = new Date();
+    twoWeeksFromNow.setDate(twoWeeksFromNow.getDate() + 14); // 2週間後
+    
+    const expiringSoon = satellites.filter(satellite => {
+      if (!satellite.token_expiry) return false;
+      
+      const expiryDate = new Date(satellite.token_expiry);
+      return expiryDate <= twoWeeksFromNow && expiryDate > new Date(); // 2週間以内でまだ有効
+    });
+    
+    if (expiringSoon.length > 0) {
+      const facilityNames = expiringSoon.map(s => s.name || s.facility_name || '不明な事業所').join(', ');
+      const alertMessage = `以下の事業所の有効期限が2週間以内に切れます：\n${facilityNames}`;
+      
+      // アラートを表示
+      setTimeout(() => {
+        alert(alertMessage);
+        setAlertShown(true); // アラート表示済みフラグを設定
+      }, 1000); // 1秒後に表示（ページ読み込み完了後）
+    }
+  };
+
   // satellitesデータ取得
   const fetchSatellites = async () => {
     try {
       console.log('satellites一覧取得開始');
       
-      const response = await fetch('http://localhost:5000/satellites');
+      const response = await authenticatedFetch('http://localhost:5000/satellites');
       console.log('satellites一覧取得レスポンス:', response.status, response.statusText);
       
       if (!response.ok) {
@@ -116,6 +145,8 @@ const LocationManagement = () => {
       // satellitesデータをfacilitiesとして設定
       if (data.success && data.data) {
         setFacilities(data.data);
+        // 有効期限チェックを実行
+        checkExpirationAlerts(data.data);
       } else {
         setFacilities([]);
       }
@@ -131,7 +162,7 @@ const LocationManagement = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒タイムアウト
       
-      const response = await fetch('http://localhost:5000/office-types', {
+      const response = await authenticatedFetch('http://localhost:5000/office-types', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -176,7 +207,7 @@ const LocationManagement = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒タイムアウト
 
-      const response = await fetch(`http://localhost:5000/office-types/${typeData.id}`, {
+      const response = await authenticatedFetch(`http://localhost:5000/office-types/${typeData.id}`, {
         method: 'DELETE',
         signal: controller.signal
       });
@@ -213,7 +244,7 @@ const LocationManagement = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
-      const response = await fetch('http://localhost:5000/', { 
+      const response = await authenticatedFetch('http://localhost:5000/', { 
         method: 'GET',
         signal: controller.signal
       });
@@ -228,6 +259,9 @@ const LocationManagement = () => {
 
   // 初期データ取得
   useEffect(() => {
+    // アラート表示済みフラグをリセット
+    setAlertShown(false);
+    
     const initializeData = async () => {
       const isBackendAvailable = await checkBackendConnection();
       if (isBackendAvailable) {
@@ -288,6 +322,7 @@ const LocationManagement = () => {
     company_id: '',
     name: '',
     address: '',
+    phone: '',
     office_type_id: '',
     contract_type: '30days',
     max_users: 10
@@ -308,6 +343,7 @@ const LocationManagement = () => {
   // 編集モーダル表示制御
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedOfficeForEdit, setSelectedOfficeForEdit] = useState(null);
+  const [editFormData, setEditFormData] = useState({});
 
   // サンプルユーザーリスト
   const sampleUsers = [
@@ -349,6 +385,14 @@ const LocationManagement = () => {
   // 編集ハンドラー
   const handleEditOffice = (office) => {
     setSelectedOfficeForEdit(office);
+    setEditFormData({
+      name: office.name,
+      address: office.address || '',
+      phone: office.phone || '',
+      office_type_id: office.office_type_name || office.office_type_id || '',
+      max_users: office.max_users || 10,
+      token_expiry_at: office.token_expiry_at || ''
+    });
     setShowEditModal(true);
   };
 
@@ -367,10 +411,40 @@ const LocationManagement = () => {
   };
 
   // 編集確定ハンドラー
-  const handleConfirmEdit = (updatedData) => {
-    alert(`「${selectedOfficeForEdit.name}」の情報を更新しました。`);
-    setShowEditModal(false);
-    setSelectedOfficeForEdit(null);
+  const handleConfirmEdit = async () => {
+    try {
+      // 有効期限の日時形式を適切に処理
+      const updateData = { ...editFormData };
+      if (updateData.token_expiry_at) {
+        // 日本時間として送信（バックエンドでUTCに変換される）
+        updateData.token_expiry_at = new Date(updateData.token_expiry_at).toISOString();
+      }
+
+      const response = await fetch(`http://localhost:5000/satellites/${selectedOfficeForEdit.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData)
+      });
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || '事業所情報の更新に失敗しました');
+      }
+
+      showNotification(`「${selectedOfficeForEdit.name}」の情報を更新しました。`, 'success');
+      setShowEditModal(false);
+      setSelectedOfficeForEdit(null);
+      setEditFormData({});
+      
+      // 拠点一覧を再取得
+      await fetchSatellites();
+    } catch (error) {
+      console.error('事業所情報更新エラー:', error);
+      showNotification(error.message, 'error');
+    }
   };
 
   // 事業所追加モーダル（DB連携版）
@@ -448,6 +522,7 @@ const LocationManagement = () => {
         company_id: companyId,
         name: newOffice.name,
         address: newOffice.address,
+        phone: newOffice.phone,
         office_type_id: newOffice.office_type_id,
         contract_type: newOffice.contract_type,
         max_users: newOffice.max_users
@@ -476,6 +551,7 @@ const LocationManagement = () => {
         company_id: '',
         name: '',
         address: '',
+        phone: '',
         office_type_id: '',
         contract_type: '30days',
         max_users: 10
@@ -521,7 +597,7 @@ const LocationManagement = () => {
         office.organizationName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (office.address && office.address.toLowerCase().includes(searchTerm.toLowerCase()));
      
-      const matchesType = filterType === 'all' || office.office_type_id === filterType;
+      const matchesType = filterType === 'all' || office.office_type_name === filterType || office.office_type_id === filterType;
      
       const matchesManager = showOnlyNoManager ? 
         (!office.manager_ids || office.manager_ids.length === 0) : true;
@@ -800,13 +876,31 @@ const LocationManagement = () => {
     }
   };
 
-  const totalLocations = facilities.reduce((sum, facility) => sum + (facility.offices ? facility.offices.length : 0), 0);
-  const totalTeachers = facilities.reduce((sum, facility) => 
-    sum + (facility.offices ? facility.offices.reduce((officeSum, office) => officeSum + (office.managers ? office.managers.length : 0), 0) : 0), 0);
+
+
+  // 必要な統計情報の計算
   const totalStudents = facilities.reduce((sum, facility) => 
-    sum + (facility.offices ? facility.offices.reduce((officeSum, office) => officeSum + (office.students || 0), 0) : 0), 0);
+    sum + (facility.current_users || 0), 0);
   const totalMaxStudents = facilities.reduce((sum, facility) => 
-    sum + (facility.offices ? facility.offices.reduce((officeSum, office) => officeSum + (office.maxStudents || 0), 0) : 0), 0);
+    sum + (facility.max_users || 0), 0);
+  
+  // 使用率の計算
+  const usageRate = totalMaxStudents > 0 ? Math.round((totalStudents / totalMaxStudents) * 100) : 0;
+  
+  // 責任者不在の事業所数
+  const facilitiesWithoutManager = facilities.filter(facility => 
+    !facility.manager_ids || facility.manager_ids.length === 0
+  ).length;
+  
+  // 30日以内に期限切れになる事業所数
+  const expiringSoonFacilities = facilities.filter(facility => {
+    if (!facility.token_expiry_at) return false;
+    const expiryDate = new Date(facility.token_expiry_at);
+    const now = new Date();
+    const diffTime = expiryDate - now;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays <= 30 && diffDays > 0;
+  }).length;
 
   const filteredFacilities = getFilteredAndSortedFacilities();
 
@@ -877,6 +971,32 @@ const LocationManagement = () => {
     }
   };
 
+  // 企業削除ハンドラー
+  const handleDeleteCompany = async (company) => {
+    if (window.confirm(`「${company.name}」を削除しますか？\n\n注意: この企業に所属するユーザーが存在する場合は削除できません。\nこの操作は取り消せません。`)) {
+      try {
+        const response = await fetch(`http://localhost:5000/companies/${company.id}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+          throw new Error(result.message || '企業の削除に失敗しました');
+        }
+        
+        showNotification(`「${company.name}」を削除しました`, 'success');
+        
+        // 企業一覧を再取得
+        await fetchCompanies();
+      } catch (err) {
+        console.error('企業削除エラー:', err);
+        showNotification(err.message, 'error');
+      }
+    }
+  };
+
   return (
     <div className="p-6">
       {/* 通知コンポーネント */}
@@ -897,11 +1017,48 @@ const LocationManagement = () => {
 
       <div className="mb-8">
         <h2 className="text-3xl font-bold text-red-800 mb-6">事業所(拠点)管理</h2>
-        <div className="grid grid-cols-1 md:grid-cols-1 gap-6 mb-6">
+        
+        {/* 必要な統計情報 */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          {/* 生徒の総数に対する稼働率 */}
           <div className="bg-white border-2 border-red-200 rounded-xl p-6 text-center transition-all duration-300 hover:border-red-400 hover:shadow-lg">
-            <h3 className="text-red-800 font-medium mb-2">総生徒数</h3>
+            <h3 className="text-red-800 font-medium mb-2">生徒稼働率</h3>
             <p className="text-3xl font-bold text-red-600">{totalStudents} / {totalMaxStudents}</p>
-            <small className="text-red-600">使用率: {Math.round((totalStudents/totalMaxStudents)*100)}%</small>
+            <div className="mt-2">
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className={`h-2 rounded-full transition-all duration-300 ${
+                    usageRate >= 80 ? 'bg-red-500' : 
+                    usageRate >= 60 ? 'bg-yellow-500' : 'bg-green-500'
+                  }`}
+                  style={{ width: `${Math.min(usageRate, 100)}%` }}
+                ></div>
+              </div>
+              <small className={`font-medium ${
+                usageRate >= 80 ? 'text-red-600' : 
+                usageRate >= 60 ? 'text-yellow-600' : 'text-green-600'
+              }`}>
+                稼働率: {usageRate}%
+              </small>
+            </div>
+          </div>
+
+          {/* 責任者不在事業所数 */}
+          <div className="bg-white border-2 border-yellow-200 rounded-xl p-6 text-center transition-all duration-300 hover:border-yellow-400 hover:shadow-lg">
+            <h3 className="text-yellow-800 font-medium mb-2">責任者不在事業所</h3>
+            <p className={`text-3xl font-bold ${facilitiesWithoutManager > 0 ? 'text-red-600' : 'text-green-600'}`}>
+              {facilitiesWithoutManager}
+            </p>
+            <small className="text-yellow-600">事業所数</small>
+          </div>
+
+          {/* 有効期限間近の事業所数 */}
+          <div className="bg-white border-2 border-orange-200 rounded-xl p-6 text-center transition-all duration-300 hover:border-orange-400 hover:shadow-lg">
+            <h3 className="text-orange-800 font-medium mb-2">🔒 有効期限間近</h3>
+            <p className={`text-3xl font-bold ${expiringSoonFacilities > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+              {expiringSoonFacilities}
+            </p>
+            <small className="text-orange-600">14日以内期限切れ</small>
           </div>
         </div>
       </div>
@@ -1055,6 +1212,7 @@ const LocationManagement = () => {
                 <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">住所</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">電話番号</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">生徒数</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">有効期限</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">責任者</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">操作</th>
               </tr>
@@ -1066,7 +1224,7 @@ const LocationManagement = () => {
                   !office.manager_ids || office.manager_ids.length === 0 ? 'bg-yellow-50 hover:bg-yellow-100' : ''
                 }`}>
                   <td className="px-6 py-4">{office.name}</td>
-                  <td className="px-6 py-4">{office.office_type_id}</td>
+                  <td className="px-6 py-4">{office.office_type_name || office.office_type_id || '-'}</td>
                   <td className="px-6 py-4">
                     <strong className="text-gray-800">{office.organizationName || <span className="text-gray-500 italic">組織名なし</span>}</strong>
                   </td>
@@ -1074,6 +1232,27 @@ const LocationManagement = () => {
                   <td className="px-6 py-4 text-gray-600">{office.phone || '-'}</td>
                   <td className="px-6 py-4 text-gray-600">
                     {office.current_users || 0} / {office.max_users || 0}
+                  </td>
+                  <td className="px-6 py-4 text-gray-600">
+                    {office.token_expiry_at ? (
+                      <div className={`text-sm ${new Date(office.token_expiry_at) < new Date() ? 'text-red-600 font-medium' : 'text-gray-600'}`}>
+                        <div>{new Date(office.token_expiry_at).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })}</div>
+                        {(() => {
+                          const expiryDate = new Date(office.token_expiry_at);
+                          const now = new Date();
+                          const diffTime = expiryDate - now;
+                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                          
+                          if (diffDays < 0) {
+                            return <span className="text-xs bg-red-100 text-red-800 px-1 py-0.5 rounded">期限切れ</span>;
+                          } else if (diffDays <= 30) {
+                            return <span className="text-xs bg-yellow-100 text-yellow-800 px-1 py-0.5 rounded">残り{diffDays}日</span>;
+                          } else {
+                            return <span className="text-xs bg-green-100 text-green-800 px-1 py-0.5 rounded">有効</span>;
+                          }
+                        })()}
+                      </div>
+                    ) : '-'}
                   </td>
                   <td className="px-6 py-4">
                     {office.manager_ids && office.manager_ids.length > 0 ? (
@@ -1908,7 +2087,7 @@ const LocationManagement = () => {
                 <button 
                   type="button" 
                   onClick={() => setShowOfficeForm(false)} 
-                  className="flex-1 bg-gray-100 text-gray-700 border-2 border-gray-200 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 transition-colors duration-300"
+                  className="flex-1 bg-gray-100 text-gray-700 border-2 border-gray-200 px-6 py-3 rounded-lg font-semibold transition-colors duration-300 hover:bg-gray-200"
                 >
                   キャンセル
                 </button>
@@ -1997,16 +2176,22 @@ const LocationManagement = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">事業所名</label>
                 <input
                   type="text"
-                  defaultValue={selectedOfficeForEdit.name}
+                  value={editFormData.name || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-400"
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">事業所タイプ</label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-400">
+                <select 
+                  value={editFormData.office_type_id || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, office_type_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-400"
+                >
+                  <option value="">選択してください</option>
                   {facilityTypes.map(type => (
-                    <option key={type} value={type} selected={type === selectedOfficeForEdit.type}>{type}</option>
+                    <option key={type} value={type}>{type}</option>
                   ))}
                 </select>
               </div>
@@ -2015,7 +2200,8 @@ const LocationManagement = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">住所</label>
                 <input
                   type="text"
-                  defaultValue={selectedOfficeForEdit.address}
+                  value={editFormData.address || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-400"
                 />
               </div>
@@ -2024,24 +2210,96 @@ const LocationManagement = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">電話番号</label>
                 <input
                   type="text"
-                  defaultValue={selectedOfficeForEdit.phone}
+                  value={editFormData.phone || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-400"
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">最大生徒数</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">利用者上限数</label>
                 <input
                   type="number"
-                  defaultValue={selectedOfficeForEdit.maxStudents}
+                  min="1"
+                  max="10000"
+                  value={editFormData.max_users || 10}
+                  onChange={(e) => setEditFormData({ ...editFormData, max_users: parseInt(e.target.value) || 10 })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-400"
                 />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">有効期限</label>
+                <div className="space-y-2">
+                  <input
+                    type="datetime-local"
+                    value={editFormData.token_expiry_at ? editFormData.token_expiry_at.slice(0, 16) : ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, token_expiry_at: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-400"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const now = new Date();
+                        const japanTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Tokyo"}));
+                        const thirtyDaysLater = new Date(japanTime.getTime() + (30 * 24 * 60 * 60 * 1000));
+                        setEditFormData({ 
+                          ...editFormData, 
+                          token_expiry_at: thirtyDaysLater.toISOString().slice(0, 16) 
+                        });
+                      }}
+                      className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors duration-300"
+                    >
+                      +30日
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const now = new Date();
+                        const japanTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Tokyo"}));
+                        const ninetyDaysLater = new Date(japanTime.getTime() + (90 * 24 * 60 * 60 * 1000));
+                        setEditFormData({ 
+                          ...editFormData, 
+                          token_expiry_at: ninetyDaysLater.toISOString().slice(0, 16) 
+                        });
+                      }}
+                      className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors duration-300"
+                    >
+                      +90日
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const now = new Date();
+                        const japanTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Tokyo"}));
+                        const oneYearLater = new Date(japanTime.getTime() + (365 * 24 * 60 * 60 * 1000));
+                        setEditFormData({ 
+                          ...editFormData, 
+                          token_expiry_at: oneYearLater.toISOString().slice(0, 16) 
+                        });
+                      }}
+                      className="px-3 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors duration-300"
+                    >
+                      +1年
+                    </button>
+                  </div>
+                  {editFormData.token_expiry_at && (
+                    <div className="text-xs text-gray-500">
+                      現在の設定: {new Date(editFormData.token_expiry_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
               <button
-                onClick={() => setShowEditModal(false)}
+                onClick={() => {
+                  setShowEditModal(false);
+                  setSelectedOfficeForEdit(null);
+                  setEditFormData({});
+                }}
                 className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-300"
               >
                 キャンセル
@@ -2137,7 +2395,7 @@ const LocationManagement = () => {
                           <th className="px-4 py-3 text-left text-sm font-semibold text-blue-800">企業名</th>
                           <th className="px-4 py-3 text-left text-sm font-semibold text-blue-800">住所</th>
                           <th className="px-4 py-3 text-left text-sm font-semibold text-blue-800">電話番号</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-blue-800">管理符号</th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold text-blue-800">管理トークン</th>
                           <th className="px-4 py-3 text-left text-sm font-semibold text-blue-800">発行日</th>
                           <th className="px-4 py-3 text-left text-sm font-semibold text-blue-800">操作</th>
                         </tr>
@@ -2160,13 +2418,22 @@ const LocationManagement = () => {
                                 {company.token_issued_at ? new Date(company.token_issued_at).toLocaleDateString('ja-JP') : '-'}
                               </td>
                               <td className="px-4 py-3">
-                                <button 
-                                  onClick={() => handleRegenerateCompanyToken(company.id)}
-                                  className="px-3 py-1 bg-blue-500 text-white rounded text-sm font-medium transition-colors duration-300 hover:bg-blue-600"
-                                  title="管理符号を再生成"
-                                >
-                                  再生成
-                                </button>
+                                <div className="flex gap-2">
+                                  <button 
+                                    onClick={() => handleRegenerateCompanyToken(company.id)}
+                                    className="px-3 py-1 bg-blue-500 text-white rounded text-sm font-medium transition-colors duration-300 hover:bg-blue-600"
+                                    title="管理トークンを再生成"
+                                  >
+                                    再生成
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteCompany(company)}
+                                    className="px-3 py-1 bg-red-500 text-white rounded text-sm font-medium transition-colors duration-300 hover:bg-red-600"
+                                    title="企業を削除"
+                                  >
+                                    削除
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))
@@ -2206,10 +2473,10 @@ const LocationManagement = () => {
 
             <div className="mb-6">
               <p className="text-gray-600 mb-4">
-                <strong>{showCompanyTokenModal.company.name}</strong> の新しい管理符号が生成されました。
+                <strong>{showCompanyTokenModal.company.name}</strong> の新しい管理トークンが生成されました。
               </p>
               <div className="bg-gray-100 p-4 rounded-lg">
-                <p className="text-sm text-gray-600 mb-2">管理符号:</p>
+                <p className="text-sm text-gray-600 mb-2">管理トークン:</p>
                 <p className="text-xl font-mono font-bold text-blue-600">
                   {showCompanyTokenModal.company.token}
                 </p>

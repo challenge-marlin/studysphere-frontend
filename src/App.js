@@ -1,7 +1,7 @@
 import React from 'react';
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './components/contexts/AuthContext';
-import AuthStatus from './components/AuthStatus';
+import TokenCountdown from './components/TokenCountdown';
 import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 import InstructorDashboard from './pages/InstructorDashboard';
@@ -59,7 +59,7 @@ function App() {
             {/* 在宅支援管理：利用者詳細画面 */}
             <Route path="/instructor/student-detail/:studentId" element={<HomeSupportUserDetailPage />} />
           </Routes>
-          <AuthStatus />
+          <TokenCountdown />
         </div>
       </AuthProvider>
     </Router>

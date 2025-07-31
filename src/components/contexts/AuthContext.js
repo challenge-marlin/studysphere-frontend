@@ -9,8 +9,10 @@ import {
   refreshTokenAPI,
   isMockLogin,
   isAuthRequiredPage,
-  handleLogout
+  handleLogout,
+  handleTokenInvalid
 } from '../../utils/authUtils';
+import { setGlobalNavigate, setupFetchInterceptor } from '../../utils/httpInterceptor';
 
 const AuthContext = createContext();
 
@@ -33,6 +35,12 @@ export const AuthProvider = ({ children }) => {
 
   // 初期認証チェック
   useEffect(() => {
+    // グローバルナビゲーション関数を設定
+    setGlobalNavigate(navigate);
+    
+    // HTTPインターセプターを設定
+    setupFetchInterceptor();
+    
     const checkInitialAuth = () => {
       try {
         const userData = localStorage.getItem('currentUser');
@@ -57,14 +65,17 @@ export const AuthProvider = ({ children }) => {
         const { accessToken, refreshToken } = getStoredTokens();
         
         if (!accessToken || !refreshToken) {
-          // トークンがない場合はログアウト
-          handleLogout(navigate);
+          // トークンがない場合は即座にログインページにリダイレクト
+          handleTokenInvalid(navigate, 'トークンが見つかりません');
           return;
         }
 
         if (!isTokenValid(accessToken)) {
           // アクセストークンが無効な場合はリフレッシュトークンで更新を試行
-          handleTokenRefresh(refreshToken);
+          // 更新に失敗した場合は即座にログインページにリダイレクト
+          handleTokenRefresh(refreshToken).catch(() => {
+            handleTokenInvalid(navigate, 'アクセストークンが無効です');
+          });
           return;
         }
 
@@ -105,7 +116,7 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Token refresh failed:', error);
-      handleLogout(navigate);
+      handleTokenInvalid(navigate, 'トークン更新に失敗しました');
     }
   };
 
@@ -119,18 +130,21 @@ export const AuthProvider = ({ children }) => {
       const { accessToken, refreshToken } = getStoredTokens();
       
       if (!accessToken || !refreshToken) {
-        handleLogout(navigate);
+        handleTokenInvalid(navigate, 'トークンが見つかりません');
         return;
       }
 
       if (!isTokenValid(accessToken)) {
-        handleLogout(navigate);
+        // トークンが無効な場合は即座にリダイレクト
+        handleTokenInvalid(navigate, 'トークンの有効期限が切れました');
         return;
       }
 
-      // 残り120秒以下でトークン更新
+      // 残り190秒以下でトークン更新
       if (shouldRefreshToken(accessToken)) {
-        handleTokenRefresh(refreshToken);
+        handleTokenRefresh(refreshToken).catch(() => {
+          handleTokenInvalid(navigate, 'トークン更新に失敗しました');
+        });
       }
     };
 
@@ -155,7 +169,7 @@ export const AuthProvider = ({ children }) => {
     
     // 認証が必要なページで認証されていない場合
     if (isAuthRequiredPage(pathname) && !isAuthenticated) {
-      handleLogout(navigate);
+      handleTokenInvalid(navigate, '認証が必要です');
       return;
     }
 

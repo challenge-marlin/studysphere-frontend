@@ -1,207 +1,258 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import SanitizedInput from './SanitizedInput';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 
 const LocationManagement = () => {
-  // デフォルトの事業所タイプ
-  const [facilityTypes, setFacilityTypes] = useState([
-    '就労移行支援事業所',
-    '就労継続支援A型事業所',
-    '就労継続支援B型事業所',
-    '学習塾'
-  ]);
+  // 事業所タイプ（DBから取得）
+  const [facilityTypes, setFacilityTypes] = useState([]);
+  const [facilityTypesData, setFacilityTypesData] = useState([]); // IDとタイプ名の両方を保持
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
 
-  // モック事業所・拠点データ
-  const [facilities, setFacilities] = useState([
-    {
-      id: 'org001',
-      name: 'スタディスフィア株式会社',
-      type: '株式会社',
-      address: '東京都渋谷区神南1-2-3',
-      phone: '03-1234-5678',
-      offices: [
-        {
-          id: 'office001',
-          name: '東京教育渋谷校',
-          type: '就労移行支援事業所',
-          address: '東京都渋谷区渋谷1-1-1',
-          phone: '03-1234-5678',
-          students: 15,
-          maxStudents: 20,
-          managers: [
-            { name: '田中太郎', email: 'tanaka@tokyo-edu.com', department: 'IT学科' },
-            { name: '佐々木美咲', email: 'sasaki@tokyo-edu.com', department: 'IT学科' }
-          ],
-          availableCourses: []
-        },
-        {
-          id: 'office002',
-          name: '東京教育新宿校',
-          type: '就労継続支援A型事業所',
-          address: '東京都新宿区新宿2-2-2',
-          phone: '03-2345-6789',
-          students: 12,
-          maxStudents: 15,
-          managers: [
-            { name: '佐藤花子', email: 'sato@tokyo-edu.com', department: 'デザイン学科' }
-          ],
-          availableCourses: []
-        },
-        {
-          id: 'office003',
-          name: '東京教育池袋校',
-          type: '学習塾',
-          address: '東京都豊島区池袋3-3-3',
-          phone: '03-3456-7890',
-          students: 8,
-          maxStudents: 10,
-          managers: [
-            { name: '鈴木一郎', email: 'suzuki@tokyo-edu.com', department: 'ビジネス学科' }
-          ],
-          availableCourses: []
-        }
-      ]
-    },
-    {
-      id: 'org002',
-      name: '関西教育グループ',
-      type: '学校法人',
-      address: '大阪府大阪市北区梅田3-4-5',
-      phone: '06-5678-9012',
-      offices: [
-        {
-          id: 'office004',
-          name: '関西教育大阪校',
-          type: '就労継続支援A型事業所',
-          address: '大阪府大阪市北区梅田3-4-5',
-          phone: '06-5678-9012',
-          students: 18,
-          maxStudents: 25,
-          managers: [
-            { name: '山田次郎', email: 'yamada@kansai-edu.com', department: 'IT学科' },
-            { name: '高橋一郎', email: 'takahashi@kansai-edu.com', department: 'IT学科' },
-            { name: '中村花子', email: 'nakamura@kansai-edu.com', department: 'デザイン学科' }
-          ],
-          availableCourses: []
-        },
-        {
-          id: 'office005',
-          name: '関西教育難波校',
-          type: '就労継続支援B型事業所',
-          address: '大阪府大阪市中央区難波5-6-7',
-          phone: '06-9012-3456',
-          students: 10,
-          maxStudents: 12,
-          managers: [
-            { name: '高橋美咲', email: 'takahashi@kansai-edu.com', department: 'デザイン学科' }
-          ],
-          availableCourses: []
-        },
-        {
-          id: 'office008',
-          name: '関西教育新規校',
-          type: '就労移行支援事業所',
-          address: '大阪府大阪市天王寺区上本町6-7-8',
-          phone: '06-3456-7890',
-          students: 0,
-          maxStudents: 0,
-          managers: [],
-          availableCourses: []
-        }
-      ]
-    },
-    {
-      id: 'org003',
-      name: '中部学習センター',
-      type: 'NPO法人',
-      address: '愛知県名古屋市中区栄1-1-1',
-      phone: '052-1234-5678',
-      offices: [
-        {
-          id: 'office006',
-          name: '中部学習名古屋校',
-          type: '就労移行支援事業所',
-          address: '愛知県名古屋市中区栄1-1-1',
-          phone: '052-1234-5678',
-          students: 20,
-          maxStudents: 30,
-          managers: [
-            { name: '伊藤健太', email: 'ito@chubu-learning.com', department: 'ビジネス学科' },
-            { name: '松本恵子', email: 'matsumoto@chubu-learning.com', department: 'ビジネス学科' }
-          ],
-          availableCourses: []
-        },
-        {
-          id: 'office007',
-          name: '中部学習岡崎校',
-          type: '学習塾',
-          address: '愛知県岡崎市本町2-2-2',
-          phone: '0564-1234-5678',
-          students: 6,
-          maxStudents: 8,
-          managers: [
-            { name: '渡辺真理', email: 'watanabe@chubu-learning.com', department: 'IT学科' }
-          ],
-          availableCourses: []
-        }
-      ]
-    },
-    {
-      id: 'org004',
-      name: '',
-      type: '個人事業主',
-      address: '',
-      phone: '',
-      offices: [
-        {
-          id: 'office009',
-          name: 'フリーランス学習塾',
-          type: '学習塾',
-          address: '東京都中野区中野4-4-4',
-          phone: '03-4567-8901',
-          students: 5,
-          maxStudents: 8,
-          managers: [
-            { name: '小林直子', email: 'kobayashi@freelance.com', department: '個人指導' }
-          ],
-          availableCourses: []
-        },
-        {
-          id: 'office010',
-          name: '個人指導センター',
-          type: '就労移行支援事業所',
-          address: '東京都杉並区阿佐ヶ谷5-5-5',
-          phone: '03-5678-9012',
-          students: 0,
-          maxStudents: 0,
-          managers: [],
-          availableCourses: []
-        }
-      ]
-    },
-    {
-      id: 'org005',
-      name: '',
-      type: '未分類',
-      address: '',
-      phone: '',
-      offices: [
-        {
-          id: 'office011',
-          name: '独立系教育施設',
-          type: 'その他',
-          address: '東京都世田谷区三軒茶屋6-6-6',
-          phone: '03-6789-0123',
-          students: 3,
-          maxStudents: 5,
-          managers: [
-            { name: '中村誠', email: 'nakamura@independent.com', department: '総合教育' }
-          ],
-          availableCourses: []
-        }
-      ]
+  // 企業一覧（DBから取得）
+  const [companies, setCompanies] = useState([]);
+  const [companiesLoading, setCompaniesLoading] = useState(false);
+
+  // 事業所タイプ取得
+  const fetchOfficeTypes = async () => {
+    try {
+      setLoading(true);
+      console.log('事業所タイプ取得開始...');
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      const response = await fetch('http://localhost:5000/office-types', {
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      console.log('レスポンスステータス:', response.status);
+      console.log('レスポンスヘッダー:', response.headers);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('レスポンスエラー:', errorText);
+        throw new Error(`事業所タイプの取得に失敗しました (${response.status})`);
+      }
+      
+      const data = await response.json();
+      console.log('取得したデータ:', data);
+      setFacilityTypesData(data); // 完全なデータを保持
+      setFacilityTypes(data.map(item => item.type)); // 表示用のタイプ名のみ
+      setError(null);
+    } catch (err) {
+      console.error('事業所タイプ取得エラー:', err);
+      if (err.name === 'AbortError') {
+        setError('リクエストがタイムアウトしました。バックエンドサーバーが起動しているか確認してください。');
+        showNotification('リクエストがタイムアウトしました。バックエンドサーバーが起動しているか確認してください。', 'error');
+      } else {
+              setError(err.message);
+      showNotification('事業所タイプの取得に失敗しました。事業所タイプ管理から追加してください。', 'error');
     }
-  ]);
+    // エラー時はデフォルト値を設定
+    setFacilityTypes(['就労移行支援事業所', '就労継続支援A型', '就労継続支援B型']);
+    setFacilityTypesData([
+      { id: 1, type: '就労移行支援事業所' },
+      { id: 2, type: '就労継続支援A型' },
+      { id: 3, type: '就労継続支援B型' }
+    ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 企業一覧取得
+  const fetchCompanies = async () => {
+    try {
+      setCompaniesLoading(true);
+      console.log('企業一覧取得開始');
+      
+      const response = await fetch('http://localhost:5000/companies');
+      console.log('企業一覧取得レスポンス:', response.status, response.statusText);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('企業一覧取得エラー詳細:', errorText);
+        console.warn('企業一覧の取得に失敗しましたが、新規組織作成で対応可能です');
+        setCompanies([]); // 空配列を設定
+        return;
+      }
+      
+      const data = await response.json();
+      console.log('企業一覧取得成功:', data);
+      setCompanies(data);
+      
+      // satellitesデータも取得
+      await fetchSatellites();
+    } catch (err) {
+      console.error('企業一覧取得エラー:', err);
+      console.warn('企業一覧の取得に失敗しましたが、新規組織作成で対応可能です');
+      setCompanies([]); // エラー時も空配列を設定
+    } finally {
+      setCompaniesLoading(false);
+    }
+  };
+
+  // satellitesデータ取得
+  const fetchSatellites = async () => {
+    try {
+      console.log('satellites一覧取得開始');
+      
+      const response = await fetch('http://localhost:5000/satellites');
+      console.log('satellites一覧取得レスポンス:', response.status, response.statusText);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('satellites一覧取得エラー詳細:', errorText);
+        setFacilities([]); // 空配列を設定
+        return;
+      }
+      
+      const data = await response.json();
+      console.log('satellites一覧取得成功:', data);
+      
+      // satellitesデータをfacilitiesとして設定
+      if (data.success && data.data) {
+        setFacilities(data.data);
+      } else {
+        setFacilities([]);
+      }
+    } catch (err) {
+      console.error('satellites一覧取得エラー:', err);
+      setFacilities([]); // エラー時も空配列を設定
+    }
+  };
+
+  // 事業所タイプ追加
+  const addOfficeType = async (typeName) => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒タイムアウト
+      
+      const response = await fetch('http://localhost:5000/office-types', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ type: typeName }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || '事業所タイプの追加に失敗しました');
+      }
+
+      // 成功時は一覧を再取得
+      await fetchOfficeTypes();
+      return { success: true, message: result.message };
+    } catch (err) {
+      console.error('事業所タイプ追加エラー:', err);
+      if (err.name === 'AbortError') {
+        return { success: false, message: 'リクエストがタイムアウトしました。しばらく待ってから再試行してください。' };
+      }
+      return { success: false, message: err.message };
+    }
+  };
+
+  // 事業所タイプ削除
+  const deleteOfficeType = async (typeName) => {
+    try {
+      // タイプ名からIDを取得
+      const typeData = facilityTypesData.find(item => item.type === typeName);
+      if (!typeData) {
+        throw new Error('削除対象の事業所タイプが見つかりません');
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒タイムアウト
+
+      const response = await fetch(`http://localhost:5000/office-types/${typeData.id}`, {
+        method: 'DELETE',
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('削除レスポンスエラー:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || '事業所タイプの削除に失敗しました');
+      }
+
+      // 成功時は一覧を再取得
+      await fetchOfficeTypes();
+      return { success: true, message: result.message };
+    } catch (err) {
+      console.error('事業所タイプ削除エラー:', err);
+      if (err.name === 'AbortError') {
+        return { success: false, message: 'リクエストがタイムアウトしました。しばらく待ってから再試行してください。' };
+      }
+      return { success: false, message: err.message };
+    }
+  };
+
+  // バックエンドサーバーの接続確認
+  const checkBackendConnection = async () => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const response = await fetch('http://localhost:5000/', { 
+        method: 'GET',
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      return response.ok;
+    } catch (error) {
+      console.error('バックエンド接続エラー:', error);
+      return false;
+    }
+  };
+
+  // 初期データ取得
+  useEffect(() => {
+    const initializeData = async () => {
+      const isBackendAvailable = await checkBackendConnection();
+      if (isBackendAvailable) {
+        console.log('バックエンドサーバーに接続できました');
+        fetchOfficeTypes();
+        fetchCompanies();
+      } else {
+        console.error('バックエンドサーバーに接続できません');
+        showNotification('バックエンドサーバーに接続できません。サーバーが起動しているか確認してください。', 'error');
+        setError('バックエンドサーバーに接続できません');
+        // バックエンドが利用できない場合は空の配列を設定
+        setFacilityTypes([]);
+        setFacilityTypesData([]);
+        setCompanies([]);
+      }
+    };
+    
+    initializeData();
+  }, []);
+
+  // 事業所追加モーダル表示制御
+  const [showOfficeForm, setShowOfficeForm] = useState(false);
+
+  // 事業所・拠点データ（バックエンドから取得）
+  const [facilities, setFacilities] = useState([]);
 
   // ソート・フィルタ状態
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
@@ -232,17 +283,23 @@ const LocationManagement = () => {
   const [editingFacilityData, setEditingFacilityData] = useState(null);
   const [selectedFacility, setSelectedFacility] = useState(null);
 
-  // 事業所追加用
+  // 事業所追加用（DB連携版）
   const [newOffice, setNewOffice] = useState({
-    orgId: '',
+    company_id: '',
     name: '',
-    type: facilityTypes[0] || '',
+    address: '',
+    office_type_id: '',
+    contract_type: '30days',
+    max_users: 10
+  });
+
+  // 新規組織入力用
+  const [isNewCompany, setIsNewCompany] = useState(false);
+  const [newCompany, setNewCompany] = useState({
+    name: '',
     address: '',
     phone: ''
   });
-
-  // 事業所追加モーダル表示制御
-  const [showOfficeForm, setShowOfficeForm] = useState(false);
 
   // 責任者選択モーダル表示制御
   const [showManagerSelect, setShowManagerSelect] = useState(false);
@@ -277,6 +334,12 @@ const LocationManagement = () => {
   const [targetOffice, setTargetOffice] = useState(null);
   const [selectedCourses, setSelectedCourses] = useState([]);
 
+  const [addOfficeLoading, setAddOfficeLoading] = useState(false);
+  const [tokenModal, setTokenModal] = useState({ show: false, token: '', expiry: '' });
+  const [showOfficeTypeModal, setShowOfficeTypeModal] = useState(false);
+  const [showCompanyList, setShowCompanyList] = useState(false);
+  const [showCompanyTokenModal, setShowCompanyTokenModal] = useState({ show: false, company: null });
+
   // 責任者選択ハンドラー
   const handleSelectManager = (office) => {
     setSelectedOfficeForManager(office);
@@ -310,16 +373,127 @@ const LocationManagement = () => {
     setSelectedOfficeForEdit(null);
   };
 
-  // 事業所追加モーダル
-  const handleAddOffice = () => {
-    if (!newOffice.orgId || !newOffice.name || !newOffice.type) return;
-    setFacilities(prev => prev.map(org =>
-      org.id === newOffice.orgId
-        ? { ...org, offices: [...(org.offices || []), { ...newOffice, id: `office${Date.now()}` }] }
-        : org
-    ));
-    setShowOfficeForm(false);
-    setNewOffice({ orgId: '', name: '', type: facilityTypes[0] || '', address: '', phone: '' });
+  // 事業所追加モーダル（DB連携版）
+  const handleAddOffice = async () => {
+    console.log('handleAddOffice called'); // デバッグログ追加
+    // バリデーション
+    if (isNewCompany) {
+      if (!newCompany.name.trim()) {
+        showNotification('新規組織の必須項目を入力してください', 'error');
+        return;
+      }
+    } else {
+      // 企業一覧が空の場合は新規組織作成に切り替え
+      if (companies.length === 0) {
+        setIsNewCompany(true);
+        showNotification('組織が登録されていないため、新規組織作成に切り替えました', 'info');
+        return;
+      }
+      
+      if (!newOffice.company_id || !newOffice.name.trim() || !newOffice.office_type_id || !newOffice.contract_type || !newOffice.max_users) {
+        showNotification('必須項目を入力してください', 'error');
+        return;
+      }
+    }
+    
+    // 事業所情報のバリデーション
+    if (!newOffice.name.trim() || !newOffice.office_type_id || !newOffice.contract_type || !newOffice.max_users) {
+      showNotification('事業所情報の必須項目を入力してください', 'error');
+      return;
+    }
+    
+    setAddOfficeLoading(true);
+    try {
+      let companyId = newOffice.company_id;
+      // 新規組織の場合、まず組織を作成
+      if (isNewCompany) {
+        // 空の値を適切に処理
+        const companyData = {
+          name: newCompany.name.trim(),
+          address: newCompany.address?.trim() || null,
+          phone: newCompany.phone?.trim() || null
+        };
+        
+        console.log('新規組織作成データ:', companyData);
+        console.log('送信データの詳細:', {
+          name: companyData.name,
+          address: companyData.address,
+          phone: companyData.phone,
+          office_type_id: newCompany.office_type_id || null,
+          phoneType: typeof companyData.phone,
+          officeTypeIdType: typeof newCompany.office_type_id
+        });
+        const companyResponse = await fetch('http://localhost:5000/companies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(companyData)
+        });
+        const companyResult = await companyResponse.json();
+        console.log('組織作成レスポンス:', companyResult);
+        if (!companyResult.success) {
+          // バリデーションエラーの詳細を表示
+          if (companyResult.errors && companyResult.errors.length > 0) {
+            const errorMessages = companyResult.errors.map(err => err.msg).join(', ');
+            throw new Error(`組織の作成に失敗しました: ${errorMessages}`);
+          }
+          throw new Error(companyResult.message || companyResult.error || '組織の作成に失敗しました');
+        }
+        companyId = companyResult.data.id;
+        showNotification('組織が正常に作成されました', 'success');
+        await fetchCompanies();
+      }
+      
+      // 拠点データを作成
+      const satelliteData = {
+        company_id: companyId,
+        name: newOffice.name,
+        address: newOffice.address,
+        office_type_id: newOffice.office_type_id,
+        contract_type: newOffice.contract_type,
+        max_users: newOffice.max_users
+      };
+      console.log('拠点作成データ:', satelliteData);
+      const response = await fetch('http://localhost:5000/satellites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(satelliteData)
+      });
+      const result = await response.json();
+      console.log('拠点作成レスポンス:', result);
+      if (!result.success) {
+        throw new Error(result.message || result.error || '拠点の追加に失敗しました');
+      }
+      // トークン・有効期限をモーダルで表示
+      setTokenModal({
+        show: true,
+        token: result.data.token,
+        expiry: result.data.token_expiry_at
+      });
+      showNotification('拠点が正常に追加されました', 'success');
+      setShowOfficeForm(false);
+      // フォームをリセット
+      setNewOffice({
+        company_id: '',
+        name: '',
+        address: '',
+        office_type_id: '',
+        contract_type: '30days',
+        max_users: 10
+      });
+      setIsNewCompany(false);
+      setNewCompany({
+        name: '',
+        address: '',
+        phone: ''
+      });
+      // 企業・拠点リストを再取得
+      await fetchCompanies();
+    } catch (err) {
+      console.error('拠点追加エラー:', err);
+      showNotification(err.message, 'error');
+    } finally {
+      setAddOfficeLoading(false);
+    }
   };
 
   // ソート機能
@@ -332,31 +506,25 @@ const LocationManagement = () => {
 
   // フィルタリングとソート
   const getFilteredAndSortedFacilities = () => {
-    // 事業所をフラットな配列に変換
-    let allOffices = [];
-    facilities.forEach(org => {
-      if (org.offices && org.offices.length > 0) {
-        org.offices.forEach(office => {
-          allOffices.push({
-            ...office,
-            organizationName: org.name,
-            organizationId: org.id
-          });
-        });
-      }
-    });
+    // satellitesデータを直接使用（既にフラットな配列）
+    let allOffices = facilities.map(satellite => ({
+      ...satellite,
+      // 企業名を取得
+      organizationName: companies.find(company => company.id === satellite.company_id)?.name || '不明',
+      organizationId: satellite.company_id
+    }));
 
     // 事業所レベルでフィルタリング
     let filtered = allOffices.filter(office => {
       const matchesSearch = 
         office.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         office.organizationName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        office.address.toLowerCase().includes(searchTerm.toLowerCase());
+        (office.address && office.address.toLowerCase().includes(searchTerm.toLowerCase()));
      
-      const matchesType = filterType === 'all' || office.type === filterType;
+      const matchesType = filterType === 'all' || office.office_type_id === filterType;
      
       const matchesManager = showOnlyNoManager ? 
-        (!office.managers || office.managers.length === 0) : true;
+        (!office.manager_ids || office.manager_ids.length === 0) : true;
      
       return matchesSearch && matchesType && matchesManager;
     });
@@ -414,16 +582,42 @@ const LocationManagement = () => {
     ];
   };
 
+  // 通知表示関数
+  const showNotification = (message, type = 'success') => {
+    setNotification({ show: true, message, type });
+    setTimeout(() => setNotification({ show: false, message: '', type: 'success' }), 3000);
+  };
+
   // 事業所タイプ管理
-  const handleAddFacilityType = () => {
-    if (newFacilityType.trim() && !facilityTypes.includes(newFacilityType.trim())) {
-      setFacilityTypes([...facilityTypes, newFacilityType.trim()]);
-      setNewFacilityType('');
+  const handleAddFacilityType = async () => {
+    if (newFacilityType.trim()) {
+      // 重複チェック
+      if (facilityTypes.includes(newFacilityType.trim())) {
+        showNotification('同じ名前の事業所タイプが既に存在します', 'error');
+        return;
+      }
+
+      const result = await addOfficeType(newFacilityType.trim());
+      if (result.success) {
+        // 成功時のフィードバック
+        setNewFacilityType('');
+        showNotification(result.message, 'success');
+      } else {
+        showNotification(result.message, 'error');
+      }
     }
   };
 
-  const handleRemoveFacilityType = (typeToRemove) => {
-    setFacilityTypes(facilityTypes.filter(type => type !== typeToRemove));
+  const handleRemoveFacilityType = async (typeToRemove) => {
+    if (window.confirm(`「${typeToRemove}」を削除しますか？\n\n注意: この事業所タイプを使用している企業が存在する場合は削除できません。`)) {
+      const result = await deleteOfficeType(typeToRemove);
+      if (result.success) {
+        // 成功時のフィードバック
+        showNotification(result.message, 'success');
+      } else {
+        showNotification(result.message, 'error');
+      }
+    }
   };
 
   // 連絡先フィールド管理
@@ -653,8 +847,54 @@ const LocationManagement = () => {
     setSelectedCourses([]);
   };
 
+  // 企業トークン再生成
+  const handleRegenerateCompanyToken = async (companyId) => {
+    try {
+      const response = await fetch(`http://localhost:5000/companies/${companyId}/regenerate-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'トークンの再生成に失敗しました');
+      }
+      
+      showNotification('企業トークンが正常に再生成されました', 'success');
+      
+      // 企業一覧を再取得
+      await fetchCompanies();
+      
+      // トークンモーダルを表示
+      setShowCompanyTokenModal({
+        show: true,
+        company: result.data
+      });
+    } catch (err) {
+      console.error('企業トークン再生成エラー:', err);
+      showNotification(err.message, 'error');
+    }
+  };
+
   return (
     <div className="p-6">
+      {/* 通知コンポーネント */}
+      {notification.show && (
+        <div className={`fixed top-4 right-4 z-[10000] p-4 rounded-lg shadow-lg transition-all duration-300 ${
+          notification.type === 'success' 
+            ? 'bg-green-500 text-white' 
+            : 'bg-red-500 text-white'
+        }`}>
+          <div className="flex items-center gap-2">
+            <span className="text-lg">
+              {notification.type === 'success' ? '✓' : '✗'}
+            </span>
+            <span>{notification.message}</span>
+          </div>
+        </div>
+      )}
+
       <div className="mb-8">
         <h2 className="text-3xl font-bold text-red-800 mb-6">事業所(拠点)管理</h2>
         <div className="grid grid-cols-1 md:grid-cols-1 gap-6 mb-6">
@@ -668,9 +908,19 @@ const LocationManagement = () => {
 
       <div className="flex flex-wrap gap-4 mb-8">
         <button 
-          className="bg-red-600 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-300 hover:bg-red-700"
-          onClick={() => setShowOfficeForm(true)}
-          disabled={facilities.length === 0}
+          className="bg-red-600 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-300 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          onClick={() => {
+            console.log('事業所を追加ボタンがクリックされました'); // デバッグログ追加
+            console.log('facilities:', facilities); // facilitiesの状態を確認
+            console.log('showOfficeForm before:', showOfficeForm); // 現在の状態を確認
+            setShowOfficeForm(true);
+            console.log('setShowOfficeForm(true) called'); // 状態更新を確認
+            // 状態更新後の確認（非同期なので少し遅延）
+            setTimeout(() => {
+              console.log('showOfficeForm after timeout:', showOfficeForm);
+            }, 100);
+          }}
+          disabled={false}
         >
           + 事業所を追加
         </button>
@@ -679,6 +929,55 @@ const LocationManagement = () => {
           onClick={() => setShowTypeManagement(true)}
         >
           📝 事業所タイプ管理
+        </button>
+        <button 
+          className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-300 hover:bg-blue-700"
+          onClick={() => setShowCompanyList(true)}
+        >
+          🏢 企業一覧
+        </button>
+        <button 
+          className="bg-green-600 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-300 hover:bg-green-700"
+          onClick={async () => {
+            try {
+              console.log('データベーステスト開始');
+              const response = await fetch('http://localhost:5000/test-db');
+              const data = await response.json();
+              console.log('データベーステスト結果:', data);
+              alert('データベーステスト完了。コンソールを確認してください。');
+            } catch (error) {
+              console.error('データベーステストエラー:', error);
+              alert('データベーステストでエラーが発生しました。');
+            }
+          }}
+        >
+          🔧 DBテスト
+        </button>
+        <button 
+          className="bg-orange-600 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-300 hover:bg-orange-700"
+          onClick={async () => {
+            try {
+              console.log('管理者アカウント復元開始');
+              const response = await fetch('http://localhost:5000/restore-admin', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                }
+              });
+              const data = await response.json();
+              console.log('管理者アカウント復元結果:', data);
+              if (data.success) {
+                alert('管理者アカウントが復元されました。\nユーザー名: admin001\nパスワード: admin123');
+              } else {
+                alert('管理者アカウント復元に失敗しました: ' + data.message);
+              }
+            } catch (error) {
+              console.error('管理者アカウント復元エラー:', error);
+              alert('管理者アカウント復元でエラーが発生しました。');
+            }
+          }}
+        >
+          🔑 管理者復元
         </button>
       </div>
 
@@ -736,7 +1035,7 @@ const LocationManagement = () => {
       {(searchTerm || filterType !== 'all' || showOnlyNoManager) && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-blue-800">
-            検索結果: <span className="font-semibold">{filteredFacilities.reduce((sum, org) => sum + (org.offices ? org.offices.length : 0), 0)}</span>件
+            検索結果: <span className="font-semibold">{filteredFacilities.length}</span>件
             {searchTerm && <span> (検索語: "{searchTerm}")</span>}
             {filterType !== 'all' && <span> (タイプ: "{filterType}")</span>}
             {showOnlyNoManager && <span> (責任者不在: "はい")</span>}
@@ -764,30 +1063,24 @@ const LocationManagement = () => {
               {/* フィルターされた事業所を直接表示 */}
               {filteredFacilities.map((office) => (
                 <tr key={office.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200 ${
-                  !office.managers || office.managers.length === 0 ? 'bg-yellow-50 hover:bg-yellow-100' : ''
+                  !office.manager_ids || office.manager_ids.length === 0 ? 'bg-yellow-50 hover:bg-yellow-100' : ''
                 }`}>
                   <td className="px-6 py-4">{office.name}</td>
-                  <td className="px-6 py-4">{office.type}</td>
+                  <td className="px-6 py-4">{office.office_type_id}</td>
                   <td className="px-6 py-4">
                     <strong className="text-gray-800">{office.organizationName || <span className="text-gray-500 italic">組織名なし</span>}</strong>
                   </td>
-                  <td className="px-6 py-4 text-gray-600">{office.address}</td>
-                  <td className="px-6 py-4 text-gray-600">{office.phone}</td>
+                  <td className="px-6 py-4 text-gray-600">{office.address || '-'}</td>
+                  <td className="px-6 py-4 text-gray-600">{office.phone || '-'}</td>
                   <td className="px-6 py-4 text-gray-600">
-                    {office.students || 0} / {office.maxStudents || 0}
+                    {office.current_users || 0} / {office.max_users || 0}
                   </td>
                   <td className="px-6 py-4">
-                    {office.managers && office.managers.length > 0 ? (
+                    {office.manager_ids && office.manager_ids.length > 0 ? (
                       <div className="space-y-1">
-                        {office.managers.map((manager, index) => (
-                          <div key={index} className="text-sm">
-                            <span className="font-medium text-gray-800">{manager.name}</span>
-                            <span className="text-gray-500">（{manager.email}）</span>
-                            {manager.department && (
-                              <span className="text-xs text-gray-400 ml-1">- {manager.department}</span>
-                            )}
-                          </div>
-                        ))}
+                        <span className="text-sm text-gray-600">
+                          責任者ID: {Array.isArray(office.manager_ids) ? office.manager_ids.join(', ') : office.manager_ids}
+                        </span>
                       </div>
                     ) : (
                       <span className="text-red-600 font-medium flex items-center gap-1">
@@ -848,44 +1141,86 @@ const LocationManagement = () => {
       {showTypeManagement && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
           <div className="bg-white rounded-xl p-8 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto shadow-2xl">
-            <h3 className="text-2xl font-bold text-gray-800 mb-6">事業所タイプ管理</h3>
-            
-            <div className="mb-6">
-              <h4 className="text-lg font-semibold text-gray-700 mb-4">現在の事業所タイプ</h4>
-              <div className="space-y-2">
-                {facilityTypes.map(type => (
-                  <div key={type} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <span className="text-gray-800">{type}</span>
-                    <button 
-                      className="px-3 py-1 bg-red-500 text-white rounded text-sm font-medium transition-colors duration-300 hover:bg-red-600"
-                      onClick={() => handleRemoveFacilityType(type)}
-                      disabled={facilityTypes.length <= 1}
-                    >
-                      削除
-                    </button>
-                  </div>
-                ))}
-              </div>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-bold text-gray-800">事業所タイプ管理</h3>
+              <button 
+                onClick={() => setShowTypeManagement(false)}
+                className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+              >
+                ×
+              </button>
             </div>
 
-            <div className="mb-6">
-              <h4 className="text-lg font-semibold text-gray-700 mb-4">新しい事業所タイプを追加</h4>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="新しい事業所タイプ名"
-                  value={newFacilityType}
-                  onChange={(e) => setNewFacilityType(e.target.value)}
-                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
-                />
+            {/* ローディング状態 */}
+            {loading && (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">事業所タイプを読み込み中...</p>
+              </div>
+            )}
+
+            {/* エラー状態 */}
+            {error && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-700 text-sm">
+                  <strong>エラー:</strong> {error}
+                </p>
                 <button 
-                  onClick={handleAddFacilityType}
-                  className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg font-semibold transition-colors duration-300 hover:-translate-y-0.5 shadow-lg hover:shadow-xl"
+                  onClick={fetchOfficeTypes}
+                  className="mt-2 text-red-600 hover:text-red-800 text-sm underline"
                 >
-                  追加
+                  再試行
                 </button>
               </div>
-            </div>
+            )}
+            
+            {!loading && (
+              <>
+                <div className="mb-6">
+                  <h4 className="text-lg font-semibold text-gray-700 mb-4">現在の事業所タイプ</h4>
+                  {facilityTypes.length === 0 ? (
+                    <p className="text-gray-500 text-center py-4">事業所タイプが登録されていません</p>
+                  ) : (
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {facilityTypes.map(type => (
+                        <div key={type} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200">
+                          <span className="text-gray-800">{type}</span>
+                          <button 
+                            className="px-3 py-1 bg-red-500 text-white rounded text-sm font-medium transition-colors duration-300 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => handleRemoveFacilityType(type)}
+                            disabled={facilityTypes.length <= 1}
+                            title={facilityTypes.length <= 1 ? "最低1つの事業所タイプが必要です" : ""}
+                          >
+                            削除
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mb-6">
+                  <h4 className="text-lg font-semibold text-gray-700 mb-4">新しい事業所タイプを追加</h4>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="新しい事業所タイプ名"
+                      value={newFacilityType}
+                      onChange={(e) => setNewFacilityType(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleAddFacilityType()}
+                      className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
+                    />
+                    <button 
+                      onClick={handleAddFacilityType}
+                      disabled={!newFacilityType.trim()}
+                      className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg font-semibold transition-colors duration-300 hover:-translate-y-0.5 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    >
+                      追加
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="flex gap-4 pt-4 border-t border-gray-200">
               <button 
@@ -1380,37 +1715,210 @@ const LocationManagement = () => {
 
       {showOfficeForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-8 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto shadow-2xl">
+          <div className="bg-white rounded-xl p-8 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto shadow-2xl">
             <h3 className="text-2xl font-bold text-gray-800 mb-6">事業所追加</h3>
-            <form className="space-y-4" onSubmit={e => { e.preventDefault(); handleAddOffice(); }}>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">組織 *</label>
-                <select className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg" value={newOffice.orgId} onChange={e => setNewOffice({ ...newOffice, orgId: e.target.value })} required>
-                  <option value="">選択してください</option>
-                  {facilities.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
-                </select>
+            <form className="space-y-6" onSubmit={e => { e.preventDefault(); handleAddOffice(); }}>
+              
+              {/* 組織選択セクション */}
+              <div className="border-b border-gray-200 pb-4">
+                <h4 className="text-lg font-semibold text-gray-700 mb-4">組織情報</h4>
+                
+                {/* 新規組織チェックボックス */}
+                <div className="mb-4">
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={isNewCompany}
+                      onChange={(e) => setIsNewCompany(e.target.checked)}
+                      className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                    />
+                    <span>新規組織を作成する</span>
+                  </label>
+                </div>
+
+                {isNewCompany ? (
+                  /* 新規組織作成 */
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">組織名 *</label>
+                      <SanitizedInput 
+                        type="text" 
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-indigo-400 transition-colors duration-300" 
+                        value={newCompany.name} 
+                        onChange={e => setNewCompany({ ...newCompany, name: e.target.value })} 
+                        required 
+                        sanitizeMode={SANITIZE_OPTIONS.LIGHT} 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">住所</label>
+                      <SanitizedInput 
+                        type="text" 
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-indigo-400 transition-colors duration-300" 
+                        value={newCompany.address} 
+                        onChange={e => setNewCompany({ ...newCompany, address: e.target.value })} 
+                        sanitizeMode={SANITIZE_OPTIONS.LIGHT} 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">電話番号</label>
+                      <SanitizedInput 
+                        type="text" 
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-indigo-400 transition-colors duration-300" 
+                        value={newCompany.phone} 
+                        onChange={e => setNewCompany({ ...newCompany, phone: e.target.value })} 
+                        sanitizeMode={SANITIZE_OPTIONS.LIGHT} 
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  /* 既存組織選択 */
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">組織 *</label>
+                    {companies.length === 0 ? (
+                      <div className="w-full px-4 py-3 border-2 border-yellow-200 rounded-lg bg-yellow-50">
+                        <p className="text-sm text-yellow-700 mb-2">
+                          組織が登録されていません。新規組織を作成してください。
+                        </p>
+                        <button 
+                          type="button"
+                          onClick={() => setIsNewCompany(true)}
+                          className="text-sm bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 transition-colors duration-300"
+                        >
+                          新規組織を作成
+                        </button>
+                      </div>
+                    ) : (
+                      <select 
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-indigo-400 transition-colors duration-300" 
+                        value={newOffice.company_id} 
+                        onChange={e => setNewOffice({ ...newOffice, company_id: e.target.value })} 
+                        required
+                      >
+                        <option value="">選択してください</option>
+                        {companies.map(company => (
+                          <option key={company.id} value={company.id}>
+                            {company.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    {companiesLoading && (
+                      <p className="text-sm text-gray-500 mt-2">組織一覧を読み込み中...</p>
+                    )}
+                  </div>
+                )}
               </div>
+
+              {/* 事業所情報セクション */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">事業所名 *</label>
-                <SanitizedInput type="text" className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg" value={newOffice.name} onChange={e => setNewOffice({ ...newOffice, name: e.target.value })} required sanitizeMode={SANITIZE_OPTIONS.LIGHT} />
+                <h4 className="text-lg font-semibold text-gray-700 mb-4">事業所情報</h4>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">事業所名 *</label>
+                    <SanitizedInput 
+                      type="text" 
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-indigo-400 transition-colors duration-300" 
+                      value={newOffice.name} 
+                      onChange={e => setNewOffice({ ...newOffice, name: e.target.value })} 
+                      required 
+                      sanitizeMode={SANITIZE_OPTIONS.LIGHT} 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">事業所タイプ *</label>
+                    <select 
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-indigo-400 transition-colors duration-300" 
+                      value={newOffice.office_type_id} 
+                      onChange={e => setNewOffice({ ...newOffice, office_type_id: e.target.value })} 
+                      required
+                      disabled={loading}
+                    >
+                      <option value="">
+                        {loading ? '読み込み中...' : facilityTypes.length === 0 ? '事業所タイプがありません' : '選択してください'}
+                      </option>
+                      {facilityTypes.map(type => <option key={type} value={type}>{type}</option>)}
+                    </select>
+                    {loading && (
+                      <p className="text-sm text-gray-500 mt-2">事業所タイプを読み込み中...</p>
+                    )}
+                    {!loading && facilityTypes.length === 0 && (
+                      <p className="text-sm text-red-500 mt-2">
+                        事業所タイプが取得できませんでした。
+                        <button 
+                          type="button"
+                          onClick={() => setShowOfficeTypeModal(true)}
+                          className="text-blue-600 hover:text-blue-800 underline ml-1"
+                        >
+                          事業所タイプ管理
+                        </button>
+                        から追加してください。
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">住所</label>
+                    <SanitizedInput 
+                      type="text" 
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-indigo-400 transition-colors duration-300" 
+                      value={newOffice.address} 
+                      onChange={e => setNewOffice({ ...newOffice, address: e.target.value })} 
+                      sanitizeMode={SANITIZE_OPTIONS.LIGHT} 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">電話番号</label>
+                    <SanitizedInput 
+                      type="text" 
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-indigo-400 transition-colors duration-300" 
+                      value={newOffice.phone} 
+                      onChange={e => setNewOffice({ ...newOffice, phone: e.target.value })} 
+                      sanitizeMode={SANITIZE_OPTIONS.LIGHT} 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">契約コース *</label>
+                    <select 
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-indigo-400 transition-colors duration-300" 
+                      value={newOffice.contract_type} 
+                      onChange={e => setNewOffice({ ...newOffice, contract_type: e.target.value })} 
+                      required
+                    >
+                      <option value="30days">30日コース</option>
+                      <option value="90days">90日コース</option>
+                      <option value="1year">1年コース</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">利用者上限数 *</label>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max="10000"
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-indigo-400 transition-colors duration-300" 
+                      value={newOffice.max_users} 
+                      onChange={e => setNewOffice({ ...newOffice, max_users: parseInt(e.target.value) || 10 })} 
+                      required 
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">事業所タイプ *</label>
-                <select className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg" value={newOffice.type} onChange={e => setNewOffice({ ...newOffice, type: e.target.value })} required>
-                  {facilityTypes.map(type => <option key={type} value={type}>{type}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">住所</label>
-                <SanitizedInput type="text" className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg" value={newOffice.address} onChange={e => setNewOffice({ ...newOffice, address: e.target.value })} sanitizeMode={SANITIZE_OPTIONS.LIGHT} />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">電話番号</label>
-                <SanitizedInput type="text" className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg" value={newOffice.phone} onChange={e => setNewOffice({ ...newOffice, phone: e.target.value })} sanitizeMode={SANITIZE_OPTIONS.LIGHT} />
-              </div>
+
               <div className="flex gap-4 pt-4 border-t border-gray-200">
-                <button type="button" onClick={() => setShowOfficeForm(false)} className="flex-1 bg-gray-100 text-gray-700 border-2 border-gray-200 px-6 py-3 rounded-lg font-semibold">キャンセル</button>
-                <button type="submit" className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-6 py-3 rounded-lg font-semibold">追加</button>
+                <button 
+                  type="button" 
+                  onClick={() => setShowOfficeForm(false)} 
+                  className="flex-1 bg-gray-100 text-gray-700 border-2 border-gray-200 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 transition-colors duration-300"
+                >
+                  キャンセル
+                </button>
+                <button 
+                  type="button" 
+                  onClick={handleAddOffice}
+                  className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-indigo-600 hover:to-purple-700 transition-all duration-300"
+                >
+                  {isNewCompany ? '組織・事業所を追加' : '事業所を追加'}
+                </button>
               </div>
             </form>
           </div>
@@ -1570,6 +2078,154 @@ const LocationManagement = () => {
             <div className="flex justify-end gap-4 mt-6">
               <button onClick={handleCancelCourses} className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold">キャンセル</button>
               <button onClick={handleSaveCourses} className="px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold">保存</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {addOfficeLoading && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[99999]">
+          <div className="bg-white rounded-xl p-8 w-full max-w-md mx-4 shadow-2xl">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">処理中...</h3>
+            <p className="text-gray-600">事業所の追加処理中です。しばらくお待ちください。</p>
+          </div>
+        </div>
+      )}
+
+      {tokenModal.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[99999]">
+          <div className="bg-white rounded-xl p-8 w-full max-w-md mx-4 shadow-2xl">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">トークン発行情報</h3>
+            <div className="mb-4">
+              <div className="mb-2"><span className="font-semibold">トークン:</span> <span className="text-lg tracking-widest font-mono">{tokenModal.token}</span></div>
+              <div><span className="font-semibold">有効期限:</span> <span>{tokenModal.expiry ? new Date(tokenModal.expiry).toLocaleString() : '-'}</span></div>
+            </div>
+            <button className="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold" onClick={() => setTokenModal({ show: false, token: '', expiry: '' })}>閉じる</button>
+          </div>
+        </div>
+      )}
+
+      {/* 企業一覧モーダル */}
+      {showCompanyList && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
+          <div className="bg-white rounded-xl p-8 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-bold text-gray-800">企業一覧</h3>
+              <button 
+                onClick={() => setShowCompanyList(false)}
+                className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* ローディング状態 */}
+            {companiesLoading && (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">企業一覧を読み込み中...</p>
+              </div>
+            )}
+
+            {!companiesLoading && (
+              <>
+                <div className="mb-6">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-blue-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-sm font-semibold text-blue-800">企業名</th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold text-blue-800">住所</th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold text-blue-800">電話番号</th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold text-blue-800">管理符号</th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold text-blue-800">発行日</th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold text-blue-800">操作</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {companies.length === 0 ? (
+                          <tr>
+                            <td colSpan="6" className="text-center py-8 text-gray-500">
+                              企業が登録されていません
+                            </td>
+                          </tr>
+                        ) : (
+                          companies.map(company => (
+                            <tr key={company.id} className="border-b border-gray-200 hover:bg-gray-50">
+                              <td className="px-4 py-3 text-gray-800 font-medium">{company.name}</td>
+                              <td className="px-4 py-3 text-gray-600">{company.address || '-'}</td>
+                              <td className="px-4 py-3 text-gray-600">{company.phone || '-'}</td>
+                              <td className="px-4 py-3 text-gray-600 font-mono">{company.token || '-'}</td>
+                              <td className="px-4 py-3 text-gray-600">
+                                {company.token_issued_at ? new Date(company.token_issued_at).toLocaleDateString('ja-JP') : '-'}
+                              </td>
+                              <td className="px-4 py-3">
+                                <button 
+                                  onClick={() => handleRegenerateCompanyToken(company.id)}
+                                  className="px-3 py-1 bg-blue-500 text-white rounded text-sm font-medium transition-colors duration-300 hover:bg-blue-600"
+                                  title="管理符号を再生成"
+                                >
+                                  再生成
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="flex gap-4 pt-4 border-t border-gray-200">
+              <button 
+                onClick={() => setShowCompanyList(false)} 
+                className="flex-1 bg-gray-100 text-gray-700 border-2 border-gray-200 px-6 py-3 rounded-lg font-semibold transition-colors duration-300 hover:bg-gray-200"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 企業トークンモーダル */}
+      {showCompanyTokenModal.show && showCompanyTokenModal.company && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
+          <div className="bg-white rounded-xl p-8 w-full max-w-md mx-4 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-bold text-gray-800">管理符号</h3>
+              <button 
+                onClick={() => setShowCompanyTokenModal({ show: false, company: null })}
+                className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-gray-600 mb-4">
+                <strong>{showCompanyTokenModal.company.name}</strong> の新しい管理符号が生成されました。
+              </p>
+              <div className="bg-gray-100 p-4 rounded-lg">
+                <p className="text-sm text-gray-600 mb-2">管理符号:</p>
+                <p className="text-xl font-mono font-bold text-blue-600">
+                  {showCompanyTokenModal.company.token}
+                </p>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                発行日: {new Date(showCompanyTokenModal.company.token_issued_at).toLocaleString('ja-JP')}
+              </p>
+            </div>
+
+            <div className="flex gap-4 pt-4 border-t border-gray-200">
+              <button 
+                onClick={() => setShowCompanyTokenModal({ show: false, company: null })} 
+                className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-300 hover:bg-blue-700"
+              >
+                閉じる
+              </button>
             </div>
           </div>
         </div>

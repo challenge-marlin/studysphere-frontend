@@ -422,7 +422,8 @@ const StudentManagement = ({ teacherId }) => {
   const [newStudent, setNewStudent] = useState({
     name: '',
     email: '',
-    locationId: ''
+    locationId: '',
+    recipientNumber: ''
   });
   
   // 一括入力用のstate
@@ -448,41 +449,37 @@ const StudentManagement = ({ teacherId }) => {
     return 'token' + Math.random().toString(36).substr(2, 9);
   };
 
-  // 拠点データを取得する関数
-  const getAvailableLocations = () => {
-    // ローカルストレージから拠点データを取得
-    const storedFacilities = localStorage.getItem('facilities');
-    if (storedFacilities) {
-      const facilities = JSON.parse(storedFacilities);
-      const allLocations = [];
-      facilities.forEach(facility => {
-        facility.locations.forEach(location => {
-          allLocations.push({
-            id: location.id,
-            name: location.name,
-            facilityName: facility.name
-          });
-        });
-      });
-      return allLocations;
-    } else {
-      // デフォルトの拠点データ
-      return [
-        { id: 'location001', name: '東京本校', facilityName: 'スタディスフィア東京校' },
-        { id: 'location002', name: '大阪支校', facilityName: 'スタディスフィア大阪校' },
-        { id: 'location003', name: '新宿サテライト', facilityName: 'スタディスフィア東京校' },
-        { id: 'location004', name: '池袋教室', facilityName: 'スタディスフィア東京校' },
-        { id: 'location005', name: '難波教室', facilityName: 'スタディスフィア大阪校' },
-        { id: 'location006', name: '名古屋本校', facilityName: 'スタディスフィア名古屋校' },
-        { id: 'location007', name: '福岡本校', facilityName: 'スタディスフィア福岡校' },
-        { id: 'location008', name: '天神教室', facilityName: 'スタディスフィア福岡校' },
-        { id: 'location009', name: '札幌本校', facilityName: 'スタディスフィア札幌校' },
-        { id: 'location010', name: '仙台本校', facilityName: 'スタディスフィア仙台校' }
-      ];
+  // 拠点データを取得する関数（APIから取得）
+  const [availableLocations, setAvailableLocations] = useState([]);
+  
+  const fetchAvailableLocations = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/satellites');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setAvailableLocations(data.data || []);
+        }
+      }
+    } catch (error) {
+      console.error('拠点データ取得エラー:', error);
     }
   };
 
-  const handleAddStudent = (e) => {
+  // 初期データ取得
+  useEffect(() => {
+    fetchAvailableLocations();
+  }, []);
+
+  const getAvailableLocations = () => {
+    return availableLocations.map(location => ({
+      id: location.id,
+      name: location.name,
+      facilityName: location.company_name || '不明'
+    }));
+  };
+
+  const handleAddStudent = async (e) => {
     e.preventDefault();
     
     if (bulkInputMode) {
@@ -490,32 +487,44 @@ const StudentManagement = ({ teacherId }) => {
       return;
     }
     
-    const studentId = `student${String(students.length + 1).padStart(3, '0')}`;
-    const selectedLocation = getAvailableLocations().find(location => location.id === newStudent.locationId);
-    
-    const student = {
-      id: studentId,
-      name: newStudent.name,
-      email: newStudent.email,
-      class: 'ITリテラシー・AIの基本', // デフォルトクラス
-      instructorId: currentInstructor.id,
-      instructorName: currentInstructor.name,
-      locationId: newStudent.locationId,
-      locationName: selectedLocation ? selectedLocation.name : '',
-      progress: 0,
-      lastLogin: null,
-      status: 'active',
-      loginToken: generateLoginToken(),
-      joinDate: new Date().toISOString().split('T')[0],
-      canStudyAtHome: false, // デフォルトでfalseに設定
-      tags: generateTags('ITリテラシー・AIの基本', currentInstructor.name, selectedLocation ? selectedLocation.name : '', 0)
-    };
-    
-    setStudents([...students, student]);
-    setNewStudent({ name: '', email: '', locationId: '' });
-    setShowAddForm(false);
-    
-    alert('利用者を追加しました。');
+    try {
+      const selectedLocation = getAvailableLocations().find(location => location.id === newStudent.locationId);
+      
+      // APIでユーザーを作成
+      const userData = {
+        name: newStudent.name,
+        role: 1, // 利用者
+        status: 1,
+        login_code: generateLoginToken(),
+        company_id: currentInstructor.company_id || 1, // デフォルト値として1を設定
+        satellite_ids: [parseInt(newStudent.locationId)], // 配列形式で拠点IDを設定
+        is_remote_user: false,
+        recipient_number: newStudent.recipientNumber || null
+      };
+
+      const response = await fetch('http://localhost:5000/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData)
+      });
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || '利用者の追加に失敗しました');
+      }
+
+      // 成功時の処理
+      setNewStudent({ name: '', email: '', locationId: '', recipientNumber: '' });
+      setShowAddForm(false);
+      
+      alert('利用者を追加しました。');
+    } catch (error) {
+      console.error('利用者追加エラー:', error);
+      alert(`利用者の追加に失敗しました: ${error.message}`);
+    }
   };
 
   // 一括入力で生徒を追加する関数

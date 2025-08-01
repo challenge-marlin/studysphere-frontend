@@ -1,224 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import SanitizedInput from './SanitizedInput';
 import SanitizedTextarea from './SanitizedTextarea';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
+import { apiGet, apiPost, apiPut } from '../utils/api';
 
 const InstructorManagement = () => {
-  // LocationManagement.jsと同じ拠点データを使用
-  const facilityLocations = [
-    {
-      id: 'office001',
-      name: '東京教育渋谷校',
-      organizationName: 'スタディスフィア株式会社',
-      type: '就労移行支援事業所',
-      address: '東京都渋谷区渋谷1-1-1'
-    },
-    {
-      id: 'office002',
-      name: '東京教育新宿校',
-      organizationName: 'スタディスフィア株式会社',
-      type: '就労継続支援A型事業所',
-      address: '東京都新宿区新宿2-2-2'
-    },
-    {
-      id: 'office003',
-      name: '東京教育池袋校',
-      organizationName: 'スタディスフィア株式会社',
-      type: '学習塾',
-      address: '東京都豊島区池袋3-3-3'
-    },
-    {
-      id: 'office004',
-      name: '関西教育大阪校',
-      organizationName: '関西教育グループ',
-      type: '就労継続支援A型事業所',
-      address: '大阪府大阪市北区梅田3-4-5'
-    },
-    {
-      id: 'office005',
-      name: '関西教育難波校',
-      organizationName: '関西教育グループ',
-      type: '就労継続支援B型事業所',
-      address: '大阪府大阪市中央区難波5-6-7'
-    },
-    {
-      id: 'office006',
-      name: '中部学習名古屋校',
-      organizationName: '中部学習センター',
-      type: '就労移行支援事業所',
-      address: '愛知県名古屋市中区栄1-1-1'
-    },
-    {
-      id: 'office007',
-      name: '中部学習岡崎校',
-      organizationName: '中部学習センター',
-      type: '学習塾',
-      address: '愛知県岡崎市本町2-2-2'
-    },
-    {
-      id: 'office008',
-      name: '関西教育新規校',
-      organizationName: '関西教育グループ',
-      type: '就労移行支援事業所',
-      address: '大阪府大阪市天王寺区上本町6-7-8'
-    },
-    {
-      id: 'office009',
-      name: 'フリーランス学習塾',
-      organizationName: '個人事業主',
-      type: '学習塾',
-      address: '東京都中野区中野4-4-4'
-    },
-    {
-      id: 'office010',
-      name: '個人指導センター',
-      organizationName: '個人事業主',
-      type: '就労移行支援事業所',
-      address: '東京都杉並区阿佐ヶ谷5-5-5'
-    },
-    {
-      id: 'office011',
-      name: '独立系教育施設',
-      organizationName: '未分類',
-      type: 'その他',
-      address: '東京都世田谷区三軒茶屋6-6-6'
-    }
-  ];
-
-  const [instructors, setInstructors] = useState([
-    { 
-      id: 'instructor001', 
-      name: '佐藤指導員', 
-      email: 'sato@example.com', 
-      department: 'IT基礎・AI学科',
-      facilityLocationIds: ['office001', 'office002'],
-      facilityLocationNames: ['東京教育渋谷校', '東京教育新宿校'],
-      status: 'active',
-      lastLogin: '2024-01-15',
-      passwordResetRequired: false
-    },
-    { 
-      id: 'instructor002', 
-      name: '田中指導員', 
-      email: 'tanaka@example.com', 
-      department: 'SNS運用・デザイン学科',
-      facilityLocationIds: ['office001'],
-      facilityLocationNames: ['東京教育渋谷校'],
-      status: 'active',
-      lastLogin: '2024-01-14',
-      passwordResetRequired: false
-    },
-    { 
-      id: 'instructor003', 
-      name: '鈴木指導員', 
-      email: 'suzuki@example.com', 
-      department: 'LP制作・案件対応学科',
-      facilityLocationIds: ['office004', 'office005'],
-      facilityLocationNames: ['関西教育大阪校', '関西教育難波校'],
-      status: 'active',
-      lastLogin: '2024-01-13',
-      passwordResetRequired: false
-    },
-    { 
-      id: 'instructor004', 
-      name: '山田指導員', 
-      email: 'yamada@example.com', 
-      department: 'オフィスソフト・文書作成学科',
-      facilityLocationIds: ['office003'],
-      facilityLocationNames: ['東京教育池袋校'],
-      status: 'active',
-      lastLogin: '2024-01-12',
-      passwordResetRequired: true
-    },
-    { 
-      id: 'instructor005', 
-      name: '高橋指導員', 
-      email: 'takahashi@example.com', 
-      department: 'IT基礎・AI学科',
-      facilityLocationIds: ['office006'],
-      facilityLocationNames: ['中部学習名古屋校'],
-      status: 'active',
-      lastLogin: '2024-01-11',
-      passwordResetRequired: false
-    },
-    { 
-      id: 'instructor006', 
-      name: '伊藤指導員', 
-      email: 'ito@example.com', 
-      department: 'ビジネス学科',
-      facilityLocationIds: ['office006', 'office007'],
-      facilityLocationNames: ['中部学習名古屋校', '中部学習岡崎校'],
-      status: 'active',
-      lastLogin: '2024-01-10',
-      passwordResetRequired: false
-    },
-    { 
-      id: 'instructor007', 
-      name: '渡辺指導員', 
-      email: 'watanabe@example.com', 
-      department: 'IT学科',
-      facilityLocationIds: ['office007'],
-      facilityLocationNames: ['中部学習岡崎校'],
-      status: 'active',
-      lastLogin: '2024-01-09',
-      passwordResetRequired: false
-    },
-    { 
-      id: 'instructor008', 
-      name: '小林指導員', 
-      email: 'kobayashi@example.com', 
-      department: '個人指導',
-      facilityLocationIds: ['office009'],
-      facilityLocationNames: ['フリーランス学習塾'],
-      status: 'active',
-      lastLogin: '2024-01-08',
-      passwordResetRequired: false
-    },
-    { 
-      id: 'instructor009', 
-      name: '中村指導員', 
-      email: 'nakamura@example.com', 
-      department: '総合教育',
-      facilityLocationIds: ['office011'],
-      facilityLocationNames: ['独立系教育施設'],
-      status: 'active',
-      lastLogin: '2024-01-07',
-      passwordResetRequired: false
-    },
-    { 
-      id: 'instructor010', 
-      name: '松本指導員', 
-      email: 'matsumoto@example.com', 
-      department: 'ビジネス学科',
-      facilityLocationIds: [],
-      facilityLocationNames: [],
-      status: 'active',
-      lastLogin: '2024-01-06',
-      passwordResetRequired: false
-    },
-    { 
-      id: 'instructor011', 
-      name: '佐々木指導員', 
-      email: 'sasaki@example.com', 
-      department: 'IT学科',
-      facilityLocationIds: [],
-      facilityLocationNames: [],
-      status: 'inactive',
-      lastLogin: '2023-12-20',
-      passwordResetRequired: false
-    },
-    { 
-      id: 'instructor012', 
-      name: '高橋美咲指導員', 
-      email: 'takahashi.misaki@example.com', 
-      department: 'デザイン学科',
-      facilityLocationIds: ['office005'],
-      facilityLocationNames: ['関西教育難波校'],
-      status: 'active',
-      lastLogin: '2024-01-05',
-      passwordResetRequired: false
-    }
-  ]);
+  const [instructors, setInstructors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [facilityLocations, setFacilityLocations] = useState([]);
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
@@ -238,117 +28,247 @@ const InstructorManagement = () => {
     password: ''
   });
 
-  // フィルタリング機能
-  const getFilteredInstructors = () => {
-    let filtered = instructors;
+  // 拠点一覧を取得
+  const fetchFacilityLocations = async () => {
+    try {
+      console.log('拠点一覧を取得中...');
+      const data = await apiGet('/api/satellites');
+      console.log('拠点データ:', data);
 
-    // 検索フィルター
-    if (searchTerm) {
-      filtered = filtered.filter(instructor =>
-        instructor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        instructor.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        instructor.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        instructor.facilityLocationNames.some(name => 
-          name.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-      );
+      // データが配列かどうかチェック
+      if (!Array.isArray(data)) {
+        console.warn('拠点データが配列ではありません:', data);
+        setFacilityLocations([]);
+        return;
+      }
+
+      // 拠点データを変換
+      const locations = data.map(satellite => ({
+        id: satellite.id.toString(),
+        name: satellite.name,
+        organizationName: satellite.company_name || '',
+        type: satellite.office_type_name || '未分類',
+        address: satellite.address || ''
+      }));
+
+      setFacilityLocations(locations);
+    } catch (error) {
+      console.error('拠点一覧取得エラー:', error);
+      // エラー時は空配列を設定（エラーを投げない）
+      setFacilityLocations([]);
     }
-
-    // 事業所(拠点)フィルター
-    if (facilityLocationFilter !== 'all') {
-      filtered = filtered.filter(instructor => 
-        instructor.facilityLocationIds.includes(facilityLocationFilter)
-      );
-    }
-
-    // 拠点なしフィルター
-    if (showNoLocationFilter) {
-      filtered = filtered.filter(instructor => 
-        instructor.facilityLocationIds.length === 0
-      );
-    }
-
-    // ステータスフィルター
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(instructor => instructor.status === statusFilter);
-    }
-
-    return filtered;
   };
 
+  // 指導者一覧を取得
+  const fetchInstructors = async () => {
+    try {
+      console.log('指導者一覧を取得中...');
+      console.log('apiGet を呼び出します: /api/users');
+      console.log('apiGet の前');
+      const data = await apiGet('/api/users');
+      console.log('apiGet の後');
+      console.log('取得したデータ:', data);
+      console.log('取得したデータの詳細:', JSON.stringify(data, null, 2));
 
+      // データが配列かどうかチェック
+      if (!Array.isArray(data)) {
+        console.warn('APIから配列が返されませんでした:', data);
+        setInstructors([]);
+        return;
+      }
 
-  // パスワードリセット機能
+      // ロール4、5のユーザーのみをフィルタリング
+      const instructorUsers = data.filter(user => user.role >= 4 && user.role <= 5);
+      console.log('指導者ユーザー:', instructorUsers);
+      
+      // 指導者ユーザーが空の場合は空配列を設定
+      if (instructorUsers.length === 0) {
+        console.log('指導者ユーザーが見つかりません。新規登録で追加してください。');
+        setInstructors([]);
+        return;
+      }
+      
+      // 各指導者の専門分野を取得
+      const instructorsWithSpecializations = await Promise.all(
+        instructorUsers.map(async (user) => {
+          try {
+            const specData = await apiGet(`/api/instructors/${user.id}/specializations`);
+            
+            // バックエンドから返された拠点情報を使用
+            const facilityLocationNames = (user.satellite_details || []).map(satellite => satellite.name).filter(name => name);
+            
+            return {
+              id: user.id.toString(),
+              name: user.name,
+              email: user.email || '',
+              department: specData.success && specData.data.length > 0 ? specData.data[0].specialization : '',
+              facilityLocationIds: user.satellite_ids || [],
+              facilityLocationNames: facilityLocationNames,
+              status: user.status === 1 ? 'active' : 'inactive',
+              lastLogin: user.last_login_at ? new Date(user.last_login_at).toLocaleDateString('ja-JP') : '-',
+              passwordResetRequired: false,
+              specializations: specData.success ? specData.data : []
+            };
+          } catch (error) {
+            console.error(`指導者${user.id}の専門分野取得エラー:`, error);
+            
+            // バックエンドから返された拠点情報を使用
+            const facilityLocationNames = (user.satellite_details || []).map(satellite => satellite.name).filter(name => name);
+            
+            return {
+              id: user.id.toString(),
+              name: user.name,
+              email: user.email || '',
+              department: '',
+              facilityLocationIds: user.satellite_ids || [],
+              facilityLocationNames: facilityLocationNames,
+              status: user.status === 1 ? 'active' : 'inactive',
+              lastLogin: user.last_login_at ? new Date(user.last_login_at).toLocaleDateString('ja-JP') : '-',
+              passwordResetRequired: false,
+              specializations: []
+            };
+          }
+        })
+      );
+
+      setInstructors(instructorsWithSpecializations);
+    } catch (error) {
+      console.error('指導者一覧取得エラー:', error);
+      // エラー時は空配列を設定（エラーを投げない）
+      setInstructors([]);
+    }
+  };
+
+  // 初期データ読み込み
+  useEffect(() => {
+    console.log('InstructorManagement useEffect が実行されました');
+    const loadData = async () => {
+      console.log('loadData 関数が開始されました');
+      setLoading(true);
+      setError(null);
+      
+      try {
+        console.log('fetchFacilityLocations を呼び出します');
+        await fetchFacilityLocations();
+        console.log('fetchInstructors を呼び出します');
+        await fetchInstructors();
+      } catch (error) {
+        console.error('データ読み込みエラー:', error);
+        // エラーが発生してもローディング状態を解除
+        console.log('データ読み込みでエラーが発生しましたが、処理を続行します。');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  // フィルタリング機能
+  const getFilteredInstructors = () => {
+    return instructors.filter(instructor => {
+      const matchesSearch = instructor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           instructor.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           instructor.department.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesLocation = facilityLocationFilter === 'all' || 
+                             instructor.facilityLocationIds.includes(facilityLocationFilter);
+      
+      const matchesStatus = statusFilter === 'all' || instructor.status === statusFilter;
+      
+      const matchesNoLocation = !showNoLocationFilter || instructor.facilityLocationIds.length === 0;
+      
+      return matchesSearch && matchesLocation && matchesStatus && matchesNoLocation;
+    });
+  };
+
   const handlePasswordReset = (instructor) => {
     setSelectedInstructor(instructor);
     setShowPasswordResetModal(true);
   };
 
-  const executePasswordReset = (resetType) => {
+  const executePasswordReset = async (resetType) => {
     if (!selectedInstructor) return;
-    
-    if (resetType === 'temporary') {
+
+    try {
       const tempPassword = generateTempPassword();
       setGeneratedTempPassword(tempPassword);
       setShowTempPasswordDialog(true);
-      
-      // パスワードリセット必須フラグを設定
-      setInstructors(instructors.map(inst => 
-        inst.id === selectedInstructor.id 
-          ? { ...inst, passwordResetRequired: true }
-          : inst
-      ));
-      
-      // 一時パスワードダイアログの場合は、selectedInstructorを保持
       setShowPasswordResetModal(false);
-      // setSelectedInstructor(null); // 一時パスワードダイアログで使用するため、ここではnullにしない
-    } else if (resetType === 'force_change') {
-      alert(`パスワード変更を要求しました：\n\n指導員: ${selectedInstructor.name}\n\n次回ログイン時に新しいパスワードの設定が必要になります。`);
       
-      // パスワードリセット必須フラグを設定
-      setInstructors(instructors.map(inst => 
-        inst.id === selectedInstructor.id 
-          ? { ...inst, passwordResetRequired: true }
-          : inst
-      ));
-      
-      setShowPasswordResetModal(false);
-      setSelectedInstructor(null);
+      // 実際のパスワードリセットAPIを呼び出す
+      await apiPost(`/api/users/${selectedInstructor.id}/reset-password`, {
+        resetType,
+        tempPassword
+      });
+
+      // 指導者一覧を再取得
+      await fetchInstructors();
+    } catch (error) {
+      console.error('パスワードリセットエラー:', error);
+      alert(`パスワードリセットに失敗しました: ${error.message}`);
     }
   };
 
   const generateTempPassword = () => {
-    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let result = '';
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 12; i++) {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return result;
   };
 
-  const handleAddInstructor = (e) => {
+  const handleAddInstructor = async (e) => {
     e.preventDefault();
     
-    const newInstructorData = {
-      id: `instructor${Date.now()}`,
-      ...newInstructor,
-      facilityLocationNames: newInstructor.facilityLocationIds.map(id => 
-        facilityLocations.find(l => l.id === id)?.name || ''
-      ),
-      status: 'active',
-      lastLogin: '-',
-      passwordResetRequired: false
-    };
-    
-    setInstructors([...instructors, newInstructorData]);
-    setNewInstructor({
-      name: '',
-      email: '',
-      department: '',
-      facilityLocationIds: [],
-      password: ''
-    });
-    setShowAddForm(false);
+    try {
+      // 新しい指導者を追加するAPI呼び出し
+      const data = await apiPost('/api/users', {
+        name: newInstructor.name,
+        role: 4, // 指導員ロール
+        status: 1,
+        login_code: (() => {
+          // XXXX-XXXX-XXXX形式（英数大文字小文字交じり）
+          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+          const generatePart = () => {
+            let result = '';
+            for (let i = 0; i < 4; i++) {
+              result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+          };
+          return `${generatePart()}-${generatePart()}-${generatePart()}`;
+        })(),
+        company_id: 4, // 既存の企業ID
+        satellite_ids: newInstructor.facilityLocationIds,
+        email: newInstructor.email
+      });
+
+      // 専門分野を設定
+      if (newInstructor.department) {
+        await apiPost(`/api/instructors/${data.data.id}/specializations`, {
+          specializations: [newInstructor.department]
+        });
+      }
+
+      // 指導者一覧を再取得
+      await fetchInstructors();
+      
+      setNewInstructor({
+        name: '',
+        email: '',
+        department: '',
+        facilityLocationIds: [],
+        password: ''
+      });
+      setShowAddForm(false);
+      
+      alert('指導員が正常に追加されました。');
+    } catch (error) {
+      console.error('指導員追加エラー:', error);
+      alert(`指導員の追加に失敗しました: ${error.message}`);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -359,12 +279,21 @@ const InstructorManagement = () => {
     }));
   };
 
-  const toggleInstructorStatus = (instructorId) => {
-    setInstructors(instructors.map(instructor =>
-      instructor.id === instructorId
-        ? { ...instructor, status: instructor.status === 'active' ? 'inactive' : 'active' }
-        : instructor
-    ));
+  const toggleInstructorStatus = async (instructorId) => {
+    try {
+      const instructor = instructors.find(i => i.id === instructorId);
+      const newStatus = instructor.status === 'active' ? 0 : 1;
+      
+      await apiPut(`/api/users/${instructorId}`, {
+        status: newStatus
+      });
+
+      // 指導者一覧を再取得
+      await fetchInstructors();
+    } catch (error) {
+      console.error('指導員ステータス更新エラー:', error);
+      alert(`指導員ステータスの更新に失敗しました: ${error.message}`);
+    }
   };
 
   // ソート機能を追加
@@ -396,36 +325,61 @@ const InstructorManagement = () => {
   };
 
   const getStatusLabel = (status) => {
-    switch (status) {
-      case 'active':
-        return 'アクティブ';
-      case 'inactive':
-        return '非アクティブ';
-      case 'password_reset_required':
-        return 'パスワード変更要求';
-      default:
-        return status;
-    }
+    return status === 'active' ? 'アクティブ' : '非アクティブ';
   };
 
   const handleEditInstructor = (instructor) => {
-    setSelectedInstructor(instructor);
-    setNewInstructor({
-      name: instructor.name,
-      email: instructor.email,
-      department: instructor.department,
-      facilityLocationIds: instructor.facilityLocationIds,
-      password: '' // 編集時はパスワードを空にする
-    });
-    setShowAddForm(true); // 編集モードでも追加フォームを表示
+    // 編集機能の実装（必要に応じて）
+    console.log('編集対象:', instructor);
   };
 
-  const handleResetPassword = (instructorId) => {
-    const instructor = instructors.find(inst => inst.id === instructorId);
-    if (instructor) {
-      executePasswordReset('force_change');
+  const handleResetPassword = async (instructorId) => {
+    try {
+      const tempPassword = generateTempPassword();
+      
+      await apiPost(`/api/users/${instructorId}/reset-password`, {
+        resetType: 'temp',
+        tempPassword
+      });
+
+      setGeneratedTempPassword(tempPassword);
+      setShowTempPasswordDialog(true);
+    } catch (error) {
+      console.error('パスワードリセットエラー:', error);
+      alert(`パスワードリセットに失敗しました: ${error.message}`);
     }
   };
+
+  // ローディング状態
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 p-6 flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">データを読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // エラー状態
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 p-6 flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow-xl p-8 text-center max-w-md">
+          <div className="text-red-500 text-4xl mb-4">⚠️</div>
+          <h3 className="text-xl font-bold text-gray-800 mb-2">エラーが発生しました</h3>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
+          >
+            再読み込み
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
@@ -444,7 +398,7 @@ const InstructorManagement = () => {
         <div className="mb-4">
           <input
             type="text"
-            placeholder="指導員名、メール、学科で検索..."
+            placeholder="指導員名、メール、専門分野で検索..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
@@ -524,39 +478,40 @@ const InstructorManagement = () => {
           <table className="w-full">
             <thead className="bg-red-50">
               <tr>
-                <th 
-                  className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200"
-                  onClick={() => handleSort('name')}
-                >
-                  👤 指導員名
-                  {sortConfig.key === 'name' && (
-                    <span className="ml-1">
-                      {sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}
-                    </span>
-                  )}
-                </th>
-                <th 
-                  className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200"
-                  onClick={() => handleSort('email')}
-                >
-                  📧 メールアドレス
-                  {sortConfig.key === 'email' && (
-                    <span className="ml-1">
-                      {sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}
-                    </span>
-                  )}
-                </th>
-                <th 
-                  className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200"
-                  onClick={() => handleSort('department')}
-                >
-                  🎯 専門分野
-                  {sortConfig.key === 'department' && (
-                    <span className="ml-1">
-                      {sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}
-                    </span>
-                  )}
-                </th>
+                                 <th 
+                   className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200"
+                   onClick={() => handleSort('name')}
+                 >
+                   👤 指導員名
+                   {sortConfig.key === 'name' && (
+                     <span className="ml-1">
+                       {sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}
+                     </span>
+                   )}
+                 </th>
+                 <th 
+                   className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200"
+                   onClick={() => handleSort('email')}
+                 >
+                   📧 メールアドレス
+                   {sortConfig.key === 'email' && (
+                     <span className="ml-1">
+                       {sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}
+                     </span>
+                   )}
+                 </th>
+                 <th 
+                   className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200"
+                   onClick={() => handleSort('department')}
+                 >
+                   🎯 専門分野
+                   {sortConfig.key === 'department' && (
+                     <span className="ml-1">
+                       {sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}
+                     </span>
+                   )}
+                 </th>
+
                 <th 
                   className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200"
                   onClick={() => handleSort('facilityLocationNames')}
@@ -587,22 +542,22 @@ const InstructorManagement = () => {
                 <tr key={instructor.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200 ${
                   instructor.facilityLocationIds.length === 0 ? 'bg-yellow-50 hover:bg-yellow-100' : ''
                 }`}>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center">
-                      <div>
-                        <strong className="text-gray-800">{instructor.name}</strong>
-                        <div className="text-xs text-gray-500">ID: {instructor.id}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-gray-600">
-                    📧 {instructor.email}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                      {instructor.department}
-                    </span>
-                  </td>
+                                     <td className="px-6 py-4">
+                     <div className="flex items-center">
+                       <div>
+                         <strong className="text-gray-800">{instructor.name}</strong>
+                       </div>
+                     </div>
+                   </td>
+                   <td className="px-6 py-4 text-gray-600">
+                     📧 {instructor.email}
+                   </td>
+                   <td className="px-6 py-4">
+                     <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                       {instructor.department}
+                     </span>
+                   </td>
+
                   <td className="px-6 py-4">
                     {instructor.facilityLocationNames.length > 0 ? (
                       <div className="space-y-1">
@@ -622,9 +577,7 @@ const InstructorManagement = () => {
                     <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
                       instructor.status === 'active' 
                         ? 'bg-green-100 text-green-800'
-                        : instructor.status === 'inactive'
-                        ? 'bg-red-100 text-red-800'
-                        : 'bg-gray-100 text-gray-800'
+                        : 'bg-red-100 text-red-800'
                     }`}>
                       {getStatusLabel(instructor.status)}
                     </span>
@@ -653,11 +606,16 @@ const InstructorManagement = () => {
           </table>
         </div>
 
-        {getSortedInstructors().length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">条件に合致する指導員が見つかりません。</p>
-          </div>
-        )}
+                 {getSortedInstructors().length === 0 && (
+           <div className="text-center py-12">
+             <p className="text-gray-500 text-lg">
+               {instructors.length === 0 
+                 ? '指導員が登録されていません。「+ 新しい指導員を追加」ボタンから指導員を追加してください。'
+                 : '条件に合致する指導員が見つかりません。'
+               }
+             </p>
+           </div>
+         )}
       </div>
 
       {/* パスワードリセットモーダル */}
@@ -808,7 +766,7 @@ const InstructorManagement = () => {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">学科:</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">専門分野:</label>
                 <input
                   type="text"
                   name="department"
@@ -818,6 +776,8 @@ const InstructorManagement = () => {
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
                 />
               </div>
+              
+
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">事業所(拠点):</label>

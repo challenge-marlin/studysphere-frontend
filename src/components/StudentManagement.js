@@ -496,7 +496,7 @@ const StudentManagement = ({ teacherId }) => {
         role: 1, // 利用者
         status: 1,
         login_code: generateLoginToken(),
-        company_id: currentInstructor.company_id || 1, // デフォルト値として1を設定
+        company_id: currentInstructor.company_id || 4, // 既存の企業ID
         satellite_ids: [parseInt(newStudent.locationId)], // 配列形式で拠点IDを設定
         is_remote_user: false,
         recipient_number: newStudent.recipientNumber || null

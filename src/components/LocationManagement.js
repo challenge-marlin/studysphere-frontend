@@ -25,7 +25,7 @@ const LocationManagement = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
       
-      const response = await authenticatedFetch('http://localhost:5000/office-types', {
+      const response = await authenticatedFetch('http://localhost:5000/api/office-types', {
         signal: controller.signal
       });
       
@@ -71,7 +71,7 @@ const LocationManagement = () => {
       setCompaniesLoading(true);
       console.log('企業一覧取得開始');
       
-      const response = await authenticatedFetch('http://localhost:5000/companies');
+      const response = await authenticatedFetch('http://localhost:5000/api/companies');
       console.log('企業一覧取得レスポンス:', response.status, response.statusText);
       
       if (!response.ok) {
@@ -129,7 +129,7 @@ const LocationManagement = () => {
     try {
       console.log('satellites一覧取得開始');
       
-      const response = await authenticatedFetch('http://localhost:5000/satellites');
+      const response = await authenticatedFetch('http://localhost:5000/api/satellites');
       console.log('satellites一覧取得レスポンス:', response.status, response.statusText);
       
       if (!response.ok) {
@@ -143,11 +143,12 @@ const LocationManagement = () => {
       console.log('satellites一覧取得成功:', data);
       
       // satellitesデータをfacilitiesとして設定
-      if (data.success && data.data) {
-        setFacilities(data.data);
+      if (Array.isArray(data)) {
+        setFacilities(data);
         // 有効期限チェックを実行
-        checkExpirationAlerts(data.data);
+        checkExpirationAlerts(data);
       } else {
+        console.warn('satellitesデータが配列ではありません:', data);
         setFacilities([]);
       }
     } catch (err) {
@@ -162,7 +163,7 @@ const LocationManagement = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒タイムアウト
       
-      const response = await authenticatedFetch('http://localhost:5000/office-types', {
+      const response = await authenticatedFetch('http://localhost:5000/api/office-types', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -207,7 +208,7 @@ const LocationManagement = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒タイムアウト
 
-      const response = await authenticatedFetch(`http://localhost:5000/office-types/${typeData.id}`, {
+      const response = await authenticatedFetch(`http://localhost:5000/api/office-types/${typeData.id}`, {
         method: 'DELETE',
         signal: controller.signal
       });
@@ -420,7 +421,7 @@ const LocationManagement = () => {
         updateData.token_expiry_at = new Date(updateData.token_expiry_at).toISOString();
       }
 
-      const response = await fetch(`http://localhost:5000/satellites/${selectedOfficeForEdit.id}`, {
+      const response = await fetch(`http://localhost:5000/api/satellites/${selectedOfficeForEdit.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -497,7 +498,7 @@ const LocationManagement = () => {
           phoneType: typeof companyData.phone,
           officeTypeIdType: typeof newCompany.office_type_id
         });
-        const companyResponse = await fetch('http://localhost:5000/companies', {
+        const companyResponse = await fetch('http://localhost:5000/api/companies', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(companyData)
@@ -528,7 +529,7 @@ const LocationManagement = () => {
         max_users: newOffice.max_users
       };
       console.log('拠点作成データ:', satelliteData);
-      const response = await fetch('http://localhost:5000/satellites', {
+      const response = await fetch('http://localhost:5000/api/satellites', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(satelliteData)
@@ -944,7 +945,7 @@ const LocationManagement = () => {
   // 企業トークン再生成
   const handleRegenerateCompanyToken = async (companyId) => {
     try {
-      const response = await fetch(`http://localhost:5000/companies/${companyId}/regenerate-token`, {
+      const response = await fetch(`http://localhost:5000/api/companies/${companyId}/regenerate-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -975,7 +976,7 @@ const LocationManagement = () => {
   const handleDeleteCompany = async (company) => {
     if (window.confirm(`「${company.name}」を削除しますか？\n\n注意: この企業に所属するユーザーが存在する場合は削除できません。\nこの操作は取り消せません。`)) {
       try {
-        const response = await fetch(`http://localhost:5000/companies/${company.id}`, {
+        const response = await fetch(`http://localhost:5000/api/companies/${company.id}`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' }
         });

@@ -1,37 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { apiGet, apiPost, apiPut } from '../utils/api';
 
 const LocationManagementForInstructor = ({ currentUser }) => {
   const [locationInfo, setLocationInfo] = useState({
-    id: currentUser.locationId,
-    name: currentUser.locationName,
-    facilityName: currentUser.facilityName,
-    maxStudents: 30,
-    currentStudents: 8,
-    address: '東京都渋谷区○○1-2-3',
-    phone: '03-1234-5678',
-    manager: currentUser.name
+    id: null,
+    name: '',
+    facilityName: '',
+    maxStudents: 0,
+    currentStudents: 0,
+    address: '',
+    phone: '',
+    manager: ''
   });
 
-  const [instructors, setInstructors] = useState([
-    {
-      id: 'teacher001',
-      name: '佐藤指導員',
-      email: 'sato@example.com',
-      department: 'プログラミング学科',
-      studentsCount: 4,
-      status: 'active',
-      joinDate: '2023-04-01'
-    },
-    {
-      id: 'teacher002',
-      name: '田中指導員',
-      email: 'tanaka@example.com',
-      department: 'Web開発学科',
-      studentsCount: 4,
-      status: 'active',
-      joinDate: '2023-06-15'
-    }
-  ]);
+  const [instructors, setInstructors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const [showAddTeacherForm, setShowAddTeacherForm] = useState(false);
   const [showEditLocationForm, setShowEditLocationForm] = useState(false);
@@ -43,56 +27,249 @@ const LocationManagementForInstructor = ({ currentUser }) => {
   });
 
   const [editLocation, setEditLocation] = useState({
-    name: locationInfo.name,
-    maxStudents: locationInfo.maxStudents,
-    address: locationInfo.address,
-    phone: locationInfo.phone
+    name: '',
+    maxStudents: 0,
+    address: '',
+    phone: ''
   });
+
+  // 現在のユーザーの拠点IDを取得
+  const getCurrentUserSatelliteId = () => {
+    if (currentUser && currentUser.satellite_ids && currentUser.satellite_ids.length > 0) {
+      return currentUser.satellite_ids[0]; // 最初の拠点を使用
+    }
+    return null;
+  };
+
+  // 拠点情報と統計を取得
+  const fetchLocationData = async () => {
+    const satelliteId = getCurrentUserSatelliteId();
+    if (!satelliteId) {
+      setError('拠点情報が見つかりません');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      console.log('拠点情報を取得中...', satelliteId);
+      // 拠点詳細情報を取得
+      const satelliteData = await apiGet(`/api/satellites/${satelliteId}`);
+      console.log('拠点データ:', satelliteData);
+
+      // 拠点統計情報を取得
+      const statsData = await apiGet(`/api/satellites/${satelliteId}/stats`);
+      console.log('統計データ:', statsData);
+
+      // 拠点情報を更新
+      setLocationInfo({
+        id: satelliteData.id,
+        name: satelliteData.name,
+        facilityName: satelliteData.company_name || '',
+        maxStudents: satelliteData.max_users,
+        currentStudents: statsData.stats.current_students,
+        address: satelliteData.address || '',
+        phone: satelliteData.phone || '',
+        manager: currentUser.name
+      });
+
+      // 編集用の状態も更新
+      setEditLocation({
+        name: satelliteData.name,
+        maxStudents: satelliteData.max_users,
+        address: satelliteData.address || '',
+        phone: satelliteData.phone || ''
+      });
+
+    } catch (error) {
+      console.error('拠点情報取得エラー:', error);
+      setError(error.message);
+    }
+  };
+
+  // 指導者一覧を取得
+  const fetchInstructors = async () => {
+    const satelliteId = getCurrentUserSatelliteId();
+    if (!satelliteId) return;
+
+    try {
+      console.log('指導者一覧を取得中...', satelliteId);
+      const data = await apiGet(`/api/satellites/${satelliteId}/instructors`);
+      console.log('指導者データ:', data);
+
+      setInstructors(data.data || []);
+    } catch (error) {
+      console.error('指導者一覧取得エラー:', error);
+      setError(error.message);
+    }
+  };
+
+  // 初期データ読み込み
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        await Promise.all([
+          fetchLocationData(),
+          fetchInstructors()
+        ]);
+      } catch (error) {
+        console.error('データ読み込みエラー:', error);
+        setError(error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [currentUser]);
 
   // 学習可能状況の判定
   const isOverCapacity = locationInfo.currentStudents > locationInfo.maxStudents;
-  const capacityPercentage = (locationInfo.currentStudents / locationInfo.maxStudents) * 100;
+  const capacityPercentage = locationInfo.maxStudents > 0 ? (locationInfo.currentStudents / locationInfo.maxStudents) * 100 : 0;
 
-  const handleAddTeacher = (e) => {
+  const handleAddTeacher = async (e) => {
     e.preventDefault();
-    const teacherId = `teacher${String(instructors.length + 1).padStart(3, '0')}`;
-    const teacher = {
-      id: teacherId,
-      ...newTeacher,
-      studentsCount: 0,
-      status: 'active',
-      joinDate: new Date().toISOString().split('T')[0]
-    };
     
-    setInstructors([...instructors, teacher]);
-    setNewTeacher({ name: '', email: '', department: '', password: '' });
-    setShowAddTeacherForm(false);
-    
-    alert(`指導員が追加されました！\nログイン情報:\nID: ${teacherId}\nパスワード: ${newTeacher.password}`);
+    try {
+      // 新しい指導者を追加するAPI呼び出し
+      const response = await apiPost('/api/users', {
+        name: newTeacher.name,
+        role: 4, // 指導員ロール
+        status: 1,
+        login_code: (() => {
+          // XXXX-XXXX-XXXX形式（英数大文字小文字交じり）
+          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+          const generatePart = () => {
+            let result = '';
+            for (let i = 0; i < 4; i++) {
+              result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+          };
+          return `${generatePart()}-${generatePart()}-${generatePart()}`;
+        })(),
+        company_id: currentUser.company_id,
+        satellite_ids: [getCurrentUserSatelliteId()],
+        department: newTeacher.department
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || '指導員の追加に失敗しました');
+      }
+
+      // 指導者一覧を再取得
+      await fetchInstructors();
+      
+      setNewTeacher({ name: '', email: '', department: '', password: '' });
+      setShowAddTeacherForm(false);
+      
+      alert(`指導員が追加されました！\nログイン情報:\nID: ${data.data.login_code}\nパスワード: ${newTeacher.password}`);
+    } catch (error) {
+      console.error('指導員追加エラー:', error);
+      alert(`指導員の追加に失敗しました: ${error.message}`);
+    }
   };
 
-  const handleLocationUpdate = (e) => {
+  const handleLocationUpdate = async (e) => {
     e.preventDefault();
-    setLocationInfo({
-      ...locationInfo,
-      ...editLocation,
-      maxStudents: parseInt(editLocation.maxStudents)
-    });
-    setShowEditLocationForm(false);
-    alert('拠点情報が更新されました。');
+    
+    const satelliteId = getCurrentUserSatelliteId();
+    if (!satelliteId) return;
+
+    try {
+      const response = await fetch(`/api/satellites/${satelliteId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: editLocation.name,
+          max_users: parseInt(editLocation.maxStudents),
+          address: editLocation.address,
+          phone: editLocation.phone
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || '拠点情報の更新に失敗しました');
+      }
+
+      // 拠点情報を再取得
+      await fetchLocationData();
+      setShowEditLocationForm(false);
+      alert('拠点情報が更新されました。');
+    } catch (error) {
+      console.error('拠点更新エラー:', error);
+      alert(`拠点情報の更新に失敗しました: ${error.message}`);
+    }
   };
 
-  const toggleTeacherStatus = (teacherId) => {
-    setInstructors(instructors.map(teacher => 
-      teacher.id === teacherId 
-        ? { ...teacher, status: teacher.status === 'active' ? 'inactive' : 'active' }
-        : teacher
-    ));
+  const toggleTeacherStatus = async (teacherId) => {
+    try {
+      const response = await fetch(`/api/users/${teacherId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: instructors.find(t => t.id === teacherId)?.status === 1 ? 0 : 1
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || '指導員ステータスの更新に失敗しました');
+      }
+
+      // 指導者一覧を再取得
+      await fetchInstructors();
+    } catch (error) {
+      console.error('指導員ステータス更新エラー:', error);
+      alert(`指導員ステータスの更新に失敗しました: ${error.message}`);
+    }
   };
 
   const contactManagement = () => {
     alert(`運営に連絡しました。\n\n内容:\n拠点: ${locationInfo.name}\n現在の生徒数: ${locationInfo.currentStudents}名\n最大受入数: ${locationInfo.maxStudents}名\n\n至急、生徒数の調整をお願いします。`);
   };
+
+  // ローディング状態
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 p-6 flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">データを読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // エラー状態
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 p-6 flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow-xl p-8 text-center max-w-md">
+          <div className="text-red-500 text-4xl mb-4">⚠️</div>
+          <h3 className="text-xl font-bold text-gray-800 mb-2">エラーが発生しました</h3>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
+          >
+            再読み込み
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 p-6">
@@ -154,7 +331,7 @@ const LocationManagementForInstructor = ({ currentUser }) => {
         <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
           <h3 className="text-lg font-semibold text-gray-700 mb-2">指導員数</h3>
           <p className="text-3xl font-bold text-indigo-600 mb-2">
-            {instructors.filter(t => t.status === 'active').length}名
+            {instructors.filter(t => t.status === 1).length}名
           </p>
           <small className="text-gray-500">アクティブ</small>
         </div>
@@ -196,15 +373,7 @@ const LocationManagementForInstructor = ({ currentUser }) => {
             <h3 className="text-xl font-bold text-gray-800">拠点情報</h3>
             <button 
               className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
-              onClick={() => {
-                setEditLocation({
-                  name: locationInfo.name,
-                  maxStudents: locationInfo.maxStudents,
-                  address: locationInfo.address,
-                  phone: locationInfo.phone
-                });
-                setShowEditLocationForm(true);
-              }}
+              onClick={() => setShowEditLocationForm(true)}
             >
               編集
             </button>
@@ -253,37 +422,45 @@ const LocationManagementForInstructor = ({ currentUser }) => {
             </button>
           </div>
           <div className="space-y-4">
-            {instructors.map(teacher => (
-              <div key={teacher.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-all duration-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-gray-800 mb-1">{teacher.name}</h4>
-                    <p className="text-sm text-gray-600 mb-1">{teacher.department}</p>
-                    <p className="text-sm text-gray-600 mb-1">担当生徒: {teacher.studentsCount}名</p>
-                    <p className="text-sm text-gray-600">入職日: {teacher.joinDate}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      teacher.status === 'active' 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {teacher.status === 'active' ? 'アクティブ' : '非アクティブ'}
-                    </span>
-                    <button 
-                      className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200 ${
-                        teacher.status === 'active' 
-                          ? 'bg-red-100 text-red-700 hover:bg-red-200' 
-                          : 'bg-green-100 text-green-700 hover:bg-green-200'
-                      }`}
-                      onClick={() => toggleTeacherStatus(teacher.id)}
-                    >
-                      {teacher.status === 'active' ? '無効化' : '有効化'}
-                    </button>
+            {instructors.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">指導員が登録されていません</p>
+            ) : (
+              instructors.map(teacher => (
+                <div key={teacher.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-all duration-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-gray-800 mb-1">{teacher.name}</h4>
+                      <p className="text-sm text-gray-600 mb-1">ロール: {teacher.role === 4 ? '指導員' : '管理者'}</p>
+                      {teacher.specializations && teacher.specializations.length > 0 && (
+                        <p className="text-sm text-gray-600 mb-1">
+                          専門分野: {teacher.specializations.map(s => s.specialization).join(', ')}
+                        </p>
+                      )}
+                      <p className="text-sm text-gray-600">入職日: {new Date(teacher.created_at).toLocaleDateString('ja-JP')}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        teacher.status === 1 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {teacher.status === 1 ? 'アクティブ' : '非アクティブ'}
+                      </span>
+                      <button 
+                        className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200 ${
+                          teacher.status === 1 
+                            ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                            : 'bg-green-100 text-green-700 hover:bg-green-200'
+                        }`}
+                        onClick={() => toggleTeacherStatus(teacher.id)}
+                      >
+                        {teacher.status === 1 ? '無効化' : '有効化'}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>

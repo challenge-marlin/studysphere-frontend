@@ -106,14 +106,20 @@ export const handleTokenInvalid = (navigate, reason = 'トークンが無効に�
   clearStoredTokens();
   localStorage.removeItem('currentUser');
   
-  // 即座にログインページにリダイレクト
-  navigate('/', { replace: true });
+  // 現在のパスを取得
+  const currentPath = window.location.pathname;
   
-  // 必要に応じてユーザーに通知
-  if (typeof window !== 'undefined' && window.alert) {
-    setTimeout(() => {
-      alert(`${reason}\nログインページに戻ります。`);
-    }, 100);
+  // ログインページまたは生徒ログインページの場合はアラートを表示しない
+  const isLoginPage = currentPath === '/' || currentPath.startsWith('/student/login');
+  
+  // ログインページでない場合のみアラートを表示してから強制リロード
+  if (!isLoginPage && typeof window !== 'undefined' && window.alert) {
+    alert(`${reason}\nログインページに戻ります。`);
+    // アラート後に強制リロード
+    window.location.href = '/';
+  } else {
+    // ログインページの場合は即座にリダイレクト
+    navigate('/', { replace: true });
   }
 };
 

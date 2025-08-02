@@ -11,6 +11,7 @@ const InstructorManagement = () => {
   const [facilityLocations, setFacilityLocations] = useState([]);
 
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
   const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
   const [selectedInstructor, setSelectedInstructor] = useState(null);
   const [showTempPasswordDialog, setShowTempPasswordDialog] = useState(false);
@@ -19,6 +20,7 @@ const InstructorManagement = () => {
   const [facilityLocationFilter, setFacilityLocationFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showNoLocationFilter, setShowNoLocationFilter] = useState(false);
+  const [satelliteManagers, setSatelliteManagers] = useState({});
   
   const [newInstructor, setNewInstructor] = useState({
     name: '',
@@ -42,16 +44,30 @@ const InstructorManagement = () => {
         return;
       }
 
-      // 拠点データを変換
-      const locations = data.map(satellite => ({
-        id: satellite.id.toString(),
-        name: satellite.name,
-        organizationName: satellite.company_name || '',
-        type: satellite.office_type_name || '未分類',
-        address: satellite.address || ''
-      }));
+             // 拠点データを変換
+       const locations = data.map(satellite => ({
+         id: satellite.id.toString(),
+         name: satellite.name,
+         organizationName: satellite.company_name || '',
+         type: satellite.office_type_name || '未分類',
+         address: satellite.address || '',
+         managerIds: satellite.manager_ids ? (Array.isArray(satellite.manager_ids) ? satellite.manager_ids : JSON.parse(satellite.manager_ids)) : []
+       }));
 
+      console.log('拠点データ変換後:', locations);
       setFacilityLocations(locations);
+      
+      // 拠点管理者の情報をマップ化
+      const managersMap = {};
+      locations.forEach(location => {
+        if (location.managerIds && location.managerIds.length > 0) {
+          managersMap[location.id] = location.managerIds;
+        } else {
+          managersMap[location.id] = [];
+        }
+      });
+      console.log('管理者マップ:', managersMap);
+      setSatelliteManagers(managersMap);
     } catch (error) {
       console.error('拠点一覧取得エラー:', error);
       // エラー時は空配列を設定（エラーを投げない）
@@ -95,14 +111,34 @@ const InstructorManagement = () => {
             const specData = await apiGet(`/api/instructors/${user.id}/specializations`);
             
             // バックエンドから返された拠点情報を使用
-            const facilityLocationNames = (user.satellite_details || []).map(satellite => satellite.name).filter(name => name);
+            let facilityLocationNames = [];
+            let facilityLocationIds = [];
+            
+            if (user.satellite_details && Array.isArray(user.satellite_details)) {
+              facilityLocationNames = user.satellite_details.map(satellite => satellite.name).filter(name => name);
+              facilityLocationIds = user.satellite_details.map(satellite => satellite.id.toString());
+            } else if (user.satellite_ids) {
+              // satellite_detailsが空の場合、satellite_idsから拠点情報を取得
+              try {
+                const satelliteIds = Array.isArray(user.satellite_ids) ? user.satellite_ids : JSON.parse(user.satellite_ids);
+                facilityLocationIds = satelliteIds.map(id => id.toString());
+                
+                // 拠点名を取得（facilityLocationsから）
+                facilityLocationNames = satelliteIds.map(id => {
+                  const location = facilityLocations.find(loc => loc.id === id.toString());
+                  return location ? location.name : `拠点${id}`;
+                });
+              } catch (e) {
+                console.error('拠点ID処理エラー:', e);
+              }
+            }
             
             return {
               id: user.id.toString(),
               name: user.name,
               email: user.email || '',
               department: specData.success && specData.data.length > 0 ? specData.data[0].specialization : '',
-              facilityLocationIds: user.satellite_ids || [],
+              facilityLocationIds: facilityLocationIds,
               facilityLocationNames: facilityLocationNames,
               status: user.status === 1 ? 'active' : 'inactive',
               lastLogin: user.last_login_at ? new Date(user.last_login_at).toLocaleDateString('ja-JP') : '-',
@@ -113,14 +149,34 @@ const InstructorManagement = () => {
             console.error(`指導者${user.id}の専門分野取得エラー:`, error);
             
             // バックエンドから返された拠点情報を使用
-            const facilityLocationNames = (user.satellite_details || []).map(satellite => satellite.name).filter(name => name);
+            let facilityLocationNames = [];
+            let facilityLocationIds = [];
+            
+            if (user.satellite_details && Array.isArray(user.satellite_details)) {
+              facilityLocationNames = user.satellite_details.map(satellite => satellite.name).filter(name => name);
+              facilityLocationIds = user.satellite_details.map(satellite => satellite.id.toString());
+            } else if (user.satellite_ids) {
+              // satellite_detailsが空の場合、satellite_idsから拠点情報を取得
+              try {
+                const satelliteIds = Array.isArray(user.satellite_ids) ? user.satellite_ids : JSON.parse(user.satellite_ids);
+                facilityLocationIds = satelliteIds.map(id => id.toString());
+                
+                // 拠点名を取得（facilityLocationsから）
+                facilityLocationNames = satelliteIds.map(id => {
+                  const location = facilityLocations.find(loc => loc.id === id.toString());
+                  return location ? location.name : `拠点${id}`;
+                });
+              } catch (e) {
+                console.error('拠点ID処理エラー:', e);
+              }
+            }
             
             return {
               id: user.id.toString(),
               name: user.name,
               email: user.email || '',
               department: '',
-              facilityLocationIds: user.satellite_ids || [],
+              facilityLocationIds: facilityLocationIds,
               facilityLocationNames: facilityLocationNames,
               status: user.status === 1 ? 'active' : 'inactive',
               lastLogin: user.last_login_at ? new Date(user.last_login_at).toLocaleDateString('ja-JP') : '-',
@@ -329,8 +385,109 @@ const InstructorManagement = () => {
   };
 
   const handleEditInstructor = (instructor) => {
-    // 編集機能の実装（必要に応じて）
-    console.log('編集対象:', instructor);
+    // 拠点管理者の情報を初期化
+    const isManagerData = {};
+    instructor.facilityLocationIds.forEach(locationId => {
+      isManagerData[locationId] = isSatelliteManager(instructor.id, locationId);
+    });
+    
+    setSelectedInstructor({
+      ...instructor,
+      isManager: isManagerData
+    });
+    setShowEditForm(true);
+  };
+
+  const handleUpdateInstructor = async (e) => {
+    e.preventDefault();
+    
+    try {
+      // 指導員情報を更新するAPI呼び出し
+      await apiPut(`/api/users/${selectedInstructor.id}`, {
+        name: selectedInstructor.name,
+        email: selectedInstructor.email,
+        satellite_ids: selectedInstructor.facilityLocationIds
+      });
+
+      // 専門分野を更新
+      if (selectedInstructor.department) {
+        await apiPost(`/api/instructors/${selectedInstructor.id}/specializations`, {
+          specializations: [selectedInstructor.department]
+        });
+      }
+
+      // 拠点管理者の設定を更新
+      for (const locationId of selectedInstructor.facilityLocationIds) {
+        const shouldBeManager = selectedInstructor.isManager[locationId] || false;
+        const currentManagers = satelliteManagers[locationId] || [];
+        const isCurrentlyManager = currentManagers.includes(Number(selectedInstructor.id));
+        
+        if (shouldBeManager && !isCurrentlyManager) {
+          // 管理者として追加
+          const updatedManagers = [...currentManagers, Number(selectedInstructor.id)];
+          await apiPut(`/api/satellites/${locationId}/managers`, {
+            manager_ids: updatedManagers
+          });
+        } else if (!shouldBeManager && isCurrentlyManager) {
+          // 管理者から削除
+          const updatedManagers = currentManagers.filter(id => id !== Number(selectedInstructor.id));
+          await apiPut(`/api/satellites/${locationId}/managers`, {
+            manager_ids: updatedManagers
+          });
+        }
+      }
+
+      // 指導者一覧と拠点情報を再取得
+      await fetchInstructors();
+      await fetchFacilityLocations();
+      
+      setShowEditForm(false);
+      setSelectedInstructor(null);
+      
+      alert('指導員情報が正常に更新されました。');
+    } catch (error) {
+      console.error('指導員更新エラー:', error);
+      alert(`指導員の更新に失敗しました: ${error.message}`);
+    }
+  };
+
+  const handleEditInputChange = (e) => {
+    const { name, value } = e.target;
+    setSelectedInstructor(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleEditLocationChange = (locationId, checked) => {
+    setSelectedInstructor(prev => ({
+      ...prev,
+      facilityLocationIds: checked
+        ? [...prev.facilityLocationIds, locationId]
+        : prev.facilityLocationIds.filter(id => id !== locationId)
+    }));
+  };
+
+  const handleManagerChange = (locationId, checked) => {
+    setSelectedInstructor(prev => ({
+      ...prev,
+      isManager: {
+        ...prev.isManager,
+        [locationId]: checked
+      }
+    }));
+  };
+
+  // 拠点管理者かどうかを判定する関数
+  const isSatelliteManager = (instructorId, locationId) => {
+    const managerIds = satelliteManagers[locationId];
+    const result = managerIds && managerIds.includes(Number(instructorId));
+    console.log(`isSatelliteManager(${instructorId}, ${locationId}):`, {
+      managerIds,
+      instructorId: Number(instructorId),
+      result
+    });
+    return result;
   };
 
   const handleResetPassword = async (instructorId) => {
@@ -542,13 +699,13 @@ const InstructorManagement = () => {
                 <tr key={instructor.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200 ${
                   instructor.facilityLocationIds.length === 0 ? 'bg-yellow-50 hover:bg-yellow-100' : ''
                 }`}>
-                                     <td className="px-6 py-4">
-                     <div className="flex items-center">
-                       <div>
-                         <strong className="text-gray-800">{instructor.name}</strong>
-                       </div>
-                     </div>
-                   </td>
+                                                       <td className="px-6 py-4">
+                    <div className="flex items-center">
+                      <div>
+                        <strong className="text-gray-800">{instructor.name}</strong>
+                      </div>
+                    </div>
+                  </td>
                    <td className="px-6 py-4 text-gray-600">
                      📧 {instructor.email}
                    </td>
@@ -559,13 +716,17 @@ const InstructorManagement = () => {
                    </td>
 
                   <td className="px-6 py-4">
-                    {instructor.facilityLocationNames.length > 0 ? (
+                    {instructor.facilityLocationNames && instructor.facilityLocationNames.length > 0 ? (
                       <div className="space-y-1">
-                        {instructor.facilityLocationNames.map((name, index) => (
-                          <span key={index} className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium block">
-                            {name}
-                          </span>
-                        ))}
+                        {instructor.facilityLocationNames.map((name, index) => {
+                          const locationId = instructor.facilityLocationIds[index];
+                          const isManager = isSatelliteManager(instructor.id, locationId);
+                          return (
+                            <span key={index} className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium block">
+                              {isManager && '👑 '}{name}
+                            </span>
+                          );
+                        })}
                       </div>
                     ) : (
                       <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">
@@ -833,6 +994,127 @@ const InstructorManagement = () => {
                   type="button"
                   className="flex-1 bg-gray-500 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-300 hover:bg-gray-600"
                   onClick={() => setShowAddForm(false)}
+                >
+                  キャンセル
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 指導員編集フォームモーダル */}
+      {showEditForm && selectedInstructor && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">指導員情報を編集</h3>
+              <button 
+                className="text-gray-400 hover:text-gray-600 text-2xl font-bold transition-colors duration-200"
+                onClick={() => {
+                  setShowEditForm(false);
+                  setSelectedInstructor(null);
+                }}
+              >
+                ×
+              </button>
+            </div>
+            
+            <form onSubmit={handleUpdateInstructor} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">指導員名:</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={selectedInstructor.name}
+                  onChange={handleEditInputChange}
+                  required
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">メールアドレス:</label>
+                <input
+                  type="email"
+                  name="email"
+                  value={selectedInstructor.email}
+                  onChange={handleEditInputChange}
+                  required
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">専門分野:</label>
+                <input
+                  type="text"
+                  name="department"
+                  value={selectedInstructor.department}
+                  onChange={handleEditInputChange}
+                  required
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">事業所(拠点):</label>
+                <div className="max-h-40 overflow-y-auto border-2 border-gray-200 rounded-lg p-2">
+                  {facilityLocations.map(location => {
+                    const isManager = isSatelliteManager(selectedInstructor.id, location.id);
+                    const isSelected = selectedInstructor.facilityLocationIds.includes(location.id);
+                    return (
+                      <div key={location.id} className="p-2 hover:bg-gray-50 rounded">
+                        <label className="flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            name="facilityLocationIds"
+                            value={location.id}
+                            checked={isSelected}
+                            onChange={(e) => handleEditLocationChange(location.id, e.target.checked)}
+                            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 mr-3"
+                          />
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-800">
+                              {isManager && '👑 '}{location.name}
+                            </div>
+                            <div className="text-xs text-gray-500">{location.organizationName} - {location.type}</div>
+                          </div>
+                        </label>
+                        {isSelected && (
+                          <div className="mt-2 ml-7">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={selectedInstructor.isManager[location.id] || false}
+                                onChange={(e) => handleManagerChange(location.id, e.target.checked)}
+                                className="w-4 h-4 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500 mr-2"
+                              />
+                              <span className="text-sm text-gray-700">👑 この拠点の管理者にする</span>
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">👑 マークは拠点管理者を示します</p>
+              </div>
+              
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-blue-500 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-300 hover:bg-blue-600"
+                >
+                  更新
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 bg-gray-500 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-300 hover:bg-gray-600"
+                  onClick={() => {
+                    setShowEditForm(false);
+                    setSelectedInstructor(null);
+                  }}
                 >
                   キャンセル
                 </button>

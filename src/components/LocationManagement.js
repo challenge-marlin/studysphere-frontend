@@ -16,6 +16,150 @@ const LocationManagement = () => {
   const [companies, setCompanies] = useState([]);
   const [companiesLoading, setCompaniesLoading] = useState(false);
 
+  // 管理者情報（DBから取得）
+  const [managers, setManagers] = useState([]);
+  const [managersLoading, setManagersLoading] = useState(false);
+
+  // 拠点に所属する指導者情報（DBから取得）
+  const [satelliteInstructors, setSatelliteInstructors] = useState({});
+  const [instructorsLoading, setInstructorsLoading] = useState(false);
+
+  // 管理者情報取得
+  const fetchManagers = async () => {
+    try {
+      setManagersLoading(true);
+      console.log('管理者情報取得開始');
+      
+      const response = await authenticatedFetch('http://localhost:5000/api/users');
+      console.log('管理者情報取得レスポンス:', response.status, response.statusText);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('管理者情報取得エラー詳細:', errorText);
+        setManagers([]); // 空配列を設定
+        return;
+      }
+      
+      const data = await response.json();
+      console.log('管理者情報取得成功:', data);
+      setManagers(data);
+    } catch (err) {
+      console.error('管理者情報取得エラー:', err);
+      setManagers([]); // エラー時も空配列を設定
+    } finally {
+      setManagersLoading(false);
+    }
+  };
+
+    // 拠点に所属する指導者情報取得
+  const fetchSatelliteInstructors = async (satelliteId) => {
+    if (!satelliteId) {
+      console.error('拠点IDが未定義です');
+      return;
+    }
+    
+    try {
+      setInstructorsLoading(true);
+      console.log(`拠点ID ${satelliteId} の指導者情報取得開始`);
+      
+      // 常に代替方法を使用（全ユーザーから拠点の指導員をフィルタリング）
+      console.log('全ユーザーから拠点の指導員を抽出します');
+      const allUsersResponse = await authenticatedFetch('http://localhost:5000/api/users');
+      if (allUsersResponse.ok) {
+        const allUsers = await allUsersResponse.json();
+        console.log('全ユーザー取得成功:', allUsers.length, '件');
+        console.log('全ユーザーの詳細:', allUsers);
+        
+        // 指導員（ロール4、5）を抽出
+        const allInstructors = allUsers.filter(user => user.role >= 4 && user.role <= 5);
+        console.log('全指導員:', allInstructors);
+        
+        // 拠点に所属する指導員を抽出
+        const instructorsInSatellite = allInstructors.filter(user => {
+          console.log(`ユーザー ${user.name} (ID: ${user.id}) のsatellite_ids:`, user.satellite_ids);
+          
+          if (!user.satellite_ids) {
+            console.log(`ユーザー ${user.name} のsatellite_idsがnull/undefined`);
+            return false;
+          }
+          
+          const hasSatellite = Array.isArray(user.satellite_ids) 
+            ? user.satellite_ids.includes(satelliteId.toString())
+            : user.satellite_ids === satelliteId.toString();
+          
+          console.log(`ユーザー ${user.name} が拠点${satelliteId}に所属:`, hasSatellite);
+          return hasSatellite;
+        });
+        
+        console.log(`拠点${satelliteId}の指導員（全ユーザーから抽出）:`, instructorsInSatellite);
+        
+        setSatelliteInstructors(prev => {
+          const newState = { ...prev, [satelliteId]: instructorsInSatellite };
+          console.log('設定後のsatelliteInstructors:', newState);
+          return newState;
+        });
+      } else {
+        console.error('全ユーザー取得失敗:', allUsersResponse.status);
+        setSatelliteInstructors(prev => ({ ...prev, [satelliteId]: [] }));
+      }
+    } catch (err) {
+      console.error('指導者情報取得エラー:', err);
+      console.error('エラースタック:', err.stack);
+      setSatelliteInstructors(prev => ({ ...prev, [satelliteId]: [] }));
+    } finally {
+      setInstructorsLoading(false);
+    }
+  };
+
+  // 管理者IDから管理者名を取得する関数
+  const getManagerNames = (managerIds) => {
+    if (!managerIds || managerIds.length === 0) {
+      return [];
+    }
+    
+    // managerIdsが文字列の場合は配列に変換
+    const ids = Array.isArray(managerIds) ? managerIds : [managerIds];
+    
+    // まず拠点に所属する指導者から検索
+    const allInstructors = Object.values(satelliteInstructors || {}).flat().filter(instructor => instructor && typeof instructor === 'object');
+    const instructorNames = ids.map(id => {
+      if (!id) return null;
+      const instructor = allInstructors.find(i => i && i.id === id);
+      return instructor && instructor.name ? instructor.name : null;
+    }).filter(name => name !== null);
+    
+    // 指導者に見つからない場合は管理者から検索
+    const remainingIds = ids.filter(id => id && !allInstructors.find(i => i && i.id === id));
+    const managerNames = remainingIds.map(id => {
+      if (!id) return null;
+      const manager = managers.find(m => m && m.id === id);
+      return manager && manager.name ? manager.name : `ID: ${id}`;
+    }).filter(name => name !== null);
+    
+    return [...instructorNames, ...managerNames];
+  };
+
+  // 拠点に所属する指導者を取得する関数
+  const getSatelliteInstructors = (satelliteId) => {
+    if (!satelliteId) {
+      console.log('拠点IDが未定義です');
+      return [];
+    }
+    console.log(`拠点 ${satelliteId} の指導者取得開始`);
+    console.log('現在のsatelliteInstructors:', satelliteInstructors);
+    console.log('satelliteInstructorsの型:', typeof satelliteInstructors);
+    console.log('satelliteInstructors[satelliteId]:', satelliteInstructors && satelliteInstructors[satelliteId]);
+    
+    const instructors = (satelliteInstructors && satelliteInstructors[satelliteId]) || [];
+    console.log(`拠点 ${satelliteId} の指導者取得結果:`, instructors);
+    console.log('instructorsの型:', typeof instructors);
+    console.log('instructorsが配列か:', Array.isArray(instructors));
+    
+    const result = Array.isArray(instructors) ? instructors : [];
+    console.log(`拠点 ${satelliteId} の最終結果:`, result);
+    return result;
+  };
+
   // 事業所タイプ取得
   const fetchOfficeTypes = async () => {
     try {
@@ -269,6 +413,7 @@ const LocationManagement = () => {
         console.log('バックエンドサーバーに接続できました');
         fetchOfficeTypes();
         fetchCompanies();
+        fetchManagers();
       } else {
         console.error('バックエンドサーバーに接続できません');
         showNotification('バックエンドサーバーに接続できません。サーバーが起動しているか確認してください。', 'error');
@@ -277,6 +422,7 @@ const LocationManagement = () => {
         setFacilityTypes([]);
         setFacilityTypesData([]);
         setCompanies([]);
+        setManagers([]);
       }
     };
     
@@ -340,23 +486,32 @@ const LocationManagement = () => {
   // 責任者選択モーダル表示制御
   const [showManagerSelect, setShowManagerSelect] = useState(false);
   const [selectedOfficeForManager, setSelectedOfficeForManager] = useState(null);
+  const [selectedManagers, setSelectedManagers] = useState([]);
 
   // 編集モーダル表示制御
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedOfficeForEdit, setSelectedOfficeForEdit] = useState(null);
   const [editFormData, setEditFormData] = useState({});
 
-  // サンプルユーザーリスト
-  const sampleUsers = [
-    { id: 1, name: '田中太郎', email: 'tanaka@example.com', department: 'IT学科' },
-    { id: 2, name: '佐藤花子', email: 'sato@example.com', department: 'デザイン学科' },
-    { id: 3, name: '鈴木一郎', email: 'suzuki@example.com', department: 'ビジネス学科' },
-    { id: 4, name: '高橋美咲', email: 'takahashi@example.com', department: 'IT学科' },
-    { id: 5, name: '伊藤健太', email: 'ito@example.com', department: 'ビジネス学科' },
-    { id: 6, name: '渡辺真理', email: 'watanabe@example.com', department: 'IT学科' },
-    { id: 7, name: '小林直子', email: 'kobayashi@example.com', department: '個人指導' },
-    { id: 8, name: '中村誠', email: 'nakamura@example.com', department: '総合教育' }
-  ];
+  // 拠点に所属する指導者リスト（責任者選択用）
+  const getAvailableInstructors = () => {
+    console.log('getAvailableInstructors が呼び出されました');
+    console.log('selectedOfficeForManager:', selectedOfficeForManager);
+    
+    if (!selectedOfficeForManager || !selectedOfficeForManager.id) {
+      console.log('選択された拠点が未定義です');
+      return [];
+    }
+    
+    console.log(`拠点 ${selectedOfficeForManager.id} の指導者を取得します`);
+    const instructors = getSatelliteInstructors(selectedOfficeForManager.id);
+    console.log(`拠点 ${selectedOfficeForManager.id} の利用可能な指導者:`, instructors);
+    console.log('instructorsの長さ:', instructors.length);
+    
+    const result = Array.isArray(instructors) ? instructors : [];
+    console.log('最終的な利用可能な指導者:', result);
+    return result;
+  };
 
   // コースモックデータ（本来は共通管理が望ましいが、ここではローカル定義）
   const mockCourses = [
@@ -378,9 +533,23 @@ const LocationManagement = () => {
   const [showCompanyTokenModal, setShowCompanyTokenModal] = useState({ show: false, company: null });
 
   // 責任者選択ハンドラー
-  const handleSelectManager = (office) => {
+  const handleSelectManager = async (office) => {
+    if (!office || !office.id) {
+      console.error('拠点情報が不正です:', office);
+      return;
+    }
+    
     setSelectedOfficeForManager(office);
+    
+    // 既存の管理者IDを選択状態に設定
+    const existingManagerIds = office.manager_ids || [];
+    setSelectedManagers(existingManagerIds);
+    
     setShowManagerSelect(true);
+    
+    // 拠点に所属する指導者情報を取得（最新データを取得するためキャッシュをクリア）
+    setSatelliteInstructors(prev => ({ ...prev, [office.id]: undefined }));
+    await fetchSatelliteInstructors(office.id);
   };
 
   // 編集ハンドラー
@@ -405,10 +574,64 @@ const LocationManagement = () => {
   };
 
   // 責任者選択確定ハンドラー
-  const handleConfirmManagerSelection = (selectedUsers) => {
-    alert(`選択された責任者: ${selectedUsers.map(u => u.name).join(', ')}\n「${selectedOfficeForManager.name}」に設定しました。`);
-    setShowManagerSelect(false);
-    setSelectedOfficeForManager(null);
+  const handleConfirmManagerSelection = async (selectedUsers) => {
+    if (!selectedUsers || !Array.isArray(selectedUsers)) {
+      console.error('選択されたユーザーが不正です:', selectedUsers);
+      return;
+    }
+    
+    if (!selectedOfficeForManager || !selectedOfficeForManager.id) {
+      console.error('選択された拠点が不正です:', selectedOfficeForManager);
+      return;
+    }
+    
+    try {
+      // 選択されたユーザーのID配列を作成
+      const selectedManagerIds = selectedUsers.map(user => user.id);
+      
+      console.log('管理者更新リクエスト:', {
+        satelliteId: selectedOfficeForManager.id,
+        managerIds: selectedManagerIds
+      });
+      
+      // バックエンドAPIに管理者更新リクエストを送信
+      const response = await authenticatedFetch(`http://localhost:5000/api/satellites/${selectedOfficeForManager.id}/managers`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          manager_ids: selectedManagerIds
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || '管理者の更新に失敗しました');
+      }
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || '管理者の更新に失敗しました');
+      }
+      
+      const userNames = selectedUsers.map(u => u && u.name ? u.name : '不明').join(', ');
+      const officeName = selectedOfficeForManager.name;
+      
+      showNotification(`「${officeName}」の責任者を更新しました: ${userNames}`, 'success');
+      
+      // 拠点一覧を再取得
+      await fetchSatellites();
+      
+      setShowManagerSelect(false);
+      setSelectedOfficeForManager(null);
+      setSelectedManagers([]); // 選択状態をリセット
+      
+    } catch (error) {
+      console.error('管理者更新エラー:', error);
+      showNotification(error.message, 'error');
+    }
   };
 
   // 編集確定ハンドラー
@@ -1137,6 +1360,7 @@ const LocationManagement = () => {
         >
           🔑 管理者復元
         </button>
+
       </div>
 
       {/* 検索・フィルタセクション */}
@@ -1259,7 +1483,7 @@ const LocationManagement = () => {
                     {office.manager_ids && office.manager_ids.length > 0 ? (
                       <div className="space-y-1">
                         <span className="text-sm text-gray-600">
-                          責任者ID: {Array.isArray(office.manager_ids) ? office.manager_ids.join(', ') : office.manager_ids}
+                          {getManagerNames(office.manager_ids).join(', ')}
                         </span>
                       </div>
                     ) : (
@@ -2112,7 +2336,10 @@ const LocationManagement = () => {
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-2xl font-bold text-gray-800">責任者選択</h3>
               <button 
-                onClick={() => setShowManagerSelect(false)}
+                onClick={() => {
+                  setShowManagerSelect(false);
+                  setSelectedManagers([]); // 選択状態をリセット
+                }}
                 className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
               >
                 ×
@@ -2120,38 +2347,120 @@ const LocationManagement = () => {
             </div>
             
             <div className="mb-4">
-              <p className="text-gray-600 mb-2">事業所: <span className="font-semibold text-gray-800">{selectedOfficeForManager.name}</span></p>
-              <p className="text-sm text-gray-500">複数の責任者を選択できます</p>
+              <p className="text-gray-600 mb-2">拠点: <span className="font-semibold text-gray-800">{selectedOfficeForManager.name}</span></p>
+              <p className="text-sm text-gray-500 mb-2">
+                この拠点に所属する指導者から責任者を選択してください。
+                <br />
+                <span className="text-blue-600 font-medium">✓ チェックが入っている指導者は現在の責任者です</span>
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    console.log('手動で指導者情報を更新します');
+                    await fetchSatelliteInstructors(selectedOfficeForManager.id);
+                  }}
+                  className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors duration-300"
+                >
+                  🔄 指導者情報を更新
+                </button>
+                <button
+                  onClick={() => setSelectedManagers([])}
+                  className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors duration-300"
+                >
+                  🗑️ 全選択解除
+                </button>
+              </div>
             </div>
 
             <div className="space-y-3 mb-6 max-h-96 overflow-y-auto">
-              {sampleUsers.map(user => (
-                <label key={user.id} className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 mr-3"
-                  />
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-800">{user.name}</div>
-                    <div className="text-sm text-gray-500">{user.email}</div>
-                    <div className="text-xs text-gray-400">{user.department}</div>
+              {instructorsLoading ? (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600 mx-auto mb-2"></div>
+                  <p className="text-gray-600">指導者情報を読み込み中...</p>
+                </div>
+              ) : getAvailableInstructors().length === 0 ? (
+                <div className="text-center py-4">
+                  <p className="text-gray-500">この拠点に所属する指導者がいません</p>
+                  <p className="text-sm text-gray-400 mt-2">指導者を拠点に追加してから責任者を設定してください</p>
+                  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-sm text-yellow-700">
+                      デバッグ情報: 拠点ID {selectedOfficeForManager?.id}, 
+                      指導者数 {getAvailableInstructors().length}
+                    </p>
+                    <p className="text-xs text-yellow-600 mt-1">
+                      キャッシュされた指導者データ: {JSON.stringify(satelliteInstructors[selectedOfficeForManager?.id] || [])}
+                    </p>
+                    <p className="text-xs text-yellow-600 mt-1">
+                      全拠点のキャッシュ: {JSON.stringify(Object.keys(satelliteInstructors || {}))}
+                    </p>
+                    <p className="text-xs text-yellow-600 mt-1">
+                      ローディング状態: {instructorsLoading ? 'true' : 'false'}
+                    </p>
                   </div>
-                </label>
-              ))}
+                </div>
+              ) : (
+                getAvailableInstructors().map(instructor => {
+                  const isCurrentManager = selectedManagers.includes(instructor.id);
+                  return (
+                    <label key={instructor.id} className={`flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition-all duration-200 ${
+                      isCurrentManager 
+                        ? 'border-blue-300 bg-blue-50' 
+                        : 'border-gray-200'
+                    }`}>
+                      <input
+                        type="checkbox"
+                        checked={isCurrentManager}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedManagers([...selectedManagers, instructor.id]);
+                          } else {
+                            setSelectedManagers(selectedManagers.filter(id => id !== instructor.id));
+                          }
+                        }}
+                        className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 mr-3"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="font-medium text-gray-800">{instructor.name}</div>
+                          {isCurrentManager && (
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                              現在の責任者
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-500">{instructor.email || instructor.login_code}</div>
+                        <div className="text-xs text-gray-400">
+                          {instructor.specializations && instructor.specializations.length > 0 
+                            ? `専門分野: ${instructor.specializations.join(', ')}`
+                            : '専門分野: 未設定'
+                          }
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })
+              )}
             </div>
 
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => setShowManagerSelect(false)}
+                onClick={() => {
+                  setShowManagerSelect(false);
+                  setSelectedManagers([]); // 選択状態をリセット
+                }}
                 className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-300"
               >
                 キャンセル
               </button>
               <button
-                onClick={() => handleConfirmManagerSelection([sampleUsers[0], sampleUsers[1]])}
-                className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors duration-300"
+                onClick={() => {
+                  const selectedUsers = getAvailableInstructors().filter(instructor => selectedManagers.includes(instructor.id));
+                  handleConfirmManagerSelection(selectedUsers);
+                }}
+                disabled={selectedManagers.length === 0}
+                className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
-                選択確定
+                選択確定 ({selectedManagers.length}人選択中)
               </button>
             </div>
           </div>

@@ -4,6 +4,7 @@ import { useAuth } from '../components/contexts/AuthContext';
 import { logAdminAccountOperation } from '../utils/adminLogger';
 import SanitizedInput from '../components/SanitizedInput';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
+import { addOperationLog } from '../utils/operationLogManager';
 
 const LoginPage = () => {
   const [credentials, setCredentials] = useState({ id: '', password: '' });
@@ -123,6 +124,14 @@ const LoginPage = () => {
             // 認証コンテキストを使用してログイン
             login(userData, adminData.data.access_token, adminData.data.refresh_token);
             
+            // 操作ログを記録
+            await addOperationLog({
+              action: 'ログイン',
+              details: `管理者「${userData.name}」がログインしました`,
+              adminId: userData.id,
+              adminName: userData.name
+            });
+            
             navigate('/admin/dashboard');
           } else {
             setError(adminData.message || 'ログインに失敗しました');
@@ -139,6 +148,15 @@ const LoginPage = () => {
         if (user) {
           // 指導員でログイン（モックログイン）
           login(user);
+          
+          // 操作ログを記録
+          await addOperationLog({
+            action: 'ログイン',
+            details: `指導員「${user.name}」がログインしました`,
+            adminId: user.id,
+            adminName: user.name
+          });
+          
           navigate('/instructor/dashboard');
         } else {
           setError('ユーザーIDまたはパスワードが正しくありません。');

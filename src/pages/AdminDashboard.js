@@ -8,20 +8,15 @@ import CourseManagement from '../components/CourseManagement';
 import LessonManagement from '../components/LessonManagement';
 import CurriculumPathManagement from '../components/CurriculumPathManagement';
 import AdminManagement from '../components/AdminManagement';
-import { logAdminAccountOperation } from '../utils/adminLogger';
 
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState('locations');
+  // 保存されたタブ状態を取得、デフォルトは'locations'
+  const [activeTab, setActiveTab] = useState(() => {
+    const savedTab = sessionStorage.getItem('adminDashboardActiveTab');
+    return savedTab || 'locations';
+  });
   const navigate = useNavigate();
-  const { currentUser, logout } = useAdminGuard();
-
-  const handleLogout = () => {
-    // ログアウト時の操作ログを記録
-    if (currentUser) {
-      logAdminAccountOperation('logout', currentUser);
-    }
-    logout();
-  };
+  const { currentUser } = useAdminGuard();
 
   if (!currentUser) {
     return (
@@ -42,7 +37,7 @@ const AdminDashboard = () => {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
-      <AdminHeader user={currentUser} onLogout={handleLogout} />
+      <AdminHeader user={currentUser} />
       
       <div className="flex flex-col flex-1 h-[calc(100vh-80px)] overflow-hidden">
         <aside className="w-full bg-white border-b border-gray-200 flex-shrink-0">
@@ -55,7 +50,11 @@ const AdminDashboard = () => {
                     ? 'bg-gradient-to-r from-red-500 to-red-400 text-white shadow-lg' 
                     : ''
                 }`}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => {
+                  setActiveTab(item.id);
+                  // タブ状態をsessionStorageに保存
+                  sessionStorage.setItem('adminDashboardActiveTab', item.id);
+                }}
               >
                 {item.label}
               </button>

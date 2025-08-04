@@ -1,6 +1,15 @@
 import React from 'react';
+import { useAuth } from './contexts/AuthContext';
 
-const AdminHeader = ({ user, onLogout }) => {
+const AdminHeader = ({ user }) => {
+  const { logout } = useAuth();
+
+  const handleLogout = () => {
+    if (window.confirm('ログアウトしますか？')) {
+      logout();
+    }
+  };
+
   return (
     <header className="bg-gradient-to-r from-red-500 to-red-400 text-white py-4 shadow-lg">
       <div className="max-w-7xl mx-auto px-5 flex justify-between items-center">
@@ -14,7 +23,7 @@ const AdminHeader = ({ user, onLogout }) => {
           <span className="font-medium text-white">{user.name}</span>
           <button 
             className="bg-white bg-opacity-10 text-white border-2 border-white border-opacity-30 px-4 py-2 rounded-md cursor-pointer transition-all duration-200 hover:bg-opacity-20 hover:border-opacity-50"
-            onClick={onLogout}
+            onClick={handleLogout}
           >
             ログアウト
           </button>

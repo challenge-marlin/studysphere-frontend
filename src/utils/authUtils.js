@@ -4,15 +4,39 @@
 export const getTokenExpiryTime = (token) => {
   if (!token) return 0;
   
+  // トークンの形式をチェック
+  if (!token.includes('.') || token.split('.').length !== 3) {
+    console.error('Invalid token format:', {
+      token: token ? token.substring(0, 50) + '...' : 'null',
+      fullToken: token, // 完全なトークンを表示
+      length: token ? token.length : 0,
+      containsDots: token ? token.includes('.') : false,
+      dotCount: token ? (token.match(/\./g) || []).length : 0
+    });
+    return 0;
+  }
+  
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
+    const parts = token.split('.');
+    console.log('トークンパーツ:', {
+      headerLength: parts[0] ? parts[0].length : 0,
+      payloadLength: parts[1] ? parts[1].length : 0,
+      signatureLength: parts[2] ? parts[2].length : 0
+    });
+    
+    const payload = JSON.parse(atob(parts[1]));
     const expiryTime = payload.exp * 1000; // JWTのexpは秒単位なのでミリ秒に変換
     const currentTime = Date.now();
     const remainingTime = Math.floor((expiryTime - currentTime) / 1000); // 秒単位で返す
     
     return Math.max(0, remainingTime);
   } catch (error) {
-    console.error('Token expiry check error:', error);
+    console.error('Token expiry check error:', {
+      error: error.message,
+      token: token ? token.substring(0, 50) + '...' : 'null',
+      fullToken: token, // 完全なトークンを表示
+      tokenLength: token ? token.length : 0
+    });
     return 0;
   }
 };
@@ -22,23 +46,23 @@ export const isTokenValid = (token) => {
   return getTokenExpiryTime(token) > 0;
 };
 
-// セッションストレージからトークンを取得
+// ローカルストレージからトークンを取得
 export const getStoredTokens = () => {
-  const accessToken = sessionStorage.getItem('accessToken');
-  const refreshToken = sessionStorage.getItem('refreshToken');
+  const accessToken = localStorage.getItem('accessToken');
+  const refreshToken = localStorage.getItem('refreshToken');
   return { accessToken, refreshToken };
 };
 
-// セッションストレージにトークンを保存
+// ローカルストレージにトークンを保存
 export const storeTokens = (accessToken, refreshToken) => {
-  if (accessToken) sessionStorage.setItem('accessToken', accessToken);
-  if (refreshToken) sessionStorage.setItem('refreshToken', refreshToken);
+  if (accessToken) localStorage.setItem('accessToken', accessToken);
+  if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
 };
 
-// セッションストレージからトークンを削除
+// ローカルストレージからトークンを削除
 export const clearStoredTokens = () => {
-  sessionStorage.removeItem('accessToken');
-  sessionStorage.removeItem('refreshToken');
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('refreshToken');
 };
 
 // トークン更新APIを呼び出し
@@ -112,19 +136,19 @@ export const handleTokenInvalid = (navigate, reason = 'トークンが無効に�
   // ログインページまたは生徒ログインページの場合はアラートを表示しない
   const isLoginPage = currentPath === '/' || currentPath.startsWith('/student/login');
   
-  // ログインページでない場合のみアラートを表示してから強制リロード
+  // ログインページでない場合のみアラートを表示してからナビゲーション
   if (!isLoginPage && typeof window !== 'undefined' && window.alert) {
     alert(`${reason}\nログインページに戻ります。`);
-    // アラート後に強制リロード
-    window.location.href = '/';
+    // アラート後に通常のナビゲーション（強制リロードを避ける）
+    navigate('/', { replace: true });
   } else {
     // ログインページの場合は即座にリダイレクト
     navigate('/', { replace: true });
   }
 };
 
-// トークン更新が必要かどうかを判定（残り190秒以下で更新）
+// トークン更新が必要かどうかを判定（残り120秒以下で更新）
 export const shouldRefreshToken = (token) => {
   const remainingTime = getTokenExpiryTime(token);
-  return remainingTime <= 190; // 190秒以下で更新
+  return remainingTime <= 120; // 120秒以下で更新（より短い時間に調整）
 }; 

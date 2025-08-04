@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import SanitizedInput from './SanitizedInput';
+import { addOperationLog } from '../utils/operationLogManager';
 
 const SatelliteManagement = () => {
   const [satellites, setSatellites] = useState([]);
@@ -82,6 +83,13 @@ const SatelliteManagement = () => {
 
       await fetchSatellites();
       showNotification(result.message, 'success');
+      
+      // 操作ログを記録
+      await addOperationLog({
+        action: '拠点作成',
+        details: `拠点「${satelliteData.name}」を作成しました`
+      });
+      
       return { success: true, message: result.message };
     } catch (err) {
       console.error('拠点作成エラー:', err);
@@ -109,6 +117,13 @@ const SatelliteManagement = () => {
 
       await fetchSatellites();
       showNotification(result.message, 'success');
+      
+      // 操作ログを記録
+      await addOperationLog({
+        action: '拠点更新',
+        details: `拠点「${satelliteData.name}」の情報を更新しました`
+      });
+      
       return { success: true, message: result.message };
     } catch (err) {
       console.error('拠点更新エラー:', err);
@@ -132,6 +147,13 @@ const SatelliteManagement = () => {
 
       await fetchSatellites();
       showNotification(result.message, 'success');
+      
+      // 操作ログを記録
+      await addOperationLog({
+        action: '拠点削除',
+        details: `拠点ID: ${satelliteId} を削除しました`
+      });
+      
       return { success: true, message: result.message };
     } catch (err) {
       console.error('拠点削除エラー:', err);
@@ -159,6 +181,13 @@ const SatelliteManagement = () => {
 
       await fetchSatellites();
       showNotification(result.message, 'success');
+      
+      // 操作ログを記録
+      await addOperationLog({
+        action: '拠点管理者追加',
+        details: `拠点ID: ${satelliteId} に管理者ID: ${managerId} を追加しました`
+      });
+      
       return { success: true, message: result.message };
     } catch (err) {
       console.error('管理者追加エラー:', err);
@@ -182,6 +211,13 @@ const SatelliteManagement = () => {
 
       await fetchSatellites();
       showNotification(result.message, 'success');
+      
+      // 操作ログを記録
+      await addOperationLog({
+        action: '拠点管理者削除',
+        details: `拠点ID: ${satelliteId} から管理者ID: ${managerId} を削除しました`
+      });
+      
       return { success: true, message: result.message };
     } catch (err) {
       console.error('管理者削除エラー:', err);

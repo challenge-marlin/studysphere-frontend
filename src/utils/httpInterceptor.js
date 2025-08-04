@@ -1,5 +1,5 @@
 // HTTPリクエストインターセプター
-import { getStoredTokens, handleTokenInvalid } from './authUtils';
+import { getStoredTokens, handleTokenInvalid, refreshTokenAPI, storeTokens } from './authUtils';
 
 // グローバルなナビゲーション関数を保持
 let globalNavigate = null;
@@ -12,7 +12,7 @@ export const setGlobalNavigate = (navigate) => {
 // カスタムfetch関数（トークン無効検出付き）
 export const authenticatedFetch = async (url, options = {}) => {
   try {
-    const { accessToken } = getStoredTokens();
+    const { accessToken, refreshToken } = getStoredTokens();
     
     // アクセストークンがある場合はヘッダーに追加
     if (accessToken) {
@@ -26,7 +26,37 @@ export const authenticatedFetch = async (url, options = {}) => {
     
     // 401 Unauthorized または 403 Forbidden の場合
     if (response.status === 401 || response.status === 403) {
-      console.warn('Authentication failed, redirecting to login');
+      // リフレッシュトークンがある場合は更新を試行
+      if (refreshToken) {
+        try {
+          console.log('HTTPインターセプター: トークン更新を試行中...');
+          const refreshResponse = await refreshTokenAPI(refreshToken);
+          
+          if (refreshResponse.success) {
+            const { access_token, refresh_token } = refreshResponse.data;
+            storeTokens(access_token, refresh_token);
+            console.log('HTTPインターセプター: トークン更新成功');
+            
+            // 新しいトークンでリクエストを再実行
+            const newOptions = {
+              ...options,
+              headers: {
+                ...options.headers,
+                'Authorization': `Bearer ${access_token}`
+              }
+            };
+            
+            return await fetch(url, newOptions);
+          } else {
+            console.error('HTTPインターセプター: トークン更新APIが失敗:', refreshResponse);
+          }
+        } catch (refreshError) {
+          console.error('HTTPインターセプター: トークン更新に失敗:', refreshError);
+        }
+      }
+      
+      // トークン更新に失敗した場合はログインページにリダイレクト
+      console.warn('HTTPインターセプター: Authentication failed, redirecting to login');
       if (globalNavigate) {
         handleTokenInvalid(globalNavigate, '認証に失敗しました');
       }
@@ -58,7 +88,7 @@ export const setupFetchInterceptor = () => {
   
   window.fetch = async (url, options = {}) => {
     try {
-      const { accessToken } = getStoredTokens();
+      const { accessToken, refreshToken } = getStoredTokens();
       
       // アクセストークンがある場合はヘッダーに追加
       if (accessToken && !options.headers?.['Authorization']) {
@@ -72,7 +102,37 @@ export const setupFetchInterceptor = () => {
       
       // 401 Unauthorized または 403 Forbidden の場合
       if (response.status === 401 || response.status === 403) {
-        console.warn('Authentication failed, redirecting to login');
+        // リフレッシュトークンがある場合は更新を試行
+        if (refreshToken) {
+          try {
+            console.log('Fetchインターセプター: トークン更新を試行中...');
+            const refreshResponse = await refreshTokenAPI(refreshToken);
+            
+            if (refreshResponse.success) {
+              const { access_token, refresh_token } = refreshResponse.data;
+              storeTokens(access_token, refresh_token);
+              console.log('Fetchインターセプター: トークン更新成功');
+              
+              // 新しいトークンでリクエストを再実行
+              const newOptions = {
+                ...options,
+                headers: {
+                  ...options.headers,
+                  'Authorization': `Bearer ${access_token}`
+                }
+              };
+              
+              return await originalFetch(url, newOptions);
+            } else {
+              console.error('Fetchインターセプター: トークン更新APIが失敗:', refreshResponse);
+            }
+          } catch (refreshError) {
+            console.error('Fetchインターセプター: トークン更新に失敗:', refreshError);
+          }
+        }
+        
+        // トークン更新に失敗した場合はログインページにリダイレクト
+        console.warn('Fetchインターセプター: Authentication failed, redirecting to login');
         if (globalNavigate) {
           handleTokenInvalid(globalNavigate, '認証に失敗しました');
         }

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
-import { logAdminAccountOperation } from '../utils/adminLogger';
 import SanitizedInput from './SanitizedInput';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
+import { addOperationLog } from '../utils/operationLogManager';
 
 /**
  * サニタイズ機能付きLoginPageの例
@@ -116,7 +116,15 @@ const LoginPageWithSanitize = () => {
         if (adminData.user) {
           // 管理者ログイン成功
           await login(adminData.user, adminData.token);
-          logAdminAccountOperation('login', credentials.id, '管理者ログイン成功');
+          
+          // 操作ログを記録
+          await addOperationLog({
+            action: 'ログイン',
+            details: `管理者「${adminData.user.name}」がログインしました`,
+            adminId: adminData.user.id,
+            adminName: adminData.user.name
+          });
+          
           navigate('/admin/dashboard');
           return;
         }
@@ -133,12 +141,25 @@ const LoginPageWithSanitize = () => {
       if (user) {
         // 指導員ログイン成功
         await login(user, 'mock-token-for-instructor');
-        logAdminAccountOperation('login', credentials.id, '指導員ログイン成功');
+        
+        // 操作ログを記録
+        await addOperationLog({
+          action: 'ログイン',
+          details: `指導員「${user.name}」がログインしました`,
+          adminId: user.id,
+          adminName: user.name
+        });
+        
         navigate('/instructor/dashboard');
       } else {
         // ログイン失敗
         setError('ユーザーIDまたはパスワードが正しくありません');
-        logAdminAccountOperation('login_failed', credentials.id, 'ログイン失敗');
+        
+        // ログイン失敗のログを記録
+        await addOperationLog({
+          action: 'ログイン失敗',
+          details: `ログイン試行が失敗しました（ID: ${credentials.id}）`
+        });
       }
     } catch (error) {
       console.error('Login error:', error);

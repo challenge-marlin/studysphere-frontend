@@ -70,6 +70,8 @@ const LoginPage = () => {
   // 管理者ログインAPI呼び出し
   const adminLoginAPI = async (username, password) => {
     try {
+      console.log('LoginPage: 管理者ログインAPI呼び出し開始');
+      
       const response = await fetch('http://localhost:5000/login', {
         method: 'POST',
         headers: {
@@ -78,15 +80,19 @@ const LoginPage = () => {
         body: JSON.stringify({ username, password }),
       });
 
+      console.log('LoginPage: ログインAPI応答', { status: response.status, ok: response.ok });
+
       const data = await response.json();
       
       if (!response.ok) {
+        console.log('LoginPage: ログイン失敗', data);
         throw new Error(data.message || 'ログインに失敗しました');
       }
 
+      console.log('LoginPage: ログイン成功', data);
       return data;
     } catch (error) {
-      console.error('Admin login API error:', error);
+      console.error('LoginPage: Admin login API error:', error);
       throw error;
     }
   };
@@ -137,7 +143,13 @@ const LoginPage = () => {
             setError(adminData.message || 'ログインに失敗しました');
           }
         } catch (apiError) {
-          setError(apiError.message || 'データベース認証に失敗しました');
+          console.error('Login API error:', apiError);
+          // 認証エラーの場合は適切なメッセージを表示
+          if (apiError.message === 'Authentication failed') {
+            setError('ユーザーIDまたはパスワードが正しくありません。');
+          } else {
+            setError(apiError.message || 'データベース認証に失敗しました');
+          }
         }
       } else {
         // 通常のユーザー認証（モックデータ）

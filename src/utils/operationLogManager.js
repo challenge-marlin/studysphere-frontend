@@ -175,12 +175,13 @@ const cleanOldLogs = (logs) => {
  */
 export const clearOperationLogs = async () => {
   try {
-    // バックエンドAPIでログをクリア
-    const response = await apiDelete('/api/operation-logs');
+    // バックエンドAPIでログをクリア（すべてのログを削除）
+    const response = await apiDelete('/api/operation-logs?clearAll=true');
     
     if (response.success) {
       // ローカルストレージもクリア
       localStorage.removeItem(LOG_STORAGE_KEY);
+      console.log('ログクリア成功:', response.message);
       return true;
     } else {
       console.error('バックエンドログクリアに失敗:', response.message);
@@ -192,6 +193,7 @@ export const clearOperationLogs = async () => {
     // バックエンドが利用できない場合はローカルストレージのみクリア
     try {
       localStorage.removeItem(LOG_STORAGE_KEY);
+      console.log('ローカルストレージのログをクリアしました');
       return true;
     } catch (localError) {
       console.error('ローカルログクリアにも失敗しました:', localError);
@@ -239,14 +241,14 @@ export const getLogStats = async () => {
     
     if (response.success && response.data) {
       return {
-        totalLogs: response.data.totalLogs,
-        todayLogs: response.data.todayLogs,
-        thisWeekLogs: response.data.thisWeekLogs,
-        thisMonthLogs: response.data.thisMonthLogs,
-        actionCounts: response.data.actionStats.reduce((acc, stat) => {
+        totalLogs: response.data.totalLogs || 0,
+        todayLogs: response.data.todayLogs || 0,
+        thisWeekLogs: response.data.thisWeekLogs || 0,
+        thisMonthLogs: response.data.thisMonthLogs || 0,
+        actionCounts: response.data.actionStats ? response.data.actionStats.reduce((acc, stat) => {
           acc[stat.action] = stat.count;
           return acc;
-        }, {})
+        }, {}) : {}
       };
     } else {
       // バックエンドが利用できない場合はローカル計算

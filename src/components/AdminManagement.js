@@ -396,9 +396,26 @@ const AdminManagement = () => {
       try {
         const success = await clearOperationLogs();
         if (success) {
-          await loadOperationLogs();
+          // ログクリア後に統計情報をリセット
+          setOperationLogs([]);
+          setLogStats({
+            totalLogs: 0,
+            todayLogs: 0,
+            thisWeekLogs: 0,
+            thisMonthLogs: 0,
+            actionCounts: {}
+          });
           setError(null);
-          // ログクリア操作も記録
+          
+          // バックエンドから最新の統計情報を再取得（0件であることを確認）
+          try {
+            const updatedStats = await getLogStats();
+            setLogStats(updatedStats);
+          } catch (statsError) {
+            console.log('統計情報の再取得に失敗しました（正常な動作です）:', statsError);
+          }
+          
+          // ログクリア操作も記録（ただし、クリア後の記録なので即座に表示されない）
           const currentUser = getCurrentUser();
           const adminName = currentUser ? currentUser.name || currentUser.username : '不明な管理者';
           const adminId = currentUser ? currentUser.id : 'unknown';
@@ -406,6 +423,9 @@ const AdminManagement = () => {
             adminId: adminId,
             adminName: adminName
           });
+          
+          // 成功メッセージを表示
+          alert('すべての操作ログを削除しました');
         } else {
           setError('ログの削除に失敗しました');
         }

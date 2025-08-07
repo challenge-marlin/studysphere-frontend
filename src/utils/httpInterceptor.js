@@ -1,85 +1,32 @@
 // HTTPリクエストインターセプター
-import { getStoredTokens, handleTokenInvalid, refreshTokenAPI, storeTokens } from './authUtils';
+import { getStoredTokens, isRefreshTokenExpired, handleTokenInvalid } from './authUtils';
 
-// グローバルなナビゲーション関数を保持
 let globalNavigate = null;
+let isAuthErrorHandling = false;
 
-// ナビゲーション関数を設定
+// グローバルナビゲーション関数を設定
 export const setGlobalNavigate = (navigate) => {
   globalNavigate = navigate;
 };
 
-// カスタムfetch関数（トークン無効検出付き）
-export const authenticatedFetch = async (url, options = {}) => {
-  try {
-    const { accessToken, refreshToken } = getStoredTokens();
-    
-    // アクセストークンがある場合はヘッダーに追加
-    if (accessToken) {
-      options.headers = {
-        ...options.headers,
-        'Authorization': `Bearer ${accessToken}`
-      };
-    }
+// 認証が必要なエンドポイントかどうかを判定
+const isAuthRequiredEndpoint = (url) => {
+  // 認証が不要なエンドポイントのリスト
+  const authExcludedEndpoints = [
+    '/login',
+    '/restore-admin',
+    '/refresh',
+    '/register',
+    '/forgot-password'
+  ];
+  
+  // URLに認証不要エンドポイントが含まれているかチェック
+  return !authExcludedEndpoints.some(endpoint => url.includes(endpoint));
+};
 
-    const response = await fetch(url, options);
-    
-    // 401 Unauthorized または 403 Forbidden の場合
-    if (response.status === 401 || response.status === 403) {
-      // リフレッシュトークンがある場合は更新を試行
-      if (refreshToken) {
-        try {
-          console.log('HTTPインターセプター: トークン更新を試行中...');
-          const refreshResponse = await refreshTokenAPI(refreshToken);
-          
-          if (refreshResponse.success) {
-            const { access_token, refresh_token } = refreshResponse.data;
-            storeTokens(access_token, refresh_token);
-            console.log('HTTPインターセプター: トークン更新成功');
-            
-            // 新しいトークンでリクエストを再実行
-            const newOptions = {
-              ...options,
-              headers: {
-                ...options.headers,
-                'Authorization': `Bearer ${access_token}`
-              }
-            };
-            
-            return await fetch(url, newOptions);
-          } else {
-            console.error('HTTPインターセプター: トークン更新APIが失敗:', refreshResponse);
-          }
-        } catch (refreshError) {
-          console.error('HTTPインターセプター: トークン更新に失敗:', refreshError);
-        }
-      }
-      
-      // トークン更新に失敗した場合はログインページにリダイレクト
-      console.warn('HTTPインターセプター: Authentication failed, redirecting to login');
-      if (globalNavigate) {
-        handleTokenInvalid(globalNavigate, '認証に失敗しました');
-      }
-      throw new Error('Authentication failed');
-    }
-    
-    return response;
-  } catch (error) {
-    // ネットワークエラーやその他のエラーの場合
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      console.error('Network error:', error);
-      // ネットワークエラーの場合はリダイレクトしない
-      throw error;
-    }
-    
-    // 認証エラーの場合はリダイレクト
-    if (error.message === 'Authentication failed') {
-      throw error;
-    }
-    
-    // その他のエラーはそのまま投げる
-    throw error;
-  }
+// ログインエンドポイントかどうかを判定
+const isLoginEndpoint = (url) => {
+  return url.includes('/login') || url.endsWith('/login');
 };
 
 // 既存のfetchを拡張するためのプロキシ
@@ -87,54 +34,68 @@ export const setupFetchInterceptor = () => {
   const originalFetch = window.fetch;
   
   window.fetch = async (url, options = {}) => {
+    console.log('Fetchインターセプター: リクエスト開始', { url, method: options.method });
+    
+    // ログインエンドポイントの場合は、認証エラー処理を完全にスキップ
+    if (isLoginEndpoint(url)) {
+      console.log('Fetchインターセプター: ログインエンドポイントのため、認証処理をスキップ');
+      return originalFetch(url, options);
+    }
+    
+    // 認証エラー処理中は新しいリクエストをブロック
+    if (isAuthErrorHandling) {
+      console.log('Fetchインターセプター: 認証エラー処理中のため、リクエストをスキップします');
+      throw new Error('Authentication error handling in progress');
+    }
+
     try {
       const { accessToken, refreshToken } = getStoredTokens();
       
-      // アクセストークンがある場合はヘッダーに追加
-      if (accessToken && !options.headers?.['Authorization']) {
+      // 認証が必要なエンドポイントの場合のみAuthorizationヘッダーを追加
+      if (isAuthRequiredEndpoint(url) && accessToken && !options.headers?.['Authorization']) {
         options.headers = {
           ...options.headers,
           'Authorization': `Bearer ${accessToken}`
         };
+        console.log('Fetchインターセプター: Authorizationヘッダーを追加');
       }
 
       const response = await originalFetch(url, options);
       
       // 401 Unauthorized または 403 Forbidden の場合
       if (response.status === 401 || response.status === 403) {
-        // リフレッシュトークンがある場合は更新を試行
-        if (refreshToken) {
-          try {
-            console.log('Fetchインターセプター: トークン更新を試行中...');
-            const refreshResponse = await refreshTokenAPI(refreshToken);
-            
-            if (refreshResponse.success) {
-              const { access_token, refresh_token } = refreshResponse.data;
-              storeTokens(access_token, refresh_token);
-              console.log('Fetchインターセプター: トークン更新成功');
-              
-              // 新しいトークンでリクエストを再実行
-              const newOptions = {
-                ...options,
-                headers: {
-                  ...options.headers,
-                  'Authorization': `Bearer ${access_token}`
-                }
-              };
-              
-              return await originalFetch(url, newOptions);
-            } else {
-              console.error('Fetchインターセプター: トークン更新APIが失敗:', refreshResponse);
-            }
-          } catch (refreshError) {
-            console.error('Fetchインターセプター: トークン更新に失敗:', refreshError);
-          }
+        console.warn('Fetchインターセプター: 認証エラーを検出', { url, status: response.status });
+        
+        // ログインエンドポイントの場合は処理をスキップ
+        if (isLoginEndpoint(url)) {
+          console.log('Fetchインターセプター: ログインエンドポイントのため、認証エラー処理をスキップ');
+          return response;
         }
         
-        // トークン更新に失敗した場合はログインページにリダイレクト
+        // 認証が不要なエンドポイントの場合は処理をスキップ
+        if (!isAuthRequiredEndpoint(url)) {
+          console.log('Fetchインターセプター: 認証不要エンドポイントのため、認証エラー処理をスキップ');
+          return response;
+        }
+        
+        // 認証エラー処理フラグを設定
+        isAuthErrorHandling = true;
+        
+        console.log('Fetchインターセプター: 認証エラー処理を開始します');
+        
+        // リフレッシュトークンの有効期限をチェック
+        if (refreshToken && isRefreshTokenExpired(refreshToken)) {
+          console.error('Fetchインターセプター: リフレッシュトークンの有効期限が切れています');
+          if (globalNavigate) {
+            handleTokenInvalid(globalNavigate, 'セッションが期限切れです。再度ログインしてください。');
+          }
+          throw new Error('Refresh token expired');
+        }
+        
+        // 認証エラーの場合はログインページにリダイレクト
         console.warn('Fetchインターセプター: Authentication failed, redirecting to login');
         if (globalNavigate) {
-          handleTokenInvalid(globalNavigate, '認証に失敗しました');
+          handleTokenInvalid(globalNavigate, '認証に失敗しました。再度ログインしてください。');
         }
         throw new Error('Authentication failed');
       }
@@ -142,12 +103,22 @@ export const setupFetchInterceptor = () => {
       return response;
     } catch (error) {
       // 認証エラーの場合はリダイレクト
-      if (error.message === 'Authentication failed') {
+      if (error.message === 'Authentication failed' || error.message === 'Refresh token expired') {
         throw error;
       }
       
       // その他のエラーはそのまま投げる
       throw error;
+    } finally {
+      // 認証エラー処理フラグをリセット
+      setTimeout(() => {
+        isAuthErrorHandling = false;
+      }, 1000);
     }
   };
+};
+
+// 認証付きfetch関数（既存のコードとの互換性のため）
+export const authenticatedFetch = async (url, options = {}) => {
+  return window.fetch(url, options);
 }; 

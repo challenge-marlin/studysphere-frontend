@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import SanitizedInput from './SanitizedInput';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
-import { authenticatedFetch } from '../utils/httpInterceptor';
+// import { fetch } from '../utils/httpInterceptor'; // 一時的に無効化
 
 const LocationManagement = () => {
   // 事業所タイプ（DBから取得）
@@ -30,7 +30,7 @@ const LocationManagement = () => {
       setManagersLoading(true);
       console.log('管理者情報取得開始');
       
-      const response = await authenticatedFetch('http://localhost:5000/api/users');
+      const response = await fetch('http://localhost:5000/api/users');
       console.log('管理者情報取得レスポンス:', response.status, response.statusText);
       
       if (!response.ok) {
@@ -64,7 +64,7 @@ const LocationManagement = () => {
       
       // 常に代替方法を使用（全ユーザーから拠点の指導員をフィルタリング）
       console.log('全ユーザーから拠点の指導員を抽出します');
-      const allUsersResponse = await authenticatedFetch('http://localhost:5000/api/users');
+      const allUsersResponse = await fetch('http://localhost:5000/api/users');
       if (allUsersResponse.ok) {
         const allUsers = await allUsersResponse.json();
         console.log('全ユーザー取得成功:', allUsers.length, '件');
@@ -169,7 +169,7 @@ const LocationManagement = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
       
-      const response = await authenticatedFetch('http://localhost:5000/api/office-types', {
+      const response = await fetch('http://localhost:5000/api/office-types', {
         signal: controller.signal
       });
       
@@ -215,7 +215,7 @@ const LocationManagement = () => {
       setCompaniesLoading(true);
       console.log('企業一覧取得開始');
       
-      const response = await authenticatedFetch('http://localhost:5000/api/companies');
+      const response = await fetch('http://localhost:5000/api/companies');
       console.log('企業一覧取得レスポンス:', response.status, response.statusText);
       
       if (!response.ok) {
@@ -273,7 +273,7 @@ const LocationManagement = () => {
     try {
       console.log('satellites一覧取得開始');
       
-      const response = await authenticatedFetch('http://localhost:5000/api/satellites');
+      const response = await fetch('http://localhost:5000/api/satellites');
       console.log('satellites一覧取得レスポンス:', response.status, response.statusText);
       
       if (!response.ok) {
@@ -307,7 +307,7 @@ const LocationManagement = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒タイムアウト
       
-      const response = await authenticatedFetch('http://localhost:5000/api/office-types', {
+      const response = await fetch('http://localhost:5000/api/office-types', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -352,7 +352,7 @@ const LocationManagement = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒タイムアウト
 
-      const response = await authenticatedFetch(`http://localhost:5000/api/office-types/${typeData.id}`, {
+      const response = await fetch(`http://localhost:5000/api/office-types/${typeData.id}`, {
         method: 'DELETE',
         signal: controller.signal
       });
@@ -389,7 +389,7 @@ const LocationManagement = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
-      const response = await authenticatedFetch('http://localhost:5000/', { 
+      const response = await fetch('http://localhost:5000/', { 
         method: 'GET',
         signal: controller.signal
       });
@@ -595,7 +595,7 @@ const LocationManagement = () => {
       });
       
       // バックエンドAPIに管理者更新リクエストを送信
-      const response = await authenticatedFetch(`http://localhost:5000/api/satellites/${selectedOfficeForManager.id}/managers`, {
+      const response = await fetch(`http://localhost:5000/api/satellites/${selectedOfficeForManager.id}/managers`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

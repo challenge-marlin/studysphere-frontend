@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import SanitizedInput from './SanitizedInput';
 import SanitizedTextarea from './SanitizedTextarea';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
-import { apiGet, apiPost, apiPut } from '../utils/api';
+import { apiGet, apiPost, apiPut, apiDelete, apiCall } from '../utils/api';
 import { addOperationLog } from '../utils/operationLogManager';
 
 const InstructorManagement = () => {
@@ -10,6 +10,7 @@ const InstructorManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [facilityLocations, setFacilityLocations] = useState([]);
+  const [companies, setCompanies] = useState([]);
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
@@ -27,9 +28,46 @@ const InstructorManagement = () => {
     name: '',
     email: '',
     department: '',
+    company_id: '',
     facilityLocationIds: [],
+    managerSettings: {}, // 拠点ごとの管理者設定
     password: ''
   });
+
+  // 企業一覧を取得
+  const fetchCompanies = async () => {
+    try {
+      console.log('=== 企業一覧取得開始 ===');
+      const response = await apiGet('/api/companies');
+      console.log('企業APIレスポンス:', response);
+      console.log('レスポンスの型:', typeof response);
+      console.log('レスポンスが配列か:', Array.isArray(response));
+      
+      // レスポンス構造を確認して適切に処理
+      let companiesData = [];
+      if (response && response.success && response.data) {
+        console.log('パターン1: response.success && response.data');
+        companiesData = response.data;
+      } else if (Array.isArray(response)) {
+        console.log('パターン2: responseが配列');
+        companiesData = response;
+      } else if (response && Array.isArray(response.data)) {
+        console.log('パターン3: response.dataが配列');
+        companiesData = response.data;
+      } else {
+        console.log('パターン4: 該当なし、空配列を設定');
+        companiesData = [];
+      }
+      
+      console.log('処理後の企業データ:', companiesData);
+      console.log('企業データ件数:', companiesData.length);
+      setCompanies(companiesData);
+      console.log('=== 企業一覧取得完了 ===');
+    } catch (error) {
+      console.error('企業一覧取得エラー:', error);
+      setCompanies([]);
+    }
+  };
 
   // 拠点一覧を取得
   const fetchFacilityLocations = async () => {
@@ -49,6 +87,7 @@ const InstructorManagement = () => {
        const locations = data.map(satellite => ({
          id: satellite.id.toString(),
          name: satellite.name,
+         company_id: satellite.company_id,
          organizationName: satellite.company_name || '',
          type: satellite.office_type_name || '未分類',
          address: satellite.address || '',
@@ -205,6 +244,8 @@ const InstructorManagement = () => {
       setError(null);
       
       try {
+        console.log('fetchCompanies を呼び出します');
+        await fetchCompanies();
         console.log('fetchFacilityLocations を呼び出します');
         await fetchFacilityLocations();
         console.log('fetchInstructors を呼び出します');
@@ -279,6 +320,17 @@ const InstructorManagement = () => {
   const handleAddInstructor = async (e) => {
     e.preventDefault();
     
+    // バリデーション
+    if (!newInstructor.company_id) {
+      alert('企業を選択してください。');
+      return;
+    }
+    
+    if (newInstructor.facilityLocationIds.length === 0) {
+      alert('少なくとも1つの拠点を選択してください。');
+      return;
+    }
+    
     try {
       // 新しい指導者を追加するAPI呼び出し
       const data = await apiPost('/api/users', {
@@ -297,10 +349,32 @@ const InstructorManagement = () => {
           };
           return `${generatePart()}-${generatePart()}-${generatePart()}`;
         })(),
-        company_id: 4, // 既存の企業ID
+        company_id: newInstructor.company_id, // 選択された企業ID
         satellite_ids: newInstructor.facilityLocationIds,
         email: newInstructor.email
       });
+
+      // 管理者設定を処理
+      const managerSatellites = Object.keys(newInstructor.managerSettings)
+        .filter(satelliteId => newInstructor.managerSettings[satelliteId])
+        .map(satelliteId => parseInt(satelliteId));
+
+      if (managerSatellites.length > 0) {
+        // 管理者として設定された拠点のmanager_idsを更新
+        for (const satelliteId of managerSatellites) {
+          const currentManagers = satelliteManagers[satelliteId] || [];
+          const updatedManagers = [...currentManagers, data.data.id];
+          await apiPut(`/api/satellites/${satelliteId}/managers`, {
+            manager_ids: updatedManagers
+          });
+          
+          // ローカル状態も即座に更新
+          setSatelliteManagers(prev => ({
+            ...prev,
+            [satelliteId]: updatedManagers
+          }));
+        }
+      }
 
       // 専門分野を設定
       if (newInstructor.department) {
@@ -312,6 +386,9 @@ const InstructorManagement = () => {
       // 指導者一覧を再取得
       await fetchInstructors();
       
+      // 拠点一覧を再取得して管理者情報を更新
+      await fetchFacilityLocations();
+      
       // 操作ログを記録
       await addOperationLog({
         action: '指導員作成',
@@ -322,7 +399,9 @@ const InstructorManagement = () => {
         name: '',
         email: '',
         department: '',
+        company_id: '',
         facilityLocationIds: [],
+        managerSettings: {},
         password: ''
       });
       setShowAddForm(false);
@@ -336,10 +415,28 @@ const InstructorManagement = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setNewInstructor(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setNewInstructor(prev => {
+      const updated = {
+        ...prev,
+        [name]: value
+      };
+      
+      // 企業が変更された場合、拠点選択と管理者設定をリセット
+      if (name === 'company_id') {
+        updated.facilityLocationIds = [];
+        updated.managerSettings = {};
+      }
+      
+      return updated;
+    });
+  };
+
+  // 企業選択時の拠点フィルタリング
+  const getFilteredLocations = () => {
+    if (!newInstructor.company_id) {
+      return [];
+    }
+    return facilityLocations.filter(location => location.company_id == newInstructor.company_id);
   };
 
   const toggleInstructorStatus = async (instructorId) => {
@@ -442,12 +539,24 @@ const InstructorManagement = () => {
           await apiPut(`/api/satellites/${locationId}/managers`, {
             manager_ids: updatedManagers
           });
+          
+          // ローカル状態も即座に更新
+          setSatelliteManagers(prev => ({
+            ...prev,
+            [locationId]: updatedManagers
+          }));
         } else if (!shouldBeManager && isCurrentlyManager) {
           // 管理者から削除
           const updatedManagers = currentManagers.filter(id => id !== Number(selectedInstructor.id));
           await apiPut(`/api/satellites/${locationId}/managers`, {
             manager_ids: updatedManagers
           });
+          
+          // ローカル状態も即座に更新
+          setSatelliteManagers(prev => ({
+            ...prev,
+            [locationId]: updatedManagers
+          }));
         }
       }
 
@@ -524,6 +633,54 @@ const InstructorManagement = () => {
     } catch (error) {
       console.error('パスワードリセットエラー:', error);
       alert(`パスワードリセットに失敗しました: ${error.message}`);
+    }
+  };
+
+  const handleDeleteInstructor = async (instructor) => {
+    if (!window.confirm(`指導員「${instructor.name}」を削除しますか？\nこの操作は取り消せません。`)) {
+      return;
+    }
+
+    try {
+      // 指導員を削除
+      const result = await apiCall(`/api/users/${instructor.id}`, {
+        method: 'DELETE'
+      });
+      
+      if (result.success) {
+        // 拠点管理者からも削除
+        for (const locationId of instructor.facilityLocationIds) {
+          const currentManagers = satelliteManagers[locationId] || [];
+          if (currentManagers.includes(Number(instructor.id))) {
+            const updatedManagers = currentManagers.filter(id => id !== Number(instructor.id));
+            await apiPut(`/api/satellites/${locationId}/managers`, {
+              manager_ids: updatedManagers
+            });
+            
+            // ローカル状態も即座に更新
+            setSatelliteManagers(prev => ({
+              ...prev,
+              [locationId]: updatedManagers
+            }));
+          }
+        }
+        
+        // 操作ログを記録
+        await addOperationLog({
+          action: '指導員削除',
+          details: `指導員「${instructor.name}」を削除しました`
+        });
+        
+        // 指導者一覧を再取得
+        await fetchInstructors();
+        
+        alert('指導員を削除しました。');
+      } else {
+        alert(`指導員の削除に失敗しました: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('指導員削除エラー:', error);
+      alert(`指導員の削除に失敗しました: ${error.message}`);
     }
   };
 
@@ -779,6 +936,13 @@ const InstructorManagement = () => {
                       >
                         🔑 リセット
                       </button>
+                      <button 
+                        className="bg-red-500 text-white px-3 py-1 rounded text-sm font-medium transition-colors duration-300 hover:bg-red-600"
+                        onClick={() => handleDeleteInstructor(instructor)}
+                        title="削除"
+                      >
+                        🗑️ 削除
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -958,37 +1122,85 @@ const InstructorManagement = () => {
                 />
               </div>
               
-
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">事業所(拠点):</label>
-                <div className="max-h-40 overflow-y-auto border-2 border-gray-200 rounded-lg p-2">
-                  {facilityLocations.map(location => (
-                    <label key={location.id} className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="facilityLocationIds"
-                        value={location.id}
-                        checked={newInstructor.facilityLocationIds.includes(location.id)}
-                        onChange={(e) => {
-                          const { value, checked } = e.target;
-                          setNewInstructor(prev => ({
-                            ...prev,
-                            facilityLocationIds: checked
-                              ? [...prev.facilityLocationIds, value]
-                              : prev.facilityLocationIds.filter(id => id !== value)
-                          }));
-                        }}
-                        className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 mr-3"
-                      />
-                      <div>
-                        <div className="font-medium text-gray-800">{location.name}</div>
-                        <div className="text-xs text-gray-500">{location.organizationName} - {location.type}</div>
-                      </div>
-                    </label>
-                  ))}
+                              <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">企業: <span className="text-red-500">*</span></label>
+                  <select
+                    name="company_id"
+                    value={newInstructor.company_id}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
+                  >
+                    <option value="">選択してください</option>
+                    {companies && companies.length > 0 ? (
+                      companies.map(company => (
+                        <option key={company.id} value={company.id}>
+                          {company.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="" disabled>企業データが読み込まれていません</option>
+                    )}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">企業数: {companies ? companies.length : 0}</p>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">複数の拠点を選択できます</p>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">事業所(拠点): <span className="text-red-500">*</span></label>
+                {!newInstructor.company_id ? (
+                  <p className="text-sm text-gray-500">まず企業を選択してください</p>
+                ) : (
+                  <div className="max-h-40 overflow-y-auto border-2 border-gray-200 rounded-lg p-2">
+                    {getFilteredLocations().map(location => (
+                        <div key={location.id} className="p-2 hover:bg-gray-50 rounded">
+                          <label className="flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              name="facilityLocationIds"
+                              value={location.id}
+                              checked={newInstructor.facilityLocationIds.includes(location.id)}
+                              onChange={(e) => {
+                                const { value, checked } = e.target;
+                                setNewInstructor(prev => ({
+                                  ...prev,
+                                  facilityLocationIds: checked
+                                    ? [...prev.facilityLocationIds, value]
+                                    : prev.facilityLocationIds.filter(id => id !== value)
+                                }));
+                              }}
+                              className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 mr-3"
+                            />
+                            <div className="flex-1">
+                              <div className="font-medium text-gray-800">{location.name}</div>
+                              <div className="text-xs text-gray-500">{location.organizationName} - {location.type}</div>
+                            </div>
+                          </label>
+                          {newInstructor.facilityLocationIds.includes(location.id) && (
+                            <div className="ml-7 mt-2">
+                              <label className="flex items-center cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={newInstructor.managerSettings[location.id] || false}
+                                  onChange={(e) => {
+                                    setNewInstructor(prev => ({
+                                      ...prev,
+                                      managerSettings: {
+                                        ...prev.managerSettings,
+                                        [location.id]: e.target.checked
+                                      }
+                                    }));
+                                  }}
+                                  className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 mr-2"
+                                />
+                                <span className="text-sm text-gray-600">この拠点の管理者にする</span>
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                )}
+                <p className="text-xs text-gray-500 mt-1">複数の拠点を選択できます（必須）</p>
               </div>
               
               <div>
@@ -1077,6 +1289,23 @@ const InstructorManagement = () => {
                 />
               </div>
               
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">企業:</label>
+                <select
+                  name="company_id"
+                  value={selectedInstructor.company_id}
+                  onChange={handleEditInputChange}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
+                >
+                  <option value="">選択してください</option>
+                  {companies.map(company => (
+                    <option key={company.id} value={company.id}>
+                      {company.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">事業所(拠点):</label>
                 <div className="max-h-40 overflow-y-auto border-2 border-gray-200 rounded-lg p-2">

@@ -2,6 +2,9 @@
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
+// 認証エラー検出フラグ
+let isAuthErrorHandling = false;
+
 /**
  * API呼び出しの共通関数
  * @param {string} endpoint - APIエンドポイント
@@ -9,14 +12,27 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
  * @returns {Promise} - APIレスポンス
  */
 export const apiCall = async (endpoint, options = {}) => {
+  // 認証エラー処理中は新しいAPI呼び出しをブロック
+  if (isAuthErrorHandling) {
+    console.log('認証エラー処理中のため、API呼び出しをスキップします');
+    throw new Error('Authentication error handling in progress');
+  }
+
   const url = `${API_BASE_URL}${endpoint}`;
+  
+  // FormDataの場合はContent-Typeを自動設定しない
+  const isFormData = options.body instanceof FormData;
+  
+  // 認証トークンを取得
+  const accessToken = localStorage.getItem('accessToken');
   
   const defaultOptions = {
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache',
       'Expires': '0',
+      ...(accessToken && { 'Authorization': `Bearer ${accessToken}` }),
       ...options.headers,
     },
   };
@@ -35,6 +51,24 @@ export const apiCall = async (endpoint, options = {}) => {
     
     const response = await fetch(url, config);
     
+    // 認証エラーの場合
+    if (response.status === 401 || response.status === 403) {
+      isAuthErrorHandling = true;
+      console.warn('認証エラーを検出しました。リダイレクト処理を開始します。');
+      
+      // グローバルナビゲーション関数を取得
+      const { setGlobalNavigate } = await import('./httpInterceptor');
+      const { handleTokenInvalid } = await import('./authUtils');
+      
+      // 即座にリダイレクト処理を実行
+      setTimeout(() => {
+        handleTokenInvalid(window.navigate || (() => window.location.href = '/'), '認証に失敗しました');
+        isAuthErrorHandling = false;
+      }, 100);
+      
+      throw new Error('Authentication failed');
+    }
+    
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`APIエラー (${response.status}):`, errorText);
@@ -47,6 +81,13 @@ export const apiCall = async (endpoint, options = {}) => {
     return data;
   } catch (error) {
     console.error('API呼び出しエラー:', error);
+    
+    // 認証エラーの場合は特別な処理
+    if (error.message === 'Authentication failed') {
+      throw error;
+    }
+    
+    // その他のエラーはそのまま投げる
     throw error;
   }
 };
@@ -57,7 +98,13 @@ export const apiCall = async (endpoint, options = {}) => {
  * @returns {Promise} - APIレスポンス
  */
 export const apiGet = (endpoint) => {
-  // キャッシュを無効にするためにタイムスタンプを追加
+  // 認証エラー処理中は呼び出しをスキップ
+  if (isAuthErrorHandling) {
+    console.log('認証エラー処理中のため、GETリクエストをスキップします');
+    throw new Error('Authentication error handling in progress');
+  }
+  
+  // キャッシュを無効にするためにタイムスタンプを追加（認証エラー時は追加しない）
   const separator = endpoint.includes('?') ? '&' : '?';
   const urlWithTimestamp = `${endpoint}${separator}_t=${Date.now()}`;
   return apiCall(urlWithTimestamp);
@@ -69,10 +116,17 @@ export const apiGet = (endpoint) => {
  * @param {Object} data - 送信データ
  * @returns {Promise} - APIレスポンス
  */
-export const apiPost = (endpoint, data) => apiCall(endpoint, {
-  method: 'POST',
-  body: JSON.stringify(data),
-});
+export const apiPost = (endpoint, data) => {
+  if (isAuthErrorHandling) {
+    console.log('認証エラー処理中のため、POSTリクエストをスキップします');
+    throw new Error('Authentication error handling in progress');
+  }
+  
+  return apiCall(endpoint, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
 
 /**
  * PUTリクエスト
@@ -80,19 +134,116 @@ export const apiPost = (endpoint, data) => apiCall(endpoint, {
  * @param {Object} data - 送信データ
  * @returns {Promise} - APIレスポンス
  */
-export const apiPut = (endpoint, data) => apiCall(endpoint, {
-  method: 'PUT',
-  body: JSON.stringify(data),
-});
+export const apiPut = (endpoint, data) => {
+  if (isAuthErrorHandling) {
+    console.log('認証エラー処理中のため、PUTリクエストをスキップします');
+    throw new Error('Authentication error handling in progress');
+  }
+  
+  return apiCall(endpoint, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+};
 
 /**
  * DELETEリクエスト
  * @param {string} endpoint - APIエンドポイント
  * @returns {Promise} - APIレスポンス
  */
-export const apiDelete = (endpoint) => apiCall(endpoint, {
-  method: 'DELETE',
-});
+export const apiDelete = (endpoint) => {
+  if (isAuthErrorHandling) {
+    console.log('認証エラー処理中のため、DELETEリクエストをスキップします');
+    throw new Error('Authentication error handling in progress');
+  }
+  
+  return apiCall(endpoint, {
+    method: 'DELETE',
+  });
+};
+
+/**
+ * バイナリデータ（PDF、ZIP等）をダウンロードするための専用関数
+ * @param {string} endpoint - APIエンドポイント
+ * @param {Object} options - リクエストオプション
+ * @returns {Promise<Blob>} - バイナリデータ
+ */
+export const apiDownloadBinary = async (endpoint, options = {}) => {
+  // 認証エラー処理中は新しいAPI呼び出しをブロック
+  if (isAuthErrorHandling) {
+    console.log('認証エラー処理中のため、API呼び出しをスキップします');
+    throw new Error('Authentication error handling in progress');
+  }
+
+  const url = `${API_BASE_URL}${endpoint}`;
+  
+  // 認証トークンを取得
+  const accessToken = localStorage.getItem('accessToken');
+  
+  const defaultOptions = {
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      ...(accessToken && { 'Authorization': `Bearer ${accessToken}` }),
+      ...options.headers,
+    },
+  };
+
+  const config = {
+    ...defaultOptions,
+    ...options,
+    headers: {
+      ...defaultOptions.headers,
+      ...options.headers,
+    },
+  };
+
+  try {
+    console.log(`バイナリダウンロードAPI呼び出し: ${config.method || 'GET'} ${url}`);
+    
+    const response = await fetch(url, config);
+    
+    // 認証エラーの場合
+    if (response.status === 401 || response.status === 403) {
+      isAuthErrorHandling = true;
+      console.warn('認証エラーを検出しました。リダイレクト処理を開始します。');
+      
+      // グローバルナビゲーション関数を取得
+      const { setGlobalNavigate } = await import('./httpInterceptor');
+      const { handleTokenInvalid } = await import('./authUtils');
+      
+      // 即座にリダイレクト処理を実行
+      setTimeout(() => {
+        handleTokenInvalid(window.navigate || (() => window.location.href = '/'), '認証に失敗しました');
+        isAuthErrorHandling = false;
+      }, 100);
+      
+      throw new Error('Authentication failed');
+    }
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`APIエラー (${response.status}):`, errorText);
+      throw new Error(`API呼び出しに失敗しました (${response.status}): ${errorText}`);
+    }
+    
+    const blob = await response.blob();
+    console.log(`バイナリダウンロード完了: ${blob.size} bytes`);
+    
+    return blob;
+  } catch (error) {
+    console.error('バイナリダウンロードエラー:', error);
+    
+    // 認証エラーの場合は特別な処理
+    if (error.message === 'Authentication failed') {
+      throw error;
+    }
+    
+    // その他のエラーはそのまま投げる
+    throw error;
+  }
+};
 
 /**
  * 複数拠点情報取得
@@ -100,6 +251,11 @@ export const apiDelete = (endpoint) => apiCall(endpoint, {
  * @returns {Promise} - APIレスポンス
  */
 export const getSatellitesByIds = async (satelliteIds) => {
+  if (isAuthErrorHandling) {
+    console.log('認証エラー処理中のため、拠点情報取得をスキップします');
+    throw new Error('Authentication error handling in progress');
+  }
+  
   console.log('getSatellitesByIds 呼び出し:', { satelliteIds, type: typeof satelliteIds });
   
   if (!satelliteIds || satelliteIds.length === 0) {

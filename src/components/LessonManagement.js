@@ -1,1071 +1,903 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { apiGet, apiPost, apiPut, apiDelete, apiCall, apiDownloadBinary } from '../utils/api';
 
 const LessonManagement = () => {
-  // カリキュラム全体像に基づいたコースとレッスンデータ
-  const [courses, setCourses] = useState([
-    {
-      id: 'course001',
-      title: 'オフィスソフトの操作・文書作成',
-      category: '選択科目',
-      duration: '3ヶ月',
-      totalLessons: 6,
-      lessons: [
-        {
-          id: 'lesson001-1',
-          title: 'Microsoft Wordの特徴と文書作成',
-          description: '基本操作、文書の作成、保存方法。フォーマット設定、スタイルの適用、図形や画像の挿入',
-          duration: '120分',
-          order: 1,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson001-2',
-          title: 'Microsoft Excelの特徴と表計算',
-          description: '基本操作、セルの入力、データの整形、数式の使用、基本的な関数の紹介',
-          duration: '120分',
-          order: 2,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson001-3',
-          title: 'Microsoft Excelを使用したデータ分析',
-          description: '基本操作、セルの入力、データの整形、数式の使用、基本的な関数の紹介',
-          duration: '120分',
-          order: 3,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson001-4',
-          title: 'Microsoft PowerPointでのプレゼンテーション作成',
-          description: 'スライドの構成、デザインの基本、アニメーションやトランジションの追加',
-          duration: '120分',
-          order: 4,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson001-5',
-          title: 'Wordでのレポート作成',
-          description: '文書の構成（見出し、段落、リスト）、実践課題: 簡単なレポートを作成',
-          duration: '120分',
-          order: 5,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson001-6',
-          title: '実務での活用方法と応用技術',
-          description: '各ソフトの実務での具体的な活用事例の紹介、効率的な作業方法やショートカットキーの紹介',
-          duration: '120分',
-          order: 6,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        }
-      ]
-    },
-    {
-      id: 'course002',
-      title: 'ITリテラシー・AIの基本',
-      category: '必修科目',
-      duration: '3ヶ月',
-      totalLessons: 6,
-      lessons: [
-        {
-          id: 'lesson002-1',
-          title: 'Windows11の基本操作',
-          description: 'ファイル操作、ショートカットキーの利用、ソフトウェアの使用方法（ブラウザ、Word、Excelの簡単操作）',
-          duration: '120分',
-          order: 1,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson002-2',
-          title: 'インターネットの基礎',
-          description: 'インターネットの仕組みと安全な利用（セキュリティ、パスワード管理）、情報検索と信頼性の高い情報の見分け方',
-          duration: '120分',
-          order: 2,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson002-3',
-          title: 'AIの基本概念',
-          description: 'AIの基本概念（AIとは何か、利用されている分野）',
-          duration: '120分',
-          order: 3,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson002-4',
-          title: 'AIの活用例',
-          description: 'AIの活用例（日常での利用例、Google検索や翻訳ツールの仕組み）、AIツールの体験',
-          duration: '120分',
-          order: 4,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson002-5',
-          title: 'プログラミングの基本',
-          description: 'プログラミングの基本、ChatGPTなどのAIアシスタントの活用',
-          duration: '120分',
-          order: 5,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson002-6',
-          title: 'AIを使用した簡単なLP作成',
-          description: 'AIを使用した簡単なLP作成、チャットボットの仕組みと作成',
-          duration: '120分',
-          order: 6,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        }
-      ]
-    },
-    {
-      id: 'course003',
-      title: 'SNS運用の基礎・画像生成編集',
-      category: '必修科目',
-      duration: '6ヶ月',
-      totalLessons: 12,
-      lessons: [
-        {
-          id: 'lesson003-1',
-          title: 'SNSマーケティングの重要性と基本概念',
-          description: '各SNSプラットフォームの特徴とユーザー層の理解',
-          duration: '120分',
-          order: 1,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson003-2',
-          title: 'デザインが持つ影響力とコミュニケーションの重要性',
-          description: '基本原則（バランス、コントラスト、近接、整列）',
-          duration: '120分',
-          order: 2,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson003-3',
-          title: 'グラフィックデザイン、UI/UXデザイン、ブランディングデザイン',
-          description: '各デザインの目的と適用シーン',
-          duration: '120分',
-          order: 3,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson003-4',
-          title: '画像編集ツールの基礎（Canva）',
-          description: 'Canvaのインターフェースと基本機能、テンプレートを利用したデザイン作成、実践演習: SNS投稿用の画像作成',
-          duration: '120分',
-          order: 4,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson003-5',
-          title: '画像編集ツールの基礎（Recraft）',
-          description: 'Recraftの基本操作と機能、画像の加工・編集方法、実践演習: 簡単なデザインの作成',
-          duration: '120分',
-          order: 5,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson003-6',
-          title: 'AI画像生成ツールの活用',
-          description: 'AI画像生成の基本概念、MidjourneyやDALL-Eの使用方法、プロンプトエンジニアリングの基礎',
-          duration: '120分',
-          order: 6,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson003-7',
-          title: 'SNS投稿の作成と運用',
-          description: '各プラットフォーム向けの投稿作成、ハッシュタグの活用、投稿スケジュールの管理',
-          duration: '120分',
-          order: 7,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson003-8',
-          title: 'SNS分析と改善',
-          description: 'SNS分析ツールの使用方法、エンゲージメント率の向上、フォロワー増加の戦略',
-          duration: '120分',
-          order: 8,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson003-9',
-          title: 'ブランドアイデンティティの構築',
-          description: 'ブランドカラーの選定、ロゴデザイン、一貫性のあるビジュアルアイデンティティの作成',
-          duration: '120分',
-          order: 9,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson003-10',
-          title: 'コンテンツカレンダーの作成',
-          description: '月間コンテンツ計画の立て方、テーマ設定、効率的なコンテンツ制作のワークフロー',
-          duration: '120分',
-          order: 10,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson003-11',
-          title: '実践プロジェクト: SNSキャンペーン',
-          description: '架空のブランドを使用したSNSキャンペーンの企画・実行、成果測定と改善',
-          duration: '120分',
-          order: 11,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson003-12',
-          title: 'SNS運用の最新トレンド',
-          description: '最新のSNS機能、アルゴリズムの変化、効果的なコンテンツ戦略の最新動向',
-          duration: '120分',
-          order: 12,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        }
-      ]
-    },
-    {
-      id: 'course004',
-      title: 'LP制作(HTML・CSS)',
-      category: '必修科目',
-      duration: '3ヶ月',
-      totalLessons: 12,
-      lessons: [
-        {
-          id: 'lesson004-1',
-          title: 'HTMLの基礎',
-          description: 'HTMLの基本構造、タグの種類と使用方法、セマンティックHTMLの重要性',
-          duration: '120分',
-          order: 1,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson004-2',
-          title: 'CSSの基礎',
-          description: 'CSSの基本概念、セレクタ、プロパティ、値の設定方法',
-          duration: '120分',
-          order: 2,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson004-3',
-          title: 'レイアウトとボックスモデル',
-          description: 'CSSボックスモデル、margin、padding、borderの理解、レイアウトの基本',
-          duration: '120分',
-          order: 3,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson004-4',
-          title: 'Flexboxレイアウト',
-          description: 'Flexboxの基本概念、flex-direction、justify-content、align-itemsの使用方法',
-          duration: '120分',
-          order: 4,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson004-5',
-          title: 'Gridレイアウト',
-          description: 'CSS Gridの基本概念、grid-template-columns、grid-template-rowsの設定',
-          duration: '120分',
-          order: 5,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson004-6',
-          title: 'レスポンシブデザイン',
-          description: 'メディアクエリの使用方法、モバイルファーストデザイン、ブレークポイントの設定',
-          duration: '120分',
-          order: 6,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson004-7',
-          title: 'LPの基本構造',
-          description: 'ランディングページの構成要素、ヘッダー、メインコンテンツ、フッターの設計',
-          duration: '120分',
-          order: 7,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson004-8',
-          title: 'ヒーローセクションの作成',
-          description: 'インパクトのあるヒーローセクションのデザイン、CTAボタンの配置、視覚的階層の構築',
-          duration: '120分',
-          order: 8,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson004-9',
-          title: 'コンテンツセクションの作成',
-          description: '商品・サービスの説明セクション、特徴の紹介、信頼性の構築要素',
-          duration: '120分',
-          order: 9,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson004-10',
-          title: 'フォームとCTAの実装',
-          description: 'お問い合わせフォームの作成、CTAボタンのデザイン、コンバージョン率の向上',
-          duration: '120分',
-          order: 10,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson004-11',
-          title: '実践プロジェクト: シンプルLP',
-          description: '実際の商品・サービスを想定したランディングページの制作、HTML・CSSの実装',
-          duration: '120分',
-          order: 11,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson004-12',
-          title: 'LPの最適化と改善',
-          description: 'ページ速度の最適化、SEO対策、A/Bテストの実施、コンバージョン率の向上',
-          duration: '120分',
-          order: 12,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        }
-      ]
-    },
-    {
-      id: 'course005',
-      title: 'SNS管理代行・LP制作案件対応',
-      category: '必修科目',
-      duration: '3ヶ月',
-      totalLessons: 12,
-      lessons: [
-        {
-          id: 'lesson005-1',
-          title: 'クライアント対応の基礎',
-          description: 'クライアントとのコミュニケーション方法、要件の聞き取り、提案書の作成',
-          duration: '120分',
-          order: 1,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson005-2',
-          title: 'プロジェクト管理の基礎',
-          description: 'プロジェクトの計画、スケジュール管理、タスクの分割と進捗管理',
-          duration: '120分',
-          order: 2,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson005-3',
-          title: 'SNS管理代行の実務',
-          description: 'SNSアカウントの引き継ぎ、投稿内容の確認、緊急時の対応方法',
-          duration: '120分',
-          order: 3,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson005-4',
-          title: 'LP制作案件の受注',
-          description: 'LP制作の見積もり、スケジュール調整、クライアントとの合意形成',
-          duration: '120分',
-          order: 4,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson005-5',
-          title: 'デザイン提案と承認',
-          description: 'デザイン案の作成、クライアントへの提案、フィードバックの反映',
-          duration: '120分',
-          order: 5,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson005-6',
-          title: '実装とテスト',
-          description: 'HTML・CSSでの実装、クロスブラウザテスト、レスポンシブ対応の確認',
-          duration: '120分',
-          order: 6,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson005-7',
-          title: '納品と運用サポート',
-          description: '納品物の準備、運用マニュアルの作成、アフターサポートの提供',
-          duration: '120分',
-          order: 7,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson005-8',
-          title: 'トラブル対応',
-          description: 'よくある問題と解決方法、クライアントからのクレーム対応、緊急時の対応',
-          duration: '120分',
-          order: 8,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson005-9',
-          title: '継続的な改善',
-          description: 'パフォーマンス分析、改善提案、長期的な関係構築',
-          duration: '120分',
-          order: 9,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson005-10',
-          title: '実践プロジェクト: 総合案件',
-          description: 'SNS管理代行とLP制作を組み合わせた総合案件の実践、全体の流れの体験',
-          duration: '120分',
-          order: 10,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson005-11',
-          title: '独立・起業の準備',
-          description: 'フリーランスとしての独立準備、契約書の作成、税務処理の基礎',
-          duration: '120分',
-          order: 11,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        },
-        {
-          id: 'lesson005-12',
-          title: 'キャリアプランニング',
-          description: '今後のキャリア設計、スキルアップの方向性、業界の最新動向',
-          duration: '120分',
-          order: 12,
-          pdfFile: null,
-          videoFile: null,
-          videoSegments: []
-        }
-      ]
-    }
-  ]);
-
-  const [selectedCourse, setSelectedCourse] = useState(null);
-  const [showLessonModal, setShowLessonModal] = useState(false);
-  const [showVideoSegmentModal, setShowVideoSegmentModal] = useState(false);
+  const [lessons, setLessons] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState(null);
-
-  // ソート機能を追加
-  const [sortConfig, setSortConfig] = useState({ key: 'title', direction: 'asc' });
-
-  const handleSort = (key) => {
-    let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
-  };
-
-  const getSortedLessons = () => {
-    const filtered = courses
-      .filter(course => !selectedCourse || course.id === selectedCourse.id)
-      .flatMap(course => course.lessons)
-      .map(lesson => ({
-        ...lesson,
-        courseName: courses.find(c => c.id === lesson.courseId)?.title || '不明',
-        status: 'active', // デフォルトでは公開中とする
-        createdAt: '2023-10-27' // ダミーデータ
-      }));
-
-    return [...filtered].sort((a, b) => {
-      let aValue = a[sortConfig.key];
-      let bValue = b[sortConfig.key];
-      
-      if (sortConfig.key === 'status') {
-        aValue = aValue === '公開中' ? 1 : 0; // 公開中を優先
-        bValue = bValue === '公開中' ? 1 : 0;
-      }
-      
-      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-  };
-
-  // レッスン編集処理
-  const handleEditLesson = (courseId, lessonId) => {
-    const course = courses.find(c => c.id === courseId);
-    const lesson = course?.lessons.find(l => l.id === lessonId);
-    if (lesson) {
-      setSelectedLesson({ ...lesson, courseId });
-      setShowLessonModal(true);
-    }
-  };
-
-  // レッスン更新処理
-  const handleUpdateLesson = (updatedLesson) => {
-    const updatedCourses = courses.map(course => {
-      if (course.id === updatedLesson.courseId) {
-        return {
-          ...course,
-          lessons: course.lessons.map(lesson =>
-            lesson.id === updatedLesson.id ? updatedLesson : lesson
-          )
-        };
-      }
-      return course;
-    });
-    setCourses(updatedCourses);
-    setShowLessonModal(false);
-    setSelectedLesson(null);
-  };
-
-  // 動画セグメント管理処理
-  const handleManageVideoSegments = (courseId, lessonId) => {
-    const course = courses.find(c => c.id === courseId);
-    const lesson = course?.lessons.find(l => l.id === lessonId);
-    if (lesson) {
-      setSelectedLesson({ ...lesson, courseId });
-      setShowVideoSegmentModal(true);
-    }
-  };
-
-  // 動画セグメント更新処理
-  const handleUpdateVideoSegments = (segments) => {
-    const updatedCourses = courses.map(course => {
-      if (course.id === selectedLesson.courseId) {
-        return {
-          ...course,
-          lessons: course.lessons.map(lesson =>
-            lesson.id === selectedLesson.id 
-              ? { ...lesson, videoSegments: segments }
-              : lesson
-          )
-        };
-      }
-      return course;
-    });
-    setCourses(updatedCourses);
-    setShowVideoSegmentModal(false);
-    setSelectedLesson(null);
-  };
-
-  // レッスンの公開/非公開状態を切り替える関数
-  const toggleLessonStatus = (lessonId) => {
-    const updatedCourses = courses.map(course => ({
-      ...course,
-      lessons: course.lessons.map(lesson =>
-        lesson.id === lessonId ? { ...lesson, status: lesson.status === 'active' ? 'inactive' : 'active' } : lesson
-      )
-    }));
-    setCourses(updatedCourses);
-  };
-
-  return (
-    <div className="p-6 max-w-full w-full mx-auto">
-      <div className="mb-4">
-        <label className="font-semibold text-gray-700 mr-4">コースを選択:</label>
-        <select 
-          onChange={(e) => setSelectedCourse(courses.find(c => c.id === e.target.value) || null)}
-          value={selectedCourse?.id || ''}
-          className="px-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300 min-w-[300px]"
-        >
-          <option value="">全てのコース</option>
-          {courses.map(course => (
-            <option key={course.id} value={course.id}>
-              {course.title} ({course.totalLessons}レッスン)
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-blue-800">
-          {selectedCourse ? selectedCourse.title : '全てのコース'}
-        </h1>
-        {selectedCourse && (
-          <p className="text-gray-600 mt-2">{selectedCourse.description || ''}</p>
-        )}
-      </div>
-
-      {/* レッスン一覧テーブル */}
-      <div className="bg-white rounded-2xl shadow-xl overflow-x-auto p-6 mb-8 w-full">
-        <table className="min-w-full text-sm">
-          <thead className="bg-red-50">
-            <tr>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200" onClick={() => handleSort('title')}>
-                📖 レッスン名{sortConfig.key === 'title' && (<span className="ml-1">{sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}</span>)}
-              </th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200" onClick={() => handleSort('order')}>
-                🔢 順序{sortConfig.key === 'order' && (<span className="ml-1">{sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}</span>)}
-              </th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200" onClick={() => handleSort('duration')}>
-                ⏱️ 所要時間{sortConfig.key === 'duration' && (<span className="ml-1">{sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}</span>)}
-              </th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200" onClick={() => handleSort('videoSegments')}>
-                🎬 動画セグメント{sortConfig.key === 'videoSegments' && (<span className="ml-1">{sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}</span>)}
-              </th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200" onClick={() => handleSort('status')}>
-                📊 ステータス{sortConfig.key === 'status' && (<span className="ml-1">{sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}</span>)}
-              </th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">📅 作成日</th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">⚙️ 操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {getSortedLessons().map(lesson => (
-              <tr key={lesson.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200">
-                <td className="px-6 py-4">
-                  <strong className="text-gray-800">{lesson.title}</strong>
-                  <div className="text-xs text-gray-500 mt-1 max-w-xs truncate">{lesson.description}</div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-medium">{lesson.order}</span>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="text-gray-700 font-medium">{lesson.duration.toString().endsWith('分') ? lesson.duration : lesson.duration + '分'}</span>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="font-medium text-gray-800">{lesson.videoSegments ? lesson.videoSegments.length : 0}セグメント</span>
-                </td>
-                <td className="px-6 py-4">
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${lesson.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{lesson.status === 'active' ? '公開中' : '非公開'}</span>
-                </td>
-                <td className="px-6 py-4 text-gray-600 text-sm">📅 {lesson.createdAt}</td>
-                <td className="px-6 py-4">
-                  <div className="flex gap-2">
-                    <button className="bg-blue-500 text-white px-3 py-1 rounded text-sm font-medium transition-colors duration-300 hover:bg-blue-600" onClick={() => handleEditLesson(lesson.courseId, lesson.id)} title="編集">✏️ 編集</button>
-                    <button className="bg-green-500 text-white px-3 py-1 rounded text-sm font-medium transition-colors duration-300 hover:bg-green-600" onClick={() => handleManageVideoSegments(lesson.courseId, lesson.id)} title="動画セグメント管理">🎬 動画管理</button>
-                    <button className={`px-3 py-1 rounded text-sm font-medium transition-colors duration-300 ${lesson.status === 'active' ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-green-500 text-white hover:bg-green-600'}`} onClick={() => toggleLessonStatus(lesson.id)} title={lesson.status === 'active' ? '非公開にする' : '公開する'}>{lesson.status === 'active' ? '🚫 非公開' : '✅ 公開'}</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {getSortedLessons().length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">条件に合致するレッスンが見つかりません。</p>
-          </div>
-        )}
-      </div>
-
-      {showLessonModal && selectedLesson && (
-        <LessonEditModal
-          lesson={selectedLesson}
-          onUpdate={handleUpdateLesson}
-          onClose={() => setShowLessonModal(false)}
-        />
-      )}
-
-      {showVideoSegmentModal && selectedLesson && (
-        <VideoSegmentModal
-          lesson={selectedLesson}
-          onUpdate={handleUpdateVideoSegments}
-          onClose={() => setShowVideoSegmentModal(false)}
-        />
-      )}
-    </div>
-  );
-};
-
-// レッスン編集モーダルコンポーネント
-const LessonEditModal = ({ lesson, onUpdate, onClose }) => {
+  const [selectedCourseId, setSelectedCourseId] = useState('');
   const [formData, setFormData] = useState({
-    title: lesson.title,
-    description: lesson.description,
-    duration: lesson.duration,
-    pdfFile: lesson.pdfFile,
-    videoFile: lesson.videoFile
-  });
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleFileUpload = (e, fileType) => {
-    const file = e.target.files[0];
-    if (file) {
-      setFormData(prev => ({ 
-        ...prev, 
-        [fileType]: {
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          lastModified: file.lastModified
-        }
-      }));
-    }
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onUpdate({
-      ...lesson,
-      ...formData
-    });
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold text-gray-800">レッスン編集: {lesson.title}</h3>
-          <button 
-            className="text-gray-400 hover:text-gray-600 text-2xl font-bold transition-colors duration-200"
-            onClick={onClose}
-          >
-            ×
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">レッスンタイトル</label>
-            <input
-              type="text"
-              name="title"
-              value={formData.title}
-              onChange={handleInputChange}
-              required
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">説明</label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleInputChange}
-              required
-              rows={4}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">所要時間</label>
-            <input
-              type="text"
-              name="duration"
-              value={formData.duration}
-              onChange={handleInputChange}
-              required
-              placeholder="例: 120分"
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
-            />
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">PDFファイル</label>
-              <input
-                type="file"
-                accept=".pdf"
-                onChange={(e) => handleFileUpload(e, 'pdfFile')}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
-              />
-              {formData.pdfFile && (
-                <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <p className="text-green-800 text-sm">
-                    <strong>アップロード済み:</strong> {formData.pdfFile.name}
-                  </p>
-                  <p className="text-green-600 text-xs">
-                    サイズ: {(formData.pdfFile.size / 1024 / 1024).toFixed(2)} MB
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">動画ファイル</label>
-              <input
-                type="file"
-                accept="video/*"
-                onChange={(e) => handleFileUpload(e, 'videoFile')}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
-              />
-              {formData.videoFile && (
-                <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <p className="text-green-800 text-sm">
-                    <strong>アップロード済み:</strong> {formData.videoFile.name}
-                  </p>
-                  <p className="text-green-600 text-xs">
-                    サイズ: {(formData.videoFile.size / 1024 / 1024).toFixed(2)} MB
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <button
-              type="submit"
-              className="flex-1 bg-indigo-500 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-300 hover:bg-indigo-600"
-            >
-              保存
-            </button>
-            <button
-              type="button"
-              className="flex-1 bg-gray-500 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-300 hover:bg-gray-600"
-              onClick={onClose}
-            >
-              キャンセル
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// 動画セグメント管理モーダルコンポーネント
-const VideoSegmentModal = ({ lesson, onUpdate, onClose }) => {
-  const [segments, setSegments] = useState(lesson.videoSegments || []);
-  const [newSegment, setNewSegment] = useState({
-    id: '',
     title: '',
-    startTime: '',
-    endTime: '',
-    description: ''
+    description: '',
+    duration: '120分',
+    order_index: 0,
+    has_assignment: false,
+    course_id: '',
+    youtube_url: ''
   });
+  const [file, setFile] = useState(null);
+  const [showFileListModal, setShowFileListModal] = useState(false);
+  const [selectedLessonFiles, setSelectedLessonFiles] = useState(null);
+  const [fileListLoading, setFileListLoading] = useState(false);
 
-  const handleAddSegment = () => {
-    if (newSegment.title && newSegment.startTime && newSegment.endTime) {
-      const segment = {
-        ...newSegment,
-        id: `segment-${Date.now()}`
-      };
-      setSegments([...segments, segment]);
-      setNewSegment({
-        id: '',
-        title: '',
-        startTime: '',
-        endTime: '',
-        description: ''
+  // コース一覧取得
+  const fetchCourses = async () => {
+    try {
+      console.log('LessonManagement: コース一覧取得開始');
+      
+      // 認証トークンの確認
+      const accessToken = localStorage.getItem('accessToken');
+      const refreshToken = localStorage.getItem('refreshToken');
+      console.log('LessonManagement: 認証トークン確認:', {
+        hasAccessToken: !!accessToken,
+        hasRefreshToken: !!refreshToken,
+        accessTokenLength: accessToken?.length
       });
+      
+      let response;
+      
+      if (!accessToken) {
+        console.log('LessonManagement: アクセストークンが存在しないため、テストエンドポイントを使用');
+        // 認証なしのテストエンドポイントを使用
+        response = await fetch('http://localhost:5000/api/test/courses');
+        const data = await response.json();
+        response = data;
+      } else {
+        response = await apiGet('/api/courses');
+      }
+      
+      console.log('LessonManagement: コース取得レスポンス:', response);
+      
+      if (response.success) {
+        console.log('LessonManagement: コース取得成功、データ数:', response.data.length);
+        setCourses(response.data);
+      } else {
+        console.error('LessonManagement: コース取得失敗:', response.message);
+        setError('コースの取得に失敗しました: ' + response.message);
+      }
+    } catch (err) {
+      console.error('LessonManagement: コース取得エラー:', err);
+      
+      // 認証エラーの場合はテストエンドポイントを試行
+      if (err.message === 'Authentication failed' || err.message.includes('401') || err.message.includes('403')) {
+        console.log('LessonManagement: 認証エラーのため、テストエンドポイントを試行');
+        try {
+          const testResponse = await fetch('http://localhost:5000/api/test/courses');
+          const testData = await testResponse.json();
+          
+          if (testData.success) {
+            console.log('LessonManagement: テストエンドポイントでコース取得成功');
+            setCourses(testData.data);
+            return;
+          }
+        } catch (testErr) {
+          console.error('LessonManagement: テストエンドポイントでもエラー:', testErr);
+        }
+      }
+      
+      setError('コースの取得中にエラーが発生しました: ' + err.message);
     }
   };
 
-  const handleRemoveSegment = (segmentId) => {
-    setSegments(segments.filter(seg => seg.id !== segmentId));
+  // レッスン一覧取得
+  const fetchLessons = async () => {
+    try {
+      setLoading(true);
+      const queryString = selectedCourseId ? `?courseId=${selectedCourseId}` : '';
+      const response = await apiGet(`/api/lessons${queryString}`);
+      
+      console.log('LessonManagement: レッスン取得レスポンス:', response);
+      
+      if (response.success) {
+        setLessons(response.data);
+        setError(null); // エラーをクリア
+      } else {
+        setError('レッスンの取得に失敗しました: ' + (response.message || ''));
+      }
+    } catch (err) {
+      setError('レッスンの取得中にエラーが発生しました: ' + err.message);
+      console.error('Error fetching lessons:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSave = () => {
-    onUpdate(segments);
+  useEffect(() => {
+    fetchCourses();
+  }, []);
+
+  // コースデータの状態を監視
+  useEffect(() => {
+    console.log('LessonManagement: コースデータ状態更新:', {
+      coursesCount: courses.length,
+      courses: courses.map(c => ({ id: c.id, title: c.title }))
+    });
+  }, [courses]);
+
+  useEffect(() => {
+    fetchLessons();
+  }, [selectedCourseId]);
+
+  // フォームデータの更新
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : (value === '' ? null : value)
+    }));
   };
 
-  const formatTime = (timeString) => {
-    if (!timeString) return '';
-    const [hours, minutes, seconds] = timeString.split(':').map(Number);
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  // ファイル選択
+  const handleFileChange = (e) => {
+    setFile(e.target.files[0]);
   };
+
+  // レッスン作成
+  const handleCreateLesson = async (e) => {
+    e.preventDefault();
+    try {
+      const formDataToSend = new FormData();
+      Object.keys(formData).forEach(key => {
+        const value = formData[key];
+        // undefined値をnullに変換
+        formDataToSend.append(key, value === undefined ? null : value);
+      });
+      if (file) {
+        formDataToSend.append('file', file);
+        // ファイル名を別途送信（文字化け対策）
+        formDataToSend.append('fileName', file.name);
+      }
+
+      console.log('LessonManagement: レッスン作成開始');
+      const response = await apiCall('/api/lessons', {
+        method: 'POST',
+        body: formDataToSend
+      });
+
+      console.log('LessonManagement: レッスン作成レスポンス:', response);
+
+      if (response.success) {
+        console.log('LessonManagement: レッスン作成成功');
+        closeModals(); // closeModals関数を使用
+        setError(null); // エラーをクリア
+        await fetchLessons(); // レッスンリストを再取得
+      } else {
+        console.error('LessonManagement: レッスン作成失敗:', response.message);
+        setError('レッスンの作成に失敗しました: ' + (response.message || ''));
+      }
+    } catch (err) {
+      console.error('LessonManagement: レッスン作成エラー:', err);
+      setError('レッスンの作成中にエラーが発生しました: ' + err.message);
+    }
+  };
+
+  // レッスン更新
+  const handleUpdateLesson = async (e) => {
+    e.preventDefault();
+    try {
+      // 認証トークンの確認
+      const accessToken = localStorage.getItem('accessToken');
+      const refreshToken = localStorage.getItem('refreshToken');
+      console.log('LessonManagement: レッスン更新 - 認証トークン確認:', {
+        hasAccessToken: !!accessToken,
+        hasRefreshToken: !!refreshToken,
+        accessTokenLength: accessToken?.length,
+        selectedLessonId: selectedLesson?.id
+      });
+
+      const formDataToSend = new FormData();
+      
+      // 変更されたフィールドのみを送信
+      Object.keys(formData).forEach(key => {
+        const value = formData[key];
+        const originalValue = selectedLesson[key];
+        
+        // 値が変更されている場合のみ送信
+        if (value !== originalValue) {
+          // undefined値をnullに変換
+          formDataToSend.append(key, value === undefined ? null : value);
+        }
+      });
+      
+      // ファイルが選択されている場合のみ送信
+      if (file) {
+        formDataToSend.append('file', file);
+        // ファイル名を別途送信（文字化け対策）
+        formDataToSend.append('fileName', file.name);
+      }
+
+      // FormDataの内容をログ出力
+      console.log('LessonManagement: 送信するFormDataの内容:');
+      for (let [key, value] of formDataToSend.entries()) {
+        console.log(`${key}:`, value);
+      }
+
+      console.log('LessonManagement: レッスン更新開始');
+      const response = await apiCall(`/api/lessons/${selectedLesson.id}`, {
+        method: 'PUT',
+        body: formDataToSend
+      });
+
+      console.log('LessonManagement: レッスン更新レスポンス:', response);
+
+      if (response.success) {
+        console.log('LessonManagement: レッスン更新成功');
+        closeModals(); // closeModals関数を使用
+        setError(null); // エラーをクリア
+        await fetchLessons(); // レッスンリストを再取得
+      } else {
+        console.error('LessonManagement: レッスン更新失敗:', response.message);
+        setError('レッスンの更新に失敗しました: ' + (response.message || ''));
+      }
+    } catch (err) {
+      console.error('LessonManagement: レッスン更新エラー:', err);
+      let errorMessage = 'レッスンの更新中にエラーが発生しました';
+      
+      if (err.message.includes('Authentication failed')) {
+        errorMessage = '認証に失敗しました。再度ログインしてください。';
+      } else if (err.message.includes('401')) {
+        errorMessage = '認証が必要です。再度ログインしてください。';
+      } else if (err.message.includes('403')) {
+        errorMessage = '管理者権限が必要です。';
+      } else if (err.message.includes('404')) {
+        errorMessage = 'レッスンが見つかりません。';
+      } else if (err.message.includes('500')) {
+        errorMessage = 'サーバーエラーが発生しました。しばらく時間をおいて再度お試しください。';
+      } else {
+        errorMessage += ': ' + err.message;
+      }
+      
+      setError(errorMessage);
+    }
+  };
+
+  // レッスン削除
+  const handleDeleteLesson = async (lessonId) => {
+    const lesson = lessons.find(l => l.id === lessonId);
+    if (!lesson) return;
+
+    const confirmMessage = lesson.s3_key 
+      ? `このレッスン「${lesson.title}」を削除しますか？\n\n削除される内容：\n• レッスンデータ\n• S3上のファイル・フォルダ\n\nこの操作は取り消せません。`
+      : `このレッスン「${lesson.title}」を削除しますか？\n\nこの操作は取り消せません。`;
+
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      console.log('LessonManagement: レッスン削除開始', { lessonId, lessonTitle: lesson.title });
+      const response = await apiDelete(`/api/lessons/${lessonId}`);
+      
+      console.log('LessonManagement: レッスン削除レスポンス:', response);
+      
+      if (response.success) {
+        console.log('LessonManagement: レッスン削除成功');
+        setError(null); // エラーをクリア
+        await fetchLessons(); // レッスンリストを再取得
+        
+        // 成功メッセージを表示
+        const successMessage = lesson.s3_key 
+          ? `レッスン「${lesson.title}」が正常に削除されました。\nS3上のファイル・フォルダも削除されました。`
+          : `レッスン「${lesson.title}」が正常に削除されました。`;
+        
+        alert(successMessage);
+      } else {
+        console.error('LessonManagement: レッスン削除失敗:', response.message);
+        setError('レッスンの削除に失敗しました: ' + (response.message || ''));
+      }
+    } catch (err) {
+      console.error('LessonManagement: レッスン削除エラー:', err);
+      setError('レッスンの削除中にエラーが発生しました: ' + err.message);
+    }
+  };
+
+  // フォルダダウンロード（ZIP形式）
+  const handleDownloadFolder = async (lessonId) => {
+    try {
+      const blob = await apiDownloadBinary(`/api/lessons/${lessonId}/download-folder`, {
+        method: 'GET'
+      });
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `lesson-folder-${lessonId}.zip`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError('フォルダのダウンロードに失敗しました');
+      console.error('Error downloading folder:', err);
+    }
+  };
+
+  // ファイル一覧表示
+  const handleShowFileList = async (lessonId) => {
+    try {
+      setFileListLoading(true);
+      const response = await apiGet(`/api/lessons/${lessonId}/files`);
+      
+      if (response.success) {
+        setSelectedLessonFiles(response.data);
+        setShowFileListModal(true);
+      } else {
+        setError('ファイル一覧の取得に失敗しました: ' + response.message);
+      }
+    } catch (err) {
+      setError('ファイル一覧の取得に失敗しました: ' + err.message);
+      console.error('Error fetching file list:', err);
+    } finally {
+      setFileListLoading(false);
+    }
+  };
+
+  // 個別ファイルダウンロード
+  const handleDownloadIndividualFile = async (fileKey, fileName) => {
+    try {
+      const blob = await apiDownloadBinary(`/api/lessons/download-file`, {
+        method: 'POST',
+        body: JSON.stringify({ fileKey }),
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError('ファイルのダウンロードに失敗しました');
+      console.error('Error downloading individual file:', err);
+    }
+  };
+
+  // 編集モーダルを開く
+  const openEditModal = (lesson) => {
+    setSelectedLesson(lesson);
+    setFormData({
+      title: lesson.title,
+      description: lesson.description || '',
+      duration: lesson.duration || '120分',
+      order_index: lesson.order_index || 0,
+      has_assignment: lesson.has_assignment || false,
+      course_id: lesson.course_id,
+      youtube_url: lesson.youtube_url || ''
+    });
+    setFile(null);
+    setShowEditModal(true);
+  };
+
+  // モーダルを閉じる
+  const closeModals = () => {
+    setShowCreateModal(false);
+    setShowEditModal(false);
+    setShowFileListModal(false);
+    setSelectedLesson(null);
+    setSelectedLessonFiles(null);
+    setFormData({
+      title: '',
+      description: '',
+      duration: '120分',
+      order_index: 0,
+      has_assignment: false,
+      course_id: '',
+      youtube_url: ''
+    });
+    setFile(null);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex items-center justify-center">
+        <div className="text-blue-600 text-xl font-semibold">Loading...</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* ヘッダー */}
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold text-gray-800">動画セグメント管理: {lesson.title}</h3>
-          <button 
-            className="text-gray-400 hover:text-gray-600 text-2xl font-bold transition-colors duration-200"
-            onClick={onClose}
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
+            レッスン管理
+          </h1>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg font-semibold hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
           >
-            ×
+            ＋ 新規レッスン作成
           </button>
         </div>
 
-        <div className="space-y-6">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="font-semibold text-blue-800 mb-2">セグメント情報</h4>
-            <p className="text-blue-700 text-sm">
-              動画を時間区切りで分割し、各セグメントにタイトルと説明を設定できます。
-            </p>
+        {/* エラーメッセージ */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+            {error}
           </div>
+        )}
 
-          <div className="bg-gray-50 rounded-lg p-6">
-            <h4 className="font-semibold text-gray-800 mb-4">新しいセグメントを追加</h4>
-            <div className="grid md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">タイトル</label>
-                <input
-                  type="text"
-                  value={newSegment.title}
-                  onChange={(e) => setNewSegment({...newSegment, title: e.target.value})}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">開始時間 (HH:MM:SS)</label>
-                <input
-                  type="text"
-                  value={newSegment.startTime}
-                  onChange={(e) => setNewSegment({...newSegment, startTime: e.target.value})}
-                  placeholder="00:00:00"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
-                />
-              </div>
-            </div>
-            <div className="grid md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">終了時間 (HH:MM:SS)</label>
-                <input
-                  type="text"
-                  value={newSegment.endTime}
-                  onChange={(e) => setNewSegment({...newSegment, endTime: e.target.value})}
-                  placeholder="00:00:00"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">説明</label>
-                <input
-                  type="text"
-                  value={newSegment.description}
-                  onChange={(e) => setNewSegment({...newSegment, description: e.target.value})}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
-                />
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleAddSegment}
-              className="bg-indigo-500 text-white px-6 py-2 rounded-lg font-medium transition-colors duration-300 hover:bg-indigo-600"
-            >
-              セグメントを追加
-            </button>
+        {/* コースフィルター */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            コースで絞り込み
+          </label>
+          <select
+            value={selectedCourseId}
+            onChange={(e) => setSelectedCourseId(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">すべてのコース</option>
+            {courses.map(course => (
+              <option key={course.id} value={course.id}>
+                {course.title}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* レッスン一覧 */}
+        <div className="bg-white rounded-2xl shadow-xl p-6">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-blue-50">
+                <tr>
+                  <th className="px-4 py-3 text-left font-semibold text-blue-800">レッスン名</th>
+                  <th className="px-4 py-3 text-left font-semibold text-blue-800">コース</th>
+                  <th className="px-4 py-3 text-left font-semibold text-blue-800">説明</th>
+                  <th className="px-4 py-3 text-left font-semibold text-blue-800">所要時間</th>
+                                     <th className="px-4 py-3 text-left font-semibold text-blue-800">課題</th>
+                   <th className="px-4 py-3 text-left font-semibold text-blue-800">ファイル</th>
+                   <th className="px-4 py-3 text-left font-semibold text-blue-800">動画</th>
+                   <th className="px-4 py-3 text-left font-semibold text-blue-800">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lessons.map((lesson) => (
+                  <tr key={lesson.id} className="border-b border-gray-100 hover:bg-blue-50 transition-colors duration-200">
+                    <td className="px-4 py-3 font-semibold text-gray-800">{lesson.title}</td>
+                    <td className="px-4 py-3 text-gray-600">{lesson.course_title}</td>
+                    <td className="px-4 py-3 text-gray-600">{lesson.description || '-'}</td>
+                    <td className="px-4 py-3 text-gray-600">{lesson.duration}</td>
+                                         <td className="px-4 py-3">
+                       {lesson.has_assignment ? (
+                         <span className="text-green-600 font-medium">あり</span>
+                       ) : (
+                         <span className="text-gray-400">なし</span>
+                       )}
+                     </td>
+                                           <td className="px-4 py-3">
+                        {lesson.s3_key ? (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleShowFileList(lesson.id)}
+                              className="text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              📋 ファイル一覧
+                            </button>
+                            <button
+                              onClick={() => handleDownloadFolder(lesson.id)}
+                              className="text-green-600 hover:text-green-800 font-medium"
+                            >
+                              📁 フォルダ
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">なし</span>
+                        )}
+                      </td>
+                     <td className="px-4 py-3">
+                       {lesson.youtube_url ? (
+                         <a
+                           href={lesson.youtube_url}
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           className="text-red-600 hover:text-red-800 font-medium"
+                         >
+                           🎥 視聴
+                         </a>
+                       ) : (
+                         <span className="text-gray-400">なし</span>
+                       )}
+                     </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => openEditModal(lesson)}
+                          className="px-3 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+                        >
+                          ✏️ 編集
+                        </button>
+                        <button
+                          onClick={() => handleDeleteLesson(lesson.id)}
+                          className="px-3 py-1 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+                        >
+                          🗑️ 削除
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+        </div>
+      </div>
 
-          <div>
-            <h4 className="font-semibold text-gray-800 mb-4">セグメント一覧</h4>
-            {segments.length === 0 ? (
-              <div className="text-center py-8 bg-gray-50 rounded-lg">
-                <p className="text-gray-500">セグメントが設定されていません。</p>
-                <p className="text-gray-400 text-sm">上記のフォームからセグメントを追加してください。</p>
+      {/* 新規作成モーダル */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">新規レッスン作成</h2>
+            <form onSubmit={handleCreateLesson}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  コース *
+                </label>
+                <select
+                  name="course_id"
+                  value={formData.course_id}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">コースを選択</option>
+                  {courses.length > 0 ? (
+                    courses.map(course => (
+                      <option key={course.id} value={course.id}>
+                        {course.title}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="" disabled>
+                      コースが読み込まれていません
+                    </option>
+                  )}
+                </select>
+                {courses.length === 0 && (
+                  <p className="text-xs text-red-500 mt-1">
+                    コースデータの読み込みに失敗しました。ページを再読み込みしてください。
+                  </p>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  利用可能なコース数: {courses.length}
+                </p>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  レッスン名 *
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  value={formData.title}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  説明
+                </label>
+                <textarea
+                  name="description"
+                  value={formData.description}
+                  onChange={handleInputChange}
+                  rows="3"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  所要時間
+                </label>
+                <input
+                  type="text"
+                  name="duration"
+                  value={formData.duration}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  表示順序
+                </label>
+                <input
+                  type="number"
+                  name="order_index"
+                  value={formData.order_index}
+                  onChange={handleInputChange}
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+                             <div className="mb-4">
+                 <label className="flex items-center">
+                   <input
+                     type="checkbox"
+                     name="has_assignment"
+                     checked={formData.has_assignment}
+                     onChange={handleInputChange}
+                     className="mr-2"
+                   />
+                   <span className="text-sm font-medium text-gray-700">課題あり</span>
+                 </label>
+               </div>
+               <div className="mb-4">
+                 <label className="block text-sm font-medium text-gray-700 mb-2">
+                   YouTube動画URL
+                 </label>
+                 <input
+                   type="url"
+                   name="youtube_url"
+                   value={formData.youtube_url}
+                   onChange={handleInputChange}
+                   placeholder="https://www.youtube.com/watch?v=..."
+                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                 />
+                 <p className="text-xs text-gray-500 mt-1">
+                   YouTubeの動画URLを入力してください
+                 </p>
+               </div>
+               <div className="mb-6">
+                 <label className="block text-sm font-medium text-gray-700 mb-2">
+                   ファイル（PDF、MD、DOCX、PPTX）
+                 </label>
+                 <input
+                   type="file"
+                   onChange={handleFileChange}
+                   accept=".pdf,.md,.docx,.pptx"
+                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                 />
+               </div>
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all duration-200"
+                >
+                  作成
+                </button>
+                <button
+                  type="button"
+                  onClick={closeModals}
+                  className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-400 transition-all duration-200"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 編集モーダル */}
+      {showEditModal && selectedLesson && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">レッスン編集</h2>
+            <form onSubmit={handleUpdateLesson}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  コース *
+                </label>
+                <select
+                  name="course_id"
+                  value={formData.course_id}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {courses.map(course => (
+                    <option key={course.id} value={course.id}>
+                      {course.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  レッスン名 *
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  value={formData.title}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  説明
+                </label>
+                <textarea
+                  name="description"
+                  value={formData.description}
+                  onChange={handleInputChange}
+                  rows="3"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  所要時間
+                </label>
+                <input
+                  type="text"
+                  name="duration"
+                  value={formData.duration}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  表示順序
+                </label>
+                <input
+                  type="number"
+                  name="order_index"
+                  value={formData.order_index}
+                  onChange={handleInputChange}
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+                             <div className="mb-4">
+                 <label className="flex items-center">
+                   <input
+                     type="checkbox"
+                     name="has_assignment"
+                     checked={formData.has_assignment}
+                     onChange={handleInputChange}
+                     className="mr-2"
+                   />
+                   <span className="text-sm font-medium text-gray-700">課題あり</span>
+                 </label>
+               </div>
+               <div className="mb-4">
+                 <label className="block text-sm font-medium text-gray-700 mb-2">
+                   YouTube動画URL
+                 </label>
+                 <input
+                   type="url"
+                   name="youtube_url"
+                   value={formData.youtube_url}
+                   onChange={handleInputChange}
+                   placeholder="https://www.youtube.com/watch?v=..."
+                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                 />
+                 <p className="text-xs text-gray-500 mt-1">
+                   YouTubeの動画URLを入力してください
+                 </p>
+               </div>
+               <div className="mb-6">
+                 <label className="block text-sm font-medium text-gray-700 mb-2">
+                   ファイル（PDF、MD、DOCX、PPTX）
+                 </label>
+                 <input
+                   type="file"
+                   onChange={handleFileChange}
+                   accept=".pdf,.md,.docx,.pptx"
+                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                 />
+                 {selectedLesson.s3_key && (
+                   <p className="text-sm text-gray-500 mt-1">
+                     現在のファイル: {selectedLesson.s3_key.split('/').pop()}
+                   </p>
+                 )}
+               </div>
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all duration-200"
+                >
+                  更新
+                </button>
+                <button
+                  type="button"
+                  onClick={closeModals}
+                  className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-400 transition-all duration-200"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ファイル一覧モーダル */}
+      {showFileListModal && selectedLessonFiles && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-4xl max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold text-gray-800">
+                ファイル一覧 - {selectedLessonFiles.lesson.title}
+              </h2>
+              <button
+                onClick={closeModals}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>コース:</strong> {selectedLessonFiles.lesson.courseTitle}
+              </p>
+              <p className="text-sm text-blue-800">
+                <strong>ファイル数:</strong> {selectedLessonFiles.files.length}個
+              </p>
+            </div>
+
+            {fileListLoading ? (
+              <div className="text-center py-8">
+                <div className="text-blue-600 text-lg">ファイル一覧を読み込み中...</div>
               </div>
             ) : (
-              <div className="space-y-3">
-                {segments.map((segment, index) => (
-                  <div key={segment.id} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <h5 className="font-semibold text-gray-800">{segment.title}</h5>
-                      <button
-                        onClick={() => handleRemoveSegment(segment.id)}
-                        className="text-red-500 hover:text-red-700 transition-colors duration-200"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                    <div className="text-sm text-gray-600 mb-2">
-                      <span className="font-medium">時間:</span> {formatTime(segment.startTime)} - {formatTime(segment.endTime)}
-                    </div>
-                    {segment.description && (
-                      <div className="text-sm text-gray-600">
-                        <span className="font-medium">説明:</span> {segment.description}
-                      </div>
-                    )}
-                  </div>
-                ))}
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-800">ファイル名</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-800">サイズ</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-800">更新日時</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-800">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedLessonFiles.files.map((file, index) => (
+                      <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200">
+                        <td className="px-4 py-3 font-medium text-gray-800">
+                          {file.name}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {file.sizeFormatted}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {new Date(file.lastModified).toLocaleString('ja-JP')}
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => handleDownloadIndividualFile(file.key, file.name)}
+                            className="px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+                          >
+                            📥 ダウンロード
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
-          </div>
 
-          <div className="flex gap-3 pt-4">
-            <button
-              onClick={handleSave}
-              className="flex-1 bg-green-500 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-300 hover:bg-green-600"
-            >
-              保存
-            </button>
-            <button
-              onClick={onClose}
-              className="flex-1 bg-gray-500 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-300 hover:bg-gray-600"
-            >
-              キャンセル
-            </button>
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={closeModals}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-400 transition-all duration-200"
+              >
+                閉じる
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

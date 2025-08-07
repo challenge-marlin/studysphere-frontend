@@ -1,23 +1,26 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import {
-  getStoredTokens,
-  storeTokens,
-  clearStoredTokens,
-  isTokenValid,
+import { 
+  getStoredTokens, 
+  handleTokenInvalid, 
+  isMockLogin, 
+  isAuthRequiredPage, 
+  handleLogout,
+  isRefreshTokenExpired,
   shouldRefreshToken,
   getTokenExpiryTime,
-  refreshTokenAPI,
-  isMockLogin,
-  isAuthRequiredPage,
-  handleLogout,
-  handleTokenInvalid
+  isTokenValid,
+  clearStoredTokens,
+  storeTokens
 } from '../../utils/authUtils';
+import { refreshTokenAPI } from '../../utils/authUtils';
 import { setGlobalNavigate, setupFetchInterceptor } from '../../utils/httpInterceptor';
 import { addOperationLog } from '../../utils/operationLogManager';
 
+// 認証コンテキストの作成
 const AuthContext = createContext();
 
+// カスタムフック
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -34,6 +37,10 @@ export const AuthProvider = ({ children }) => {
   const location = useLocation();
   const tokenCheckInterval = useRef(null);
   const tokenRefreshTimeout = useRef(null);
+  // 更新試行回数の制限（統一）
+  const MAX_REFRESH_ATTEMPTS = 3; // 10回から3回に戻す
+  const refreshAttempts = useRef(0);
+  const isRefreshing = useRef(false); // リフレッシュ中フラグを追加
 
   // 初期認証チェック
   useEffect(() => {
@@ -44,6 +51,17 @@ export const AuthProvider = ({ children }) => {
     setupFetchInterceptor();
     
     const checkInitialAuth = async () => {
+      // ログインページの場合は認証チェックをスキップ
+      const currentPath = location.pathname;
+      const isLoginPage = currentPath === '/' || currentPath.startsWith('/student/login') || currentPath.startsWith('/login');
+      
+      if (isLoginPage) {
+        console.log('AuthContext: ログインページのため、初期認証チェックをスキップします');
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+        setIsLoading(false);
+        return;
+      }
       try {
         console.log('=== 初期認証チェック開始 ===');
         const userData = localStorage.getItem('currentUser');
@@ -84,6 +102,15 @@ export const AuthProvider = ({ children }) => {
           return;
         }
         
+        // リフレッシュトークンの有効期限をチェック
+        console.log('リフレッシュトークンの有効期限をチェック中...');
+        if (isRefreshTokenExpired(refreshToken)) {
+          console.log('リフレッシュトークンの有効期限が切れています');
+          handleTokenInvalid(navigate, 'リフレッシュトークンの有効期限が切れました');
+          return;
+        }
+        console.log('リフレッシュトークンは有効です');
+        
         // トークンの詳細を確認（デバッグ用）
         if (accessToken) {
           console.log('アクセストークン詳細:', {
@@ -118,6 +145,7 @@ export const AuthProvider = ({ children }) => {
         }
 
         // アクセストークンの有効性をチェック
+        console.log('アクセストークンの有効性をチェック中...');
         const isValid = isTokenValid(accessToken);
         const remainingTime = getTokenExpiryTime(accessToken);
         
@@ -133,158 +161,139 @@ export const AuthProvider = ({ children }) => {
           console.log('アクセストークンが無効です。トークン更新を試行します。');
           try {
             await handleTokenRefresh(refreshToken);
+            // 更新成功時は認証済みとして設定
+            console.log('トークン更新成功 - 認証済みとして設定');
             setIsAuthenticated(true);
             setIsLoading(false);
           } catch (error) {
-            console.error('トークン更新に失敗:', error);
-            handleTokenInvalid(navigate, 'アクセストークンが無効です');
+            console.error('初期認証時のトークン更新に失敗:', error);
+            // 更新失敗時はログアウト処理
+            handleTokenInvalid(navigate, 'トークンの有効期限が切れました');
           }
           return;
         }
 
-        // アクセストークンが有効だが、更新が必要な場合
-        if (shouldRefreshToken(accessToken)) {
-          console.log('アクセストークンは有効ですが、更新が必要です。バックグラウンドで更新します。');
-          // バックグラウンドでトークン更新を試行（失敗しても認証状態は維持）
-          handleTokenRefresh(refreshToken).catch(error => {
-            console.warn('バックグラウンドトークン更新に失敗:', error);
-            // 更新に失敗しても現在のトークンで継続
-          });
-        }
-
-        console.log('認証成功: ユーザーを認証済みとして設定');
+        // アクセストークンが有効な場合
+        console.log('アクセストークンが有効です');
         setIsAuthenticated(true);
         setIsLoading(false);
+        
+        // 30分以内に期限切れになる場合は更新を試行
+        if (shouldRefreshToken(accessToken)) {
+          console.log('アクセストークンが30分以内に期限切れになります。バックグラウンドで更新を試行します。');
+          handleTokenRefresh(refreshToken).catch(error => {
+            console.error('バックグラウンドトークン更新に失敗:', error);
+            // バックグラウンド更新の失敗は致命的ではないので、ログアウトしない
+          });
+        }
       } catch (error) {
         console.error('Initial auth check error:', error);
-        handleLogout(navigate);
+        handleTokenInvalid(navigate, '認証チェック中にエラーが発生しました');
       }
     };
 
     checkInitialAuth();
   }, []);
 
-  // トークン更新処理
+  // トークン更新処理の改善
   const handleTokenRefresh = async (refreshToken) => {
+    // 既にリフレッシュ中の場合は待機
+    if (isRefreshing.current) {
+      console.log('トークン更新が既に進行中です。待機します。');
+      return false;
+    }
+
+    // 試行回数制限チェック
+    if (refreshAttempts.current >= MAX_REFRESH_ATTEMPTS) {
+      console.error(`トークン更新の試行回数が上限(${MAX_REFRESH_ATTEMPTS}回)に達しました`);
+      handleTokenInvalid(navigate, '認証セッションが期限切れです。再度ログインしてください。');
+      return false;
+    }
+
     try {
-      console.log('トークン更新開始:', { refreshToken: refreshToken ? '存在' : 'なし' });
-      const response = await refreshTokenAPI(refreshToken);
-      console.log('トークン更新API応答:', response);
+      isRefreshing.current = true;
+      refreshAttempts.current++;
+      console.log(`トークン更新試行 ${refreshAttempts.current}/${MAX_REFRESH_ATTEMPTS}`);
+
+      const response = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
       
-      if (response.success) {
-        const { access_token, refresh_token } = response.data;
+      if (result.success) {
+        console.log('トークン更新成功');
+        const { access_token, refresh_token } = result.data;
         storeTokens(access_token, refresh_token);
-        console.log('トークン保存完了');
         
-        // ユーザー情報を更新（既存のユーザー情報がある場合のみ）
-        const userData = localStorage.getItem('currentUser');
-        if (userData) {
-          try {
-            const user = JSON.parse(userData);
-            const updatedUser = {
-              ...user,
-              access_token,
-              refresh_token
-            };
-            localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-            setCurrentUser(updatedUser);
-            console.log('ユーザー情報更新完了');
-          } catch (error) {
-            console.warn('ユーザー情報の更新に失敗:', error);
-          }
-        }
-        
-        setIsAuthenticated(true);
-        setIsLoading(false);
+        // 試行回数をリセット
+        refreshAttempts.current = 0;
+        isRefreshing.current = false;
+        return true;
       } else {
-        console.error('トークン更新APIが失敗:', response);
-        throw new Error(response.message || 'トークン更新に失敗しました');
+        throw new Error(result.message || 'トークン更新に失敗しました');
       }
     } catch (error) {
-      console.error('Token refresh failed:', error);
-      handleTokenInvalid(navigate, 'トークン更新に失敗しました');
+      console.error('トークン更新エラー:', error);
+      
+      // 最後の試行で失敗した場合
+      if (refreshAttempts.current >= MAX_REFRESH_ATTEMPTS) {
+        console.error('トークン更新の最大試行回数に達しました');
+        handleTokenInvalid(navigate, '認証セッションが期限切れです。再度ログインしてください。');
+      } else {
+        console.log(`更新失敗。残り試行回数: ${MAX_REFRESH_ATTEMPTS - refreshAttempts.current}`);
+      }
+      
+      isRefreshing.current = false;
+      return false;
     }
   };
 
-  // 定期的なトークンチェック（3分ごと）
-  useEffect(() => {
-    // 認証されていない場合はチェックしない
-    if (!isAuthenticated || isMockLogin()) {
-      console.log('認証されていないため、定期的なトークンチェックをスキップ');
-      return;
-    }
-
-    const checkTokenPeriodically = async () => {
-      console.log('定期的なトークンチェック開始');
+  // 定期的なトークンチェック処理の改善
+  const checkTokenPeriodically = async () => {
+    try {
       const { accessToken, refreshToken } = getStoredTokens();
-      console.log('保存されたトークン:', { accessToken: accessToken ? '存在' : 'なし', refreshToken: refreshToken ? '存在' : 'なし' });
-      
-      // トークンの詳細を確認（デバッグ用）
-      if (accessToken) {
-        console.log('定期的チェック - アクセストークン詳細:', {
-          length: accessToken.length,
-          startsWith: accessToken.substring(0, 20) + '...',
-          containsDots: accessToken.includes('.'),
-          dotCount: (accessToken.match(/\./g) || []).length,
-          fullToken: accessToken // 完全なトークンを表示
-        });
-      }
       
       if (!accessToken || !refreshToken) {
-        console.log('トークンが見つかりません');
-        handleTokenInvalid(navigate, 'トークンが見つかりません');
+        console.log('トークンが存在しません');
         return;
       }
 
-      // トークンの形式をチェック
-      if (!accessToken.includes('.') || accessToken.split('.').length !== 3) {
-        console.error('トークンの形式が不正です:', accessToken);
-        handleTokenInvalid(navigate, 'トークンの形式が不正です');
+      // リフレッシュトークンの有効期限チェック
+      if (isRefreshTokenExpired(refreshToken)) {
+        console.log('リフレッシュトークンの有効期限が切れています');
+        handleTokenInvalid(navigate, 'セッションが期限切れです。再度ログインしてください。');
         return;
       }
 
+      // アクセストークンの有効性チェック
       const isValid = isTokenValid(accessToken);
-      const remainingTime = getTokenExpiryTime(accessToken);
-      console.log('アクセストークン状態:', { isValid, remainingTime });
-
-      if (!isValid) {
-        // トークンが完全に無効な場合はリダイレクト
-        console.log('トークンの有効期限が切れました');
-        handleTokenInvalid(navigate, 'トークンの有効期限が切れました');
-        return;
-      }
-
-      // 残り120秒以下でトークン更新
-      if (shouldRefreshToken(accessToken)) {
-        console.log('トークン更新が必要です');
-        try {
-          await handleTokenRefresh(refreshToken);
-          console.log('トークン更新が完了しました');
-        } catch (error) {
-          console.error('トークン更新に失敗:', error);
-          // 更新に失敗しても現在のトークンで継続（完全に無効になるまで）
-          const stillValid = isTokenValid(accessToken);
-          if (!stillValid) {
-            handleTokenInvalid(navigate, 'トークン更新に失敗しました');
-          }
+      const shouldRefresh = shouldRefreshToken(accessToken);
+      
+      if (!isValid && shouldRefresh) {
+        console.log('アクセストークンが無効です。更新を試行します。');
+        const success = await handleTokenRefresh(refreshToken);
+        
+        if (!success) {
+          // 更新に失敗した場合はログアウト
+          console.log('トークン更新に失敗しました。ログアウトします。');
+          await logout();
         }
-      } else {
-        console.log('トークン更新は不要です');
       }
-    };
-
-    // 初回チェック
-    checkTokenPeriodically();
-
-    // 3分ごとにチェック
-    tokenCheckInterval.current = setInterval(checkTokenPeriodically, 3 * 60 * 1000);
-
-    return () => {
-      if (tokenCheckInterval.current) {
-        clearInterval(tokenCheckInterval.current);
-      }
-    };
-  }, [isAuthenticated]);
+    } catch (error) {
+      console.error('定期的なトークンチェックでエラー:', error);
+      // エラーが発生した場合はログアウト
+      await logout();
+    }
+  };
 
   // ページ変更時の認証チェック
   useEffect(() => {
@@ -303,9 +312,45 @@ export const AuthProvider = ({ children }) => {
     // また、生徒ログイン時も既存セッションがあっても新しいログインが可能になる
   }, [location.pathname, isAuthenticated, isLoading]);
 
-  // ログアウト処理
+  // 定期的なトークンチェック（認証済みの場合のみ）
+  useEffect(() => {
+    if (!isAuthenticated || isMockLogin()) {
+      return;
+    }
+
+    // 初回チェック
+    checkTokenPeriodically();
+
+    // 5分ごとにチェック
+    tokenCheckInterval.current = setInterval(checkTokenPeriodically, 5 * 60 * 1000);
+
+    return () => {
+      if (tokenCheckInterval.current) {
+        clearInterval(tokenCheckInterval.current);
+        tokenCheckInterval.current = null;
+      }
+    };
+  }, [isAuthenticated]);
+
+  // ログアウト処理の改善
   const logout = async () => {
-    // ログアウト前にユーザー情報を取得
+    console.log('=== ログアウト処理開始 ===');
+    
+    // リフレッシュ状態をリセット
+    isRefreshing.current = false;
+    refreshAttempts.current = 0;
+    
+    // 既存のタイマーをクリア
+    if (tokenCheckInterval.current) {
+      clearInterval(tokenCheckInterval.current);
+      tokenCheckInterval.current = null;
+    }
+    if (tokenRefreshTimeout.current) {
+      clearTimeout(tokenRefreshTimeout.current);
+      tokenRefreshTimeout.current = null;
+    }
+
+    // ユーザーデータを取得（ログ用）
     const userData = localStorage.getItem('currentUser');
     let userName = '不明';
     let userRole = '不明';
@@ -330,15 +375,18 @@ export const AuthProvider = ({ children }) => {
       console.error('ログアウトログの記録に失敗しました:', error);
     }
     
-    if (tokenCheckInterval.current) {
-      clearInterval(tokenCheckInterval.current);
-    }
-    if (tokenRefreshTimeout.current) {
-      clearTimeout(tokenRefreshTimeout.current);
-    }
-    handleLogout(navigate);
+    // ローカルストレージをクリア
+    localStorage.removeItem('currentUser');
+    clearStoredTokens();
+    
+    // 状態をリセット
     setIsAuthenticated(false);
     setCurrentUser(null);
+    
+    // ログインページにリダイレクト
+    handleLogout(navigate);
+    
+    console.log('ログアウト処理完了');
   };
 
   // ログイン処理
@@ -347,6 +395,9 @@ export const AuthProvider = ({ children }) => {
     console.log('ユーザーデータ:', userData);
     console.log('アクセストークン:', accessToken ? '存在' : 'なし');
     console.log('リフレッシュトークン:', refreshToken ? '存在' : 'なし');
+    
+    // 更新試行回数をリセット
+    refreshAttempts.current = 0;
     
     // トークンの詳細を確認（デバッグ用）
     if (accessToken) {

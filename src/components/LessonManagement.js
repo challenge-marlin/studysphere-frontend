@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete, apiCall, apiDownloadBinary } from '../utils/api';
+import { addOperationLog } from '../utils/operationLogManager';
 
 const LessonManagement = () => {
   const [lessons, setLessons] = useState([]);
@@ -163,8 +164,9 @@ const LessonManagement = () => {
       if (response.success) {
         console.log('LessonManagement: レッスン作成成功');
         closeModals(); // closeModals関数を使用
-        setError(null); // エラーをクリア
-        await fetchLessons(); // レッスンリストを再取得
+                  setError(null); // エラーをクリア
+          await fetchLessons(); // レッスンリストを再取得
+          addOperationLog('レッスン作成', `レッスン「${response.data.title}」を作成しました`);
       } else {
         console.error('LessonManagement: レッスン作成失敗:', response.message);
         setError('レッスンの作成に失敗しました: ' + (response.message || ''));
@@ -227,8 +229,9 @@ const LessonManagement = () => {
       if (response.success) {
         console.log('LessonManagement: レッスン更新成功');
         closeModals(); // closeModals関数を使用
-        setError(null); // エラーをクリア
-        await fetchLessons(); // レッスンリストを再取得
+                  setError(null); // エラーをクリア
+          await fetchLessons(); // レッスンリストを再取得
+          addOperationLog('レッスン更新', `レッスン「${selectedLesson.title}」を更新しました`);
       } else {
         console.error('LessonManagement: レッスン更新失敗:', response.message);
         setError('レッスンの更新に失敗しました: ' + (response.message || ''));
@@ -284,7 +287,8 @@ const LessonManagement = () => {
           ? `レッスン「${lesson.title}」が正常に削除されました。\nS3上のファイル・フォルダも削除されました。`
           : `レッスン「${lesson.title}」が正常に削除されました。`;
         
-        alert(successMessage);
+                  alert(successMessage);
+          addOperationLog('レッスン削除', `レッスン「${lesson.title}」を削除しました`);
       } else {
         console.error('LessonManagement: レッスン削除失敗:', response.message);
         setError('レッスンの削除に失敗しました: ' + (response.message || ''));

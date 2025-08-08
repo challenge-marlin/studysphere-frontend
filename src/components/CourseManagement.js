@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete } from '../utils/api';
+import { addOperationLog } from '../utils/operationLogManager';
 
 const CourseManagement = () => {
   const [courses, setCourses] = useState([]);
@@ -90,13 +91,14 @@ const CourseManagement = () => {
       const response = await apiPost('/api/courses', formData);
       console.log('コース作成レスポンス:', response);
       
-      if (response.success) {
-        setShowCreateModal(false);
-        setFormData({ title: '', description: '', category: '選択科目', order_index: 0 });
-        fetchCourses();
-        // 成功メッセージを表示
-        alert('コースが正常に作成されました');
-      } else {
+              if (response.success) {
+          setShowCreateModal(false);
+          setFormData({ title: '', description: '', category: '選択科目', order_index: 0 });
+          fetchCourses();
+          // 成功メッセージを表示
+          alert('コースが正常に作成されました');
+          addOperationLog('コース作成', `コース「${formData.title}」を作成しました`);
+        } else {
         setError(response.message || 'コースの作成に失敗しました');
       }
     } catch (err) {
@@ -128,12 +130,13 @@ const CourseManagement = () => {
 
     try {
       const response = await apiPut(`/api/courses/${selectedCourse.id}`, formData);
-      if (response.success) {
-        setShowEditModal(false);
-        setSelectedCourse(null);
-        setFormData({ title: '', description: '', category: '選択科目', order_index: 0 });
-        fetchCourses();
-      } else {
+              if (response.success) {
+          setShowEditModal(false);
+          setSelectedCourse(null);
+          setFormData({ title: '', description: '', category: '選択科目', order_index: 0 });
+          fetchCourses();
+          addOperationLog('コース更新', `コース「${formData.title}」を更新しました`);
+        } else {
         setError('コースの更新に失敗しました');
       }
     } catch (err) {
@@ -162,11 +165,19 @@ const CourseManagement = () => {
       return;
     }
 
+    // 削除対象のコース情報を取得
+    const courseToDelete = courses.find(course => course.id === courseId);
+    if (!courseToDelete) {
+      setError('削除対象のコースが見つかりません');
+      return;
+    }
+
     try {
       const response = await apiDelete(`/api/courses/${courseId}`);
-      if (response.success) {
-        fetchCourses();
-      } else {
+              if (response.success) {
+          fetchCourses();
+          addOperationLog('コース削除', `コース「${courseToDelete.title}」を削除しました`);
+        } else {
         setError('コースの削除に失敗しました');
       }
     } catch (err) {

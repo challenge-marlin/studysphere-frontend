@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { addOperationLog } from '../utils/operationLogManager';
 
 const CurriculumPathManagement = () => {
   // カリキュラムパスのサンプルデータ
@@ -166,11 +167,19 @@ const CurriculumPathManagement = () => {
     setShowEditModal(true);
   };
 
+  // パス新規作成処理
+  const handleAddPath = (newPath) => {
+    setCurriculumPaths([...curriculumPaths, newPath]);
+    addOperationLog('カリキュラムパス作成', `カリキュラムパス「${newPath.name}」を作成しました`);
+  };
+
   // パス削除処理
   const handleDeletePath = (pathId) => {
     if (window.confirm('このカリキュラムパスを削除してもよろしいですか？\n※削除すると元に戻せません。')) {
+      const pathToDelete = curriculumPaths.find(path => path.id === pathId);
       setCurriculumPaths(curriculumPaths.filter(path => path.id !== pathId));
       alert('カリキュラムパスが削除されました。');
+      addOperationLog('カリキュラムパス削除', `カリキュラムパス「${pathToDelete.name}」を削除しました`);
     }
   };
 
@@ -413,6 +422,15 @@ const CurriculumPathManagement = () => {
         </div>
       </div>
 
+      {/* パス新規作成モーダル */}
+      {showAddModal && (
+        <PathAddModal
+          availableCourses={availableCourses}
+          onAdd={handleAddPath}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
+
       {/* パス編集モーダル */}
       {showEditModal && selectedPath && (
         <PathEditModal
@@ -431,6 +449,245 @@ const CurriculumPathManagement = () => {
           }}
         />
       )}
+    </div>
+  );
+};
+
+// パス新規作成モーダルコンポーネント
+const PathAddModal = ({ availableCourses, onAdd, onClose }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    targetAudience: '',
+    duration: '',
+    status: 'draft',
+    courses: []
+  });
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleCourseOrderChange = (index, newOrder) => {
+    const updatedCourses = [...formData.courses];
+    updatedCourses[index].order = parseInt(newOrder);
+    updatedCourses.sort((a, b) => a.order - b.order);
+    
+    setFormData(prev => ({
+      ...prev,
+      courses: updatedCourses
+    }));
+  };
+
+  const handleAddCourse = () => {
+    const newCourse = {
+      courseId: '',
+      order: formData.courses.length + 1,
+      isRequired: true,
+      estimatedDuration: '3ヶ月'
+    };
+    
+    setFormData(prev => ({
+      ...prev,
+      courses: [...prev.courses, newCourse]
+    }));
+  };
+
+  const handleRemoveCourse = (index) => {
+    const updatedCourses = formData.courses.filter((_, i) => i !== index);
+    // 順序を再調整
+    updatedCourses.forEach((course, i) => {
+      course.order = i + 1;
+    });
+    
+    setFormData(prev => ({
+      ...prev,
+      courses: updatedCourses
+    }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    const newPath = {
+      id: `path${Date.now()}`,
+      ...formData,
+      totalCourses: formData.courses.length,
+      createdAt: new Date().toISOString().split('T')[0],
+      updatedAt: new Date().toISOString().split('T')[0]
+    };
+    
+    onAdd(newPath);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-bold text-gray-800">カリキュラムパス新規作成</h3>
+          <button 
+            className="text-gray-400 hover:text-gray-600 text-2xl font-bold transition-colors duration-200"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">パス名 *</label>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                required
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">対象者 *</label>
+              <input
+                type="text"
+                name="targetAudience"
+                value={formData.targetAudience}
+                onChange={handleInputChange}
+                required
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">説明 *</label>
+            <textarea
+              name="description"
+              value={formData.description}
+              onChange={handleInputChange}
+              required
+              rows={3}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
+            />
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">期間 *</label>
+              <input
+                type="text"
+                name="duration"
+                value={formData.duration}
+                onChange={handleInputChange}
+                required
+                placeholder="例: 12ヶ月"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">ステータス</label>
+              <select
+                name="status"
+                value={formData.status}
+                onChange={handleInputChange}
+                required
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
+              >
+                <option value="draft">下書き</option>
+                <option value="active">公開中</option>
+                <option value="inactive">非公開</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h4 className="text-lg font-semibold text-gray-800">コース構成</h4>
+              <button
+                type="button"
+                onClick={handleAddCourse}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-300 hover:bg-indigo-700"
+              >
+                + コースを追加
+              </button>
+            </div>
+
+            {formData.courses.map((course, index) => (
+              <div key={index} className="flex items-center gap-4 mb-4 p-4 bg-white rounded-lg border">
+                <div className="flex-1">
+                  <select
+                    value={course.courseId}
+                    onChange={(e) => {
+                      const updatedCourses = [...formData.courses];
+                      updatedCourses[index].courseId = e.target.value;
+                      setFormData(prev => ({ ...prev, courses: updatedCourses }));
+                    }}
+                    required
+                    className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400"
+                  >
+                    <option value="">コースを選択</option>
+                    {availableCourses.map(c => (
+                      <option key={c.id} value={c.id}>{c.title}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="w-20">
+                  <input
+                    type="number"
+                    value={course.order}
+                    onChange={(e) => handleCourseOrderChange(index, e.target.value)}
+                    min="1"
+                    className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400"
+                  />
+                </div>
+                <div className="w-32">
+                  <input
+                    type="text"
+                    value={course.estimatedDuration}
+                    onChange={(e) => {
+                      const updatedCourses = [...formData.courses];
+                      updatedCourses[index].estimatedDuration = e.target.value;
+                      setFormData(prev => ({ ...prev, courses: updatedCourses }));
+                    }}
+                    placeholder="期間"
+                    className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveCourse(index)}
+                  className="text-red-600 hover:text-red-800 font-medium"
+                >
+                  削除
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-end gap-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-medium transition-colors duration-300 hover:bg-gray-50"
+            >
+              キャンセル
+            </button>
+            <button
+              type="submit"
+              className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium transition-colors duration-300 hover:bg-indigo-700"
+            >
+              作成
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };
@@ -503,6 +760,7 @@ const PathEditModal = ({ path, availableCourses, onUpdate, onClose }) => {
     };
     
     onUpdate(updatedPath);
+    addOperationLog('カリキュラムパス更新', `カリキュラムパス「${formData.name}」を更新しました`);
   };
 
   return (

@@ -72,7 +72,7 @@ const LoginPage = () => {
     try {
       console.log('LoginPage: 管理者ログインAPI呼び出し開始');
       
-      const response = await fetch('http://localhost:5000/login', {
+      const response = await fetch('http://localhost:5000/api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -112,67 +112,67 @@ const LoginPage = () => {
     setError('');
 
     try {
-      // 管理者アカウントの認証（データベース認証）
-      if (credentials.id === 'admin001') {
-        try {
-          const adminData = await adminLoginAPI('admin001', credentials.password);
+      // 管理者ログインの試行
+      try {
+        const adminData = await adminLoginAPI(credentials.id, credentials.password);
+        
+        if (adminData.success && adminData.data) {
+          const userData = {
+            id: adminData.data.user_id,
+            name: adminData.data.user_name,
+            email: adminData.data.login_code,
+            role: 'admin',
+            access_token: adminData.data.access_token,
+            refresh_token: adminData.data.refresh_token
+          };
           
-          if (adminData.success) {
-            const userData = {
-              id: adminData.data.user_id,
-              name: adminData.data.user_name,
-              email: adminData.data.login_code,
-              role: 'admin',
-              access_token: adminData.data.access_token,
-              refresh_token: adminData.data.refresh_token
-            };
-            
-            // 認証コンテキストを使用してログイン
-            login(userData, adminData.data.access_token, adminData.data.refresh_token);
-            
-            // 操作ログを記録
-            await addOperationLog({
-              action: 'ログイン',
-              details: `管理者「${userData.name}」がログインしました`,
-              adminId: userData.id,
-              adminName: userData.name
-            });
-            
-            navigate('/admin/dashboard');
-          } else {
-            setError(adminData.message || 'ログインに失敗しました');
-          }
-        } catch (apiError) {
-          console.error('Login API error:', apiError);
-          // 認証エラーの場合は適切なメッセージを表示
-          if (apiError.message === 'Authentication failed') {
-            setError('ユーザーIDまたはパスワードが正しくありません。');
-          } else {
-            setError(apiError.message || 'データベース認証に失敗しました');
-          }
-        }
-      } else {
-        // 通常のユーザー認証（モックデータ）
-        const user = Object.values(users).find(
-          u => u.id === credentials.id && u.password === credentials.password
-        );
-
-        if (user) {
-          // 指導員でログイン（モックログイン）
-          login(user);
+          // 認証コンテキストを使用してログイン
+          login(userData, adminData.data.access_token, adminData.data.refresh_token);
           
           // 操作ログを記録
           await addOperationLog({
             action: 'ログイン',
-            details: `指導員「${user.name}」がログインしました`,
-            adminId: user.id,
-            adminName: user.name
+            details: `管理者「${userData.name}」がログインしました`,
+            adminId: userData.id,
+            adminName: userData.name
           });
           
-          navigate('/instructor/dashboard');
+          navigate('/admin/dashboard');
+          return;
         } else {
-          setError('ユーザーIDまたはパスワードが正しくありません。');
+          throw new Error(adminData.message || '管理者ログインに失敗しました');
         }
+      } catch (adminError) {
+        console.log('管理者ログイン失敗:', adminError);
+        
+        // 管理者ログインが失敗した場合、そのエラーメッセージを表示
+        if (adminError.message) {
+          setError(adminError.message);
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // 指導員ログインの試行（モックデータ）
+      const user = Object.values(users).find(
+        u => u.id === credentials.id && u.password === credentials.password
+      );
+
+      if (user) {
+        // 指導員でログイン（モックログイン）
+        login(user);
+        
+        // 操作ログを記録
+        await addOperationLog({
+          action: 'ログイン',
+          details: `指導員「${user.name}」がログインしました`,
+          adminId: user.id,
+          adminName: user.name
+        });
+        
+        navigate('/instructor/dashboard');
+      } else {
+        setError('ユーザーIDまたはパスワードが正しくありません。');
       }
     } catch (error) {
       setError(error.message || 'ログイン処理中にエラーが発生しました');

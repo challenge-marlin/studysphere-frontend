@@ -144,7 +144,7 @@ export const refreshTokenAPI = async (refreshToken) => {
   try {
     console.log('トークン更新API呼び出し開始:', { refreshToken: refreshToken ? '存在' : 'なし' });
     
-    const response = await fetch('http://localhost:5000/refresh', {
+    const response = await fetch('/api/refresh', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

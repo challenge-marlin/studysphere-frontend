@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import SanitizedInput from './SanitizedInput';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
+import { apiGet, apiPut } from '../utils/api';
 // import { fetch } from '../utils/httpInterceptor'; // 一時的に無効化
 
 const LocationManagement = () => {
@@ -525,6 +526,9 @@ const LocationManagement = () => {
   const [showCourseModal, setShowCourseModal] = useState(false);
   const [targetOffice, setTargetOffice] = useState(null);
   const [selectedCourses, setSelectedCourses] = useState([]);
+  const [allCourses, setAllCourses] = useState([]);
+  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [courseError, setCourseError] = useState(null);
 
   const [addOfficeLoading, setAddOfficeLoading] = useState(false);
   const [tokenModal, setTokenModal] = useState({ show: false, token: '', expiry: '' });
@@ -1128,10 +1132,40 @@ const LocationManagement = () => {
 
   const filteredFacilities = getFilteredAndSortedFacilities();
 
-  const handleManageCourses = (office) => {
+  const handleManageCourses = async (office) => {
     setTargetOffice(office);
-    setSelectedCourses(office.availableCourses || []);
-    setShowCourseModal(true);
+    setCourseError(null);
+    setCoursesLoading(true);
+    try {
+      // 全コース取得（管理者は認証必須）
+      let coursesResp = await apiGet('/api/courses');
+      let courses = [];
+      if (coursesResp && coursesResp.success && Array.isArray(coursesResp.data)) {
+        courses = coursesResp.data;
+      } else if (Array.isArray(coursesResp)) {
+        courses = coursesResp;
+      }
+      setAllCourses(courses);
+
+      // 拠点の無効化コースID一覧を取得
+      let disabledResp = await apiGet(`/api/satellites/${office.id}/disabled-courses`);
+      let disabledIds = [];
+      if (disabledResp && disabledResp.success && Array.isArray(disabledResp.data)) {
+        disabledIds = disabledResp.data.map(id => Number(id));
+      } else if (Array.isArray(disabledResp)) {
+        disabledIds = disabledResp.map(id => Number(id));
+      }
+
+      const allIds = courses.map(c => Number(c.id));
+      const enabledIds = allIds.filter(id => !disabledIds.includes(id));
+      setSelectedCourses(enabledIds);
+      setShowCourseModal(true);
+    } catch (e) {
+      console.error('コース管理データ取得エラー:', e);
+      setCourseError(e.message || 'データの取得に失敗しました');
+    } finally {
+      setCoursesLoading(false);
+    }
   };
 
   const handleCourseCheck = (courseId) => {
@@ -1142,21 +1176,25 @@ const LocationManagement = () => {
     );
   };
 
-  const handleSaveCourses = () => {
+  const handleSaveCourses = async () => {
     if (!targetOffice) return;
-    setFacilities(prevFacilities =>
-      prevFacilities.map(org => ({
-        ...org,
-        offices: org.offices.map(office =>
-          office.id === targetOffice.id
-            ? { ...office, availableCourses: selectedCourses }
-            : office
-        )
-      }))
-    );
-    setShowCourseModal(false);
-    setTargetOffice(null);
-    setSelectedCourses([]);
+    try {
+      const allIds = allCourses.map(c => Number(c.id));
+      const disabledIds = allIds.filter(id => !selectedCourses.includes(id));
+      await apiPut(`/api/satellites/${targetOffice.id}/disabled-courses`, {
+        disabled_course_ids: disabledIds
+      });
+
+      // 画面上の拠点リストを更新（必要に応じて再取得）
+      await fetchSatellites();
+
+      setShowCourseModal(false);
+      setTargetOffice(null);
+      setSelectedCourses([]);
+    } catch (e) {
+      console.error('コース設定の保存エラー:', e);
+      alert(`コース設定の保存に失敗しました: ${e.message}`);
+    }
   };
 
   const handleCancelCourses = () => {
@@ -2631,7 +2669,13 @@ const LocationManagement = () => {
           <div className="bg-white rounded-xl p-8 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto shadow-2xl">
             <h3 className="text-2xl font-bold text-gray-800 mb-6">コース管理 - {targetOffice.name}</h3>
             <div className="mb-6 space-y-2">
-              {mockCourses.map(course => (
+              {courseError && (
+                <div className="p-3 bg-red-100 text-red-700 rounded">{courseError}</div>
+              )}
+              {coursesLoading && (
+                <div className="p-3 bg-gray-50 text-gray-600 rounded">読み込み中...</div>
+              )}
+              {!coursesLoading && allCourses.map(course => (
                 <label key={course.id} className="flex items-center gap-3 p-2 border-b border-gray-100">
                   <input
                     type="checkbox"

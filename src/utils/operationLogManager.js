@@ -9,17 +9,29 @@ const MAX_AGE_DAYS = 30; // 最大30日間
 
 /**
  * 操作ログを記録する
- * @param {Object} logData - ログデータ
- * @param {string} logData.adminId - 管理者ID
- * @param {string} logData.adminName - 管理者名
- * @param {string} logData.action - 操作内容
- * @param {string} logData.details - 詳細情報
- * @param {string} logData.ipAddress - IPアドレス（省略時は自動取得）
+ * 使用例:
+ *  - addOperationLog({ action: 'xxx', details: 'yyy' })
+ *  - addOperationLog('xxx', 'yyy') // 旧形式の互換
+ * @param {Object|string} logDataOrAction - ログデータ or 操作名
+ * @param {string} [detailsText] - 旧形式の詳細テキスト
  */
-export const addOperationLog = async (logData) => {
+export const addOperationLog = async (logDataOrAction, detailsText) => {
+  // 互換性対応: 旧シグネチャ (action, details)
+  const logData = typeof logDataOrAction === 'string'
+    ? { action: logDataOrAction, details: detailsText }
+    : (logDataOrAction || {});
+
+  // details はサーバ側で文字列化されるが、念のためここでも整形
+  const normalizedDetails =
+    typeof logData.details === 'object' && logData.details !== null
+      ? JSON.stringify(logData.details)
+      : (logData.details ?? null);
+
+  // IP は外で宣言して catch でも参照できるようにする
+  let ipAddress = logData.ipAddress;
+
   try {
     // IPアドレスを取得（指定されていない場合）
-    let ipAddress = logData.ipAddress;
     if (!ipAddress || ipAddress === 'N/A') {
       ipAddress = await getCachedIPAddress();
     }
@@ -28,7 +40,7 @@ export const addOperationLog = async (logData) => {
       adminId: logData.adminId || getCurrentUserId(),
       adminName: logData.adminName || getCurrentUserName(),
       action: logData.action,
-      details: logData.details,
+      details: normalizedDetails,
       ipAddress: ipAddress
     };
     
@@ -48,7 +60,7 @@ export const addOperationLog = async (logData) => {
         adminId: logData.adminId || getCurrentUserId(),
         adminName: logData.adminName || getCurrentUserName(),
         action: logData.action,
-        details: logData.details,
+        details: normalizedDetails,
         timestamp: new Date().toISOString(),
         ipAddress: ipAddress
       };
@@ -68,14 +80,15 @@ export const addOperationLog = async (logData) => {
     try {
       const logs = await getOperationLogs();
       const logsArray = Array.isArray(logs) ? logs : [];
+      const fallbackIp = ipAddress || await getCachedIPAddress();
       const newLog = {
         id: Date.now() + Math.random(),
-        adminId: logData.adminId || getCurrentUserId(),
-        adminName: logData.adminName || getCurrentUserName(),
-        action: logData.action,
-        details: logData.details,
+        adminId: (logData && logData.adminId) || getCurrentUserId(),
+        adminName: (logData && logData.adminName) || getCurrentUserName(),
+        action: (logData && logData.action) || 'unknown_action',
+        details: normalizedDetails,
         timestamp: new Date().toISOString(),
-        ipAddress: await getCachedIPAddress()
+        ipAddress: fallbackIp
       };
       
       logsArray.unshift(newLog);

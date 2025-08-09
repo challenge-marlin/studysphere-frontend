@@ -215,7 +215,7 @@ export const AuthProvider = ({ children }) => {
       refreshAttempts.current++;
       console.log(`トークン更新試行 ${refreshAttempts.current}/${MAX_REFRESH_ATTEMPTS}`);
 
-      const response = await fetch('/api/auth/refresh', {
+      const response = await fetch('/api/refresh', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

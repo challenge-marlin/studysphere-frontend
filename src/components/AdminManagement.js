@@ -84,6 +84,88 @@ const AdminManagement = () => {
     }
   };
 
+  // details（文字列）を安全にJSONパース
+  const parseDetails = (details) => {
+    if (!details || typeof details !== 'string') return null;
+    try {
+      return JSON.parse(details);
+    } catch (_) {
+      return null;
+    }
+  };
+
+  // 操作キーを表示用に整形
+  const formatLogAction = (action) => {
+    const map = {
+      create_lesson: 'レッスン作成',
+      update_lesson: 'レッスン更新',
+      delete_lesson: 'レッスン削除',
+      // コース関連
+      create_course: 'コース作成',
+      update_course: 'コース更新',
+      delete_course: 'コース削除',
+      // 管理者関連
+      create_admin: '管理者作成',
+      update_admin: '管理者更新',
+      delete_admin: '管理者削除',
+      restore_admin: '管理者復元',
+      permanently_delete_admin: '管理者物理削除',
+      unknown_action: '不明な操作'
+    };
+    return map[action] || action || '不明な操作';
+  };
+
+  // 詳細を人間可読に整形
+  const formatLogDetail = (log) => {
+    const obj = parseDetails(log.details);
+    // JSONでなければそのまま表示
+    if (!obj) return log.details || '-';
+
+    switch (log.action) {
+      case 'create_lesson': {
+        const hasFile = obj.hasFile ? 'あり' : 'なし';
+        const courseLabel = obj.courseTitle ? `, コース: ${obj.courseTitle}` : (obj.courseId != null ? `, コースID: ${obj.courseId}` : '');
+        return `レッスン「${obj.title || '-'}」を作成（ファイル: ${hasFile}${courseLabel}）`;
+      }
+      case 'update_lesson': {
+        const hasFile = obj.hasFile ? 'あり' : 'なし';
+        const courseLabel = obj.courseTitle ? `, コース: ${obj.courseTitle}` : '';
+        return `レッスン「${obj.title || '-'}」を更新（ファイル: ${hasFile}${courseLabel}）`;
+      }
+      case 'delete_lesson': {
+        const hasS3 = obj.hasS3File ? 'あり' : 'なし';
+        return `レッスン「${obj.title || '-'}」を削除（S3ファイル: ${hasS3}）`;
+      }
+      case 'create_course': {
+        return `コース「${obj.title || '-'}」を作成（カテゴリ: ${obj.category || '-'}）`;
+      }
+      case 'update_course': {
+        return `コース「${obj.title || '-'}」を更新（カテゴリ: ${obj.category || '-'}）`;
+      }
+      case 'delete_course': {
+        return `コース「${obj.title || '-'}」を削除`;
+      }
+      case 'create_admin': {
+        return `管理者「${obj.name || '-'}」を作成`;
+      }
+      case 'update_admin': {
+        return `管理者「${obj.name || '-'}」を更新`;
+      }
+      case 'delete_admin': {
+        return `管理者「${obj.name || '-'}」を削除`;
+      }
+      case 'restore_admin': {
+        return `管理者「${obj.name || '-'}」を復元`;
+      }
+      case 'permanently_delete_admin': {
+        return `管理者「${obj.name || '-'}」を完全削除`;
+      }
+      default:
+        // 未定義アクションはキーとJSONを簡潔整形
+        return log.details;
+    }
+  };
+
   // 管理者名からID部分を削除する関数
   const cleanAdminName = (adminName) => {
     if (!adminName) return adminName;
@@ -883,8 +965,8 @@ const AdminManagement = () => {
                           {cleanAdminName(log.adminName)}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-gray-700">{log.action}</td>
-                      <td className="px-6 py-4 text-gray-600">{log.details}</td>
+                      <td className="px-6 py-4 text-gray-700">{formatLogAction(log.action)}</td>
+                      <td className="px-6 py-4 text-gray-600">{formatLogDetail(log)}</td>
                       <td className="px-6 py-4 text-gray-500 text-sm">
                         🌐 {log.ipAddress}
                       </td>

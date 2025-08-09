@@ -97,7 +97,7 @@ const CourseManagement = () => {
           fetchCourses();
           // 成功メッセージを表示
           alert('コースが正常に作成されました');
-          addOperationLog('コース作成', `コース「${formData.title}」を作成しました`);
+          addOperationLog('create_course', { title: formData.title, category: formData.category });
         } else {
         setError(response.message || 'コースの作成に失敗しました');
       }
@@ -135,7 +135,7 @@ const CourseManagement = () => {
           setSelectedCourse(null);
           setFormData({ title: '', description: '', category: '選択科目', order_index: 0 });
           fetchCourses();
-          addOperationLog('コース更新', `コース「${formData.title}」を更新しました`);
+          addOperationLog('update_course', { title: formData.title, category: formData.category });
         } else {
         setError('コースの更新に失敗しました');
       }
@@ -176,7 +176,7 @@ const CourseManagement = () => {
       const response = await apiDelete(`/api/courses/${courseId}`);
               if (response.success) {
           fetchCourses();
-          addOperationLog('コース削除', `コース「${courseToDelete.title}」を削除しました`);
+          addOperationLog('delete_course', { title: courseToDelete.title });
         } else {
         setError('コースの削除に失敗しました');
       }

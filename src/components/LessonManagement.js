@@ -24,6 +24,7 @@ const LessonManagement = () => {
   const [showFileListModal, setShowFileListModal] = useState(false);
   const [selectedLessonFiles, setSelectedLessonFiles] = useState(null);
   const [fileListLoading, setFileListLoading] = useState(false);
+  const [updateFile, setUpdateFile] = useState(false);
 
   // コース一覧取得
   const fetchCourses = async () => {
@@ -166,7 +167,7 @@ const LessonManagement = () => {
         closeModals(); // closeModals関数を使用
                   setError(null); // エラーをクリア
           await fetchLessons(); // レッスンリストを再取得
-          addOperationLog('レッスン作成', `レッスン「${response.data.title}」を作成しました`);
+          // レッスン操作のログはバックエンド側で記録（重複防止のためフロント側では送信しない）
       } else {
         console.error('LessonManagement: レッスン作成失敗:', response.message);
         setError('レッスンの作成に失敗しました: ' + (response.message || ''));
@@ -192,24 +193,28 @@ const LessonManagement = () => {
       });
 
       const formDataToSend = new FormData();
-      
-      // 変更されたフィールドのみを送信
+
+      // ファイル以外はフォームの値をそのまま送信（常に最新値を送る）
       Object.keys(formData).forEach(key => {
         const value = formData[key];
-        const originalValue = selectedLesson[key];
-        
-        // 値が変更されている場合のみ送信
-        if (value !== originalValue) {
-          // undefined値をnullに変換
-          formDataToSend.append(key, value === undefined ? null : value);
-        }
+        formDataToSend.append(key, value === undefined ? null : value);
       });
-      
-      // ファイルが選択されている場合のみ送信
-      if (file) {
-        formDataToSend.append('file', file);
-        // ファイル名を別途送信（文字化け対策）
-        formDataToSend.append('fileName', file.name);
+
+      // ファイル更新フラグ
+      formDataToSend.append('update_file', updateFile ? 'true' : 'false');
+
+      if (updateFile) {
+        if (file) {
+          // 新しいファイルが選択されている場合
+          formDataToSend.append('file', file);
+          formDataToSend.append('fileName', file.name);
+          formDataToSend.append('remove_file', 'false');
+        } else {
+          // チェックのみ（ファイル未選択）は既存ファイル削除
+          formDataToSend.append('remove_file', 'true');
+        }
+      } else {
+        formDataToSend.append('remove_file', 'false');
       }
 
       // FormDataの内容をログ出力
@@ -231,7 +236,7 @@ const LessonManagement = () => {
         closeModals(); // closeModals関数を使用
                   setError(null); // エラーをクリア
           await fetchLessons(); // レッスンリストを再取得
-          addOperationLog('レッスン更新', `レッスン「${selectedLesson.title}」を更新しました`);
+          // レッスン操作のログはバックエンド側で記録（重複防止のためフロント側では送信しない）
       } else {
         console.error('LessonManagement: レッスン更新失敗:', response.message);
         setError('レッスンの更新に失敗しました: ' + (response.message || ''));
@@ -264,7 +269,7 @@ const LessonManagement = () => {
     if (!lesson) return;
 
     const confirmMessage = lesson.s3_key 
-      ? `このレッスン「${lesson.title}」を削除しますか？\n\n削除される内容：\n• レッスンデータ\n• S3上のファイル・フォルダ\n\nこの操作は取り消せません。`
+      ? `このレッスン「${lesson.title}」を削除しますか？\n\n削除される内容：\n• レッスンデータ\n• ストレージ上のファイル・フォルダ\n\nこの操作は取り消せません。`
       : `このレッスン「${lesson.title}」を削除しますか？\n\nこの操作は取り消せません。`;
 
     if (!window.confirm(confirmMessage)) {
@@ -284,11 +289,11 @@ const LessonManagement = () => {
         
         // 成功メッセージを表示
         const successMessage = lesson.s3_key 
-          ? `レッスン「${lesson.title}」が正常に削除されました。\nS3上のファイル・フォルダも削除されました。`
+          ? `レッスン「${lesson.title}」が正常に削除されました。\nストレージ上のファイル・フォルダも削除されました。`
           : `レッスン「${lesson.title}」が正常に削除されました。`;
         
                   alert(successMessage);
-          addOperationLog('レッスン削除', `レッスン「${lesson.title}」を削除しました`);
+          // レッスン操作のログはバックエンド側で記録（重複防止のためフロント側では送信しない）
       } else {
         console.error('LessonManagement: レッスン削除失敗:', response.message);
         setError('レッスンの削除に失敗しました: ' + (response.message || ''));
@@ -378,6 +383,7 @@ const LessonManagement = () => {
       youtube_url: lesson.youtube_url || ''
     });
     setFile(null);
+    setUpdateFile(false);
     setShowEditModal(true);
   };
 
@@ -398,6 +404,7 @@ const LessonManagement = () => {
       youtube_url: ''
     });
     setFile(null);
+    setUpdateFile(false);
   };
 
   if (loading) {
@@ -789,20 +796,36 @@ const LessonManagement = () => {
                  </p>
                </div>
                <div className="mb-6">
-                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                   ファイル（PDF、MD、DOCX、PPTX）
-                 </label>
-                 <input
-                   type="file"
-                   onChange={handleFileChange}
-                   accept=".pdf,.md,.docx,.pptx"
-                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                 />
-                 {selectedLesson.s3_key && (
-                   <p className="text-sm text-gray-500 mt-1">
-                     現在のファイル: {selectedLesson.s3_key.split('/').pop()}
-                   </p>
-                 )}
+                  <label className="flex items-center mb-2">
+                    <input
+                      type="checkbox"
+                      checked={updateFile}
+                      onChange={(e) => setUpdateFile(e.target.checked)}
+                      className="mr-2"
+                    />
+                    <span className="text-sm font-medium text-gray-700">ファイルを更新する</span>
+                  </label>
+                  {updateFile ? (
+                    <>
+                      <input
+                        type="file"
+                        onChange={handleFileChange}
+                        accept=".pdf,.md,.docx,.pptx"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        ファイル未選択で更新すると、既存ファイルは削除されます。
+                      </p>
+                    </>
+                  ) : (
+                    selectedLesson.s3_key ? (
+                      <p className="text-sm text-gray-500 mt-1">
+                        現在のファイル: {selectedLesson.s3_key.split('/').pop()}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-gray-400 mt-1">現在のファイル: なし</p>
+                    )
+                  )}
                </div>
               <div className="flex gap-3">
                 <button

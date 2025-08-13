@@ -14,7 +14,6 @@ const isAuthRequiredEndpoint = (url) => {
   // 認証が不要なエンドポイントのリスト
   const authExcludedEndpoints = [
     '/login',
-    '/restore-admin',
     '/refresh',
     '/register',
     '/forgot-password'

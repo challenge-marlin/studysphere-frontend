@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete } from '../utils/api';
-import { addOperationLog } from '../utils/operationLogManager';
 
 const CourseManagement = () => {
   const [courses, setCourses] = useState([]);
@@ -16,6 +15,9 @@ const CourseManagement = () => {
     order_index: 0
   });
   const [isAuthError, setIsAuthError] = useState(false);
+  
+  // 重複操作防止用のref
+  const isProcessingRef = useRef(false);
 
   // コース一覧取得
   const fetchCourses = async () => {
@@ -76,6 +78,12 @@ const CourseManagement = () => {
   const handleCreateCourse = async (e) => {
     e.preventDefault();
     
+    // 重複操作防止
+    if (isProcessingRef.current) {
+      console.log('処理中のため、重複操作をスキップします');
+      return;
+    }
+    
     // 認証エラーが発生している場合はスキップ
     if (isAuthError) {
       console.log('認証エラーのため、コース作成をスキップします');
@@ -85,20 +93,21 @@ const CourseManagement = () => {
     // ローディング状態を設定
     setLoading(true);
     setError(null);
+    isProcessingRef.current = true;
 
     try {
       console.log('コース作成リクエスト:', formData);
       const response = await apiPost('/api/courses', formData);
       console.log('コース作成レスポンス:', response);
       
-              if (response.success) {
-          setShowCreateModal(false);
-          setFormData({ title: '', description: '', category: '選択科目', order_index: 0 });
-          fetchCourses();
-          // 成功メッセージを表示
-          alert('コースが正常に作成されました');
-          addOperationLog('create_course', { title: formData.title, category: formData.category });
-        } else {
+      if (response.success) {
+        setShowCreateModal(false);
+        setFormData({ title: '', description: '', category: '選択科目', order_index: 0 });
+        fetchCourses();
+        // 成功メッセージを表示
+        alert('コースが正常に作成されました');
+        // バックエンドで操作ログが記録されるため、フロントエンドでは記録しない
+      } else {
         setError(response.message || 'コースの作成に失敗しました');
       }
     } catch (err) {
@@ -115,6 +124,10 @@ const CourseManagement = () => {
       setError(`コースの作成中にエラーが発生しました: ${err.message}`);
     } finally {
       setLoading(false);
+      // 処理完了後、少し待ってからフラグをリセット（重複操作防止）
+      setTimeout(() => {
+        isProcessingRef.current = false;
+      }, 1000);
     }
   };
 
@@ -122,21 +135,29 @@ const CourseManagement = () => {
   const handleUpdateCourse = async (e) => {
     e.preventDefault();
     
+    // 重複操作防止
+    if (isProcessingRef.current) {
+      console.log('処理中のため、重複操作をスキップします');
+      return;
+    }
+    
     // 認証エラーが発生している場合はスキップ
     if (isAuthError) {
       console.log('認証エラーのため、コース更新をスキップします');
       return;
     }
 
+    isProcessingRef.current = true;
+
     try {
       const response = await apiPut(`/api/courses/${selectedCourse.id}`, formData);
-              if (response.success) {
-          setShowEditModal(false);
-          setSelectedCourse(null);
-          setFormData({ title: '', description: '', category: '選択科目', order_index: 0 });
-          fetchCourses();
-          addOperationLog('update_course', { title: formData.title, category: formData.category });
-        } else {
+      if (response.success) {
+        setShowEditModal(false);
+        setSelectedCourse(null);
+        setFormData({ title: '', description: '', category: '選択科目', order_index: 0 });
+        fetchCourses();
+        // バックエンドで操作ログが記録されるため、フロントエンドでは記録しない
+      } else {
         setError('コースの更新に失敗しました');
       }
     } catch (err) {
@@ -150,12 +171,23 @@ const CourseManagement = () => {
       
       setError('コースの更新中にエラーが発生しました');
       console.error('Error updating course:', err);
+    } finally {
+      // 処理完了後、少し待ってからフラグをリセット（重複操作防止）
+      setTimeout(() => {
+        isProcessingRef.current = false;
+      }, 1000);
     }
   };
 
   // コース削除
   const handleDeleteCourse = async (courseId) => {
     if (!window.confirm('このコースを削除しますか？関連するレッスンも削除されます。')) {
+      return;
+    }
+
+    // 重複操作防止
+    if (isProcessingRef.current) {
+      console.log('処理中のため、重複操作をスキップします');
       return;
     }
 
@@ -172,12 +204,14 @@ const CourseManagement = () => {
       return;
     }
 
+    isProcessingRef.current = true;
+
     try {
       const response = await apiDelete(`/api/courses/${courseId}`);
-              if (response.success) {
-          fetchCourses();
-          addOperationLog('delete_course', { title: courseToDelete.title });
-        } else {
+      if (response.success) {
+        fetchCourses();
+        // バックエンドで操作ログが記録されるため、フロントエンドでは記録しない
+      } else {
         setError('コースの削除に失敗しました');
       }
     } catch (err) {
@@ -191,6 +225,11 @@ const CourseManagement = () => {
       
       setError('コースの削除中にエラーが発生しました');
       console.error('Error deleting course:', err);
+    } finally {
+      // 処理完了後、少し待ってからフラグをリセット（重複操作防止）
+      setTimeout(() => {
+        isProcessingRef.current = false;
+      }, 1000);
     }
   };
 

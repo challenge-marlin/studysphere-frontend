@@ -7,6 +7,56 @@ const LOG_STORAGE_KEY = 'adminOperationLogs';
 const MAX_LOGS = 100; // 最大100件
 const MAX_AGE_DAYS = 30; // 最大30日間
 
+// 重複チェック用のキャッシュ（メモリ内）
+const recentOperations = new Map();
+const DUPLICATE_CHECK_WINDOW = 3000; // 3秒以内の同じ操作は重複とみなす
+
+/**
+ * バックエンドからIPアドレスを取得する
+ * @returns {Promise<string>} IPアドレス
+ */
+const getIPFromBackend = async () => {
+  try {
+    const response = await apiGet('/api/client-ip');
+    if (response.success && response.data && response.data.ip) {
+      return response.data.ip;
+    }
+  } catch (error) {
+    console.warn('バックエンドからのIP取得に失敗:', error);
+  }
+  return null;
+};
+
+/**
+ * 重複操作をチェックする
+ * @param {string} action - 操作名
+ * @param {string} details - 詳細情報
+ * @returns {boolean} 重複している場合はtrue
+ */
+const isDuplicateOperation = (action, details) => {
+  const key = `${action}:${details}`;
+  const now = Date.now();
+  const lastTime = recentOperations.get(key);
+  
+  if (lastTime && (now - lastTime) < DUPLICATE_CHECK_WINDOW) {
+    console.log('重複操作を検出しました:', { action, details, timeDiff: now - lastTime });
+    return true;
+  }
+  
+  // 新しい操作を記録
+  recentOperations.set(key, now);
+  
+  // 古いエントリをクリーンアップ（5分以上古いもの）
+  const cleanupTime = now - 300000; // 5分
+  for (const [k, v] of recentOperations.entries()) {
+    if (v < cleanupTime) {
+      recentOperations.delete(k);
+    }
+  }
+  
+  return false;
+};
+
 /**
  * 操作ログを記録する
  * 使用例:
@@ -27,13 +77,26 @@ export const addOperationLog = async (logDataOrAction, detailsText) => {
       ? JSON.stringify(logData.details)
       : (logData.details ?? null);
 
+  // 重複チェック
+  if (isDuplicateOperation(logData.action, normalizedDetails)) {
+    console.log('重複操作のため、ログ記録をスキップします:', { action: logData.action, details: normalizedDetails });
+    return null;
+  }
+
   // IP は外で宣言して catch でも参照できるようにする
   let ipAddress = logData.ipAddress;
 
   try {
-    // IPアドレスを取得（指定されていない場合）
+    // IPアドレスを取得（優先順位: 指定値 > バックエンド取得 > キャッシュ > 外部API）
     if (!ipAddress || ipAddress === 'N/A') {
-      ipAddress = await getCachedIPAddress();
+      // まずバックエンドから取得を試行
+      const backendIP = await getIPFromBackend();
+      if (backendIP && backendIP !== 'N/A') {
+        ipAddress = backendIP;
+      } else {
+        // バックエンド取得に失敗した場合はキャッシュを使用
+        ipAddress = await getCachedIPAddress();
+      }
     }
     
     const logPayload = {

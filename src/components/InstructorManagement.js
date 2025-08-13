@@ -3,7 +3,6 @@ import SanitizedInput from './SanitizedInput';
 import SanitizedTextarea from './SanitizedTextarea';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 import { apiGet, apiPost, apiPut, apiDelete, apiCall } from '../utils/api';
-import { addOperationLog } from '../utils/operationLogManager';
 
 const InstructorManagement = () => {
   const [instructors, setInstructors] = useState([]);
@@ -389,11 +388,7 @@ const InstructorManagement = () => {
       // 拠点一覧を再取得して管理者情報を更新
       await fetchFacilityLocations();
       
-      // 操作ログを記録
-      await addOperationLog({
-        action: '指導員作成',
-        details: `指導員「${newInstructor.name}」を作成しました`
-      });
+      // バックエンドで操作ログが記録されるため、フロントエンドでは記録しない
       
       setNewInstructor({
         name: '',
@@ -451,12 +446,7 @@ const InstructorManagement = () => {
       // 指導者一覧を再取得
       await fetchInstructors();
       
-      // 操作ログを記録
-      const statusText = newStatus === 1 ? '有効化' : '無効化';
-      await addOperationLog({
-        action: '指導員ステータス変更',
-        details: `指導員「${instructor.name}」を${statusText}しました`
-      });
+      // バックエンドで操作ログが記録されるため、フロントエンドでは記録しない
     } catch (error) {
       console.error('指導員ステータス更新エラー:', error);
       alert(`指導員ステータスの更新に失敗しました: ${error.message}`);
@@ -564,11 +554,7 @@ const InstructorManagement = () => {
       await fetchInstructors();
       await fetchFacilityLocations();
       
-      // 操作ログを記録
-      await addOperationLog({
-        action: '指導員更新',
-        details: `指導員「${selectedInstructor.name}」の情報を更新しました`
-      });
+      // バックエンドで操作ログが記録されるため、フロントエンドでは記録しない
       
       setShowEditForm(false);
       setSelectedInstructor(null);
@@ -665,11 +651,7 @@ const InstructorManagement = () => {
           }
         }
         
-        // 操作ログを記録
-        await addOperationLog({
-          action: '指導員削除',
-          details: `指導員「${instructor.name}」を削除しました`
-        });
+        // バックエンドで操作ログが記録されるため、フロントエンドでは記録しない
         
         // 指導者一覧を再取得
         await fetchInstructors();

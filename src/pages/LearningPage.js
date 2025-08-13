@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 // import { Document, Page, pdfjs } from 'react-pdf';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import LessonVideoPlayer from '../components/LessonVideoPlayer';
+import MultiVideoPlayer from '../components/MultiVideoPlayer';
 import LessonPdfViewer from '../components/LessonPdfViewer';
 import SanitizedInput from '../components/SanitizedInput';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
+import { apiGet } from '../utils/api';
 
 // eslint-disable-next-line no-unused-vars
 
@@ -20,6 +21,8 @@ const LearningPage = () => {
   const [videoError, setVideoError] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [lessonVideos, setLessonVideos] = useState([]);
+  const [videosLoading, setVideosLoading] = useState(false);
 
   // YouTube動画IDを抽出する関数
   const getYouTubeVideoId = (url) => {
@@ -31,6 +34,30 @@ const LearningPage = () => {
     return null;
   };
 
+  // レッスン動画取得
+  const fetchLessonVideos = async (lessonNumber) => {
+    try {
+      setVideosLoading(true);
+      // レッスン番号からレッスンIDを取得（仮実装）
+      const lessonId = lessonNumber; // 実際のAPIではレッスン番号からIDを取得する必要がある
+      const response = await apiGet(`/api/lesson-videos/lesson/${lessonId}`);
+      
+      if (response.success) {
+        setLessonVideos(response.data);
+      } else {
+        console.warn('動画データの取得に失敗しました:', response.message);
+        // フォールバック: ハードコードされたデータを使用
+        setLessonVideos(lessonData[lessonNumber]?.videos || []);
+      }
+    } catch (error) {
+      console.warn('動画データの取得中にエラーが発生しました:', error);
+      // フォールバック: ハードコードされたデータを使用
+      setLessonVideos(lessonData[lessonNumber]?.videos || []);
+    } finally {
+      setVideosLoading(false);
+    }
+  };
+
   // URLパラメータからレッスン番号を取得
   useEffect(() => {
     const lessonParam = searchParams.get('lesson');
@@ -40,45 +67,50 @@ const LearningPage = () => {
         setCurrentLesson(lessonNumber);
         setVideoLoading(true);
         setVideoError(false);
+        fetchLessonVideos(lessonNumber);
       }
     }
   }, [searchParams]);
 
-  // レッスンデータ（動画URLとPDFファイルの対応）
+  // レッスンデータ（PDFファイルのみ）
   const lessonData = {
     1: {
       title: "第1回　Windows11の基本操作とソフトウェアの活用",
-      videoUrl: "https://www.youtube.com/watch?v=j4yNkF1w6L8",
       pdfFile: "/reactStudySphereMockup/doc/pdf-samples/lesson1.pdf"
     },
     2: {
       title: "第2回　インターネットの基礎と安全な利用",
-      videoUrl: "https://www.youtube.com/watch?v=AtDQST1SQ5A",
       pdfFile: "/reactStudySphereMockup/doc/pdf-samples/lesson2.pdf"
     },
     3: {
       title: "第3回　AIの仕組みや基本用語を学ぶ",
-      videoUrl: "https://www.youtube.com/watch?v=QkJCPOWwdwI",
       pdfFile: "/reactStudySphereMockup/doc/pdf-samples/lesson3.pdf"
     },
     4: {
       title: "第4回　AIの活用例と実践体験",
-      videoUrl: "https://www.youtube.com/watch?v=75UHkx4WZh0",
       pdfFile: "/reactStudySphereMockup/doc/pdf-samples/lesson4.pdf"
     },
     5: {
       title: "第5回　簡単なプログラミングとAIアシスタント活用",
-      videoUrl: "https://www.youtube.com/watch?v=vQqMk3gFZJ0",
       pdfFile: "/reactStudySphereMockup/doc/pdf-samples/lesson5.pdf"
     },
     6: {
       title: "第6回　AIの活用例と実践体験",
-      videoUrl: "",
       pdfFile: "/reactStudySphereMockup/doc/pdf-samples/lesson6.pdf"
     }
   };
 
   const currentLessonData = lessonData[currentLesson];
+
+  // デバッグ用: 現在のレッスンデータをログ出力
+  useEffect(() => {
+    console.log('LearningPage - Current lesson data:', {
+      lessonNumber: currentLesson,
+      lessonTitle: currentLessonData.title,
+      videos: lessonVideos,
+      videosCount: lessonVideos.length
+    });
+  }, [currentLesson, currentLessonData, lessonVideos]);
 
   // PDF読み込み完了時の処理（一時的に無効化）
   // const onDocumentLoadSuccess = ({ numPages }) => {
@@ -197,25 +229,35 @@ const LearningPage = () => {
           {/* 左カラム: 動画 + PDF */}
           <div className="lg:col-span-2 space-y-6">
             {/* 上: 動画 */}
-            <div className="bg-white rounded-2xl shadow-xl p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <span className="text-2xl">🎥</span>
-                <h3 className="text-xl font-bold text-gray-800">動画学習</h3>
-              </div>
-              {currentLessonData.videoUrl ? (
-                <>
-                  <div className="mb-4 p-4 bg-blue-50 rounded-lg">
-                    <p className="font-semibold text-blue-800 mb-1">{currentLessonData.title}</p>
-                    <p className="text-sm text-blue-600">URL: {currentLessonData.videoUrl}</p>
-                  </div>
-                  <LessonVideoPlayer videoUrl={currentLessonData.videoUrl} title={currentLessonData.title} />
-                </>
-              ) : (
-                <div className="text-center py-8 text-gray-600">
-                  <p>このレッスンには動画がありません。</p>
+            {videosLoading ? (
+              <div className="bg-white rounded-2xl shadow-xl p-6">
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-blue-600 text-lg">動画データを読み込み中...</div>
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <MultiVideoPlayer 
+                videos={lessonVideos}
+                lessonTitle={currentLessonData.title}
+                isAdmin={false}
+                onVideoSelect={(video, index) => {
+                  console.log('LearningPage - Video selected:', video, 'at index:', index);
+                }}
+              />
+            )}
+            
+            {/* デバッグ情報表示 */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                <h4 className="text-sm font-semibold text-yellow-800 mb-2">デバッグ情報</h4>
+                <div className="text-xs text-yellow-700 space-y-1">
+                  <p>レッスン番号: {currentLesson}</p>
+                  <p>レッスンタイトル: {currentLessonData.title}</p>
+                  <p>動画数: {lessonVideos.length}</p>
+                  <p>動画データ: {JSON.stringify(lessonVideos, null, 2)}</p>
+                </div>
+              </div>
+            )}
 
             {/* 下: PDF */}
             <div className="bg-white rounded-2xl shadow-xl p-6">

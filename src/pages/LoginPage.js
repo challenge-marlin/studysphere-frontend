@@ -145,12 +145,9 @@ const LoginPage = () => {
       } catch (adminError) {
         console.log('管理者ログイン失敗:', adminError);
         
-        // 管理者ログインが失敗した場合、そのエラーメッセージを表示
-        if (adminError.message) {
-          setError(adminError.message);
-          setIsLoading(false);
-          return;
-        }
+        // 管理者ログインが失敗した場合、指導員ログインを試行するため、エラーをクリア
+        console.log('管理者ログイン失敗、指導員ログインを試行:', adminError.message);
+        // エラーをクリアして指導員ログインを試行
       }
 
       // 指導員ログインの試行（モックデータ）
@@ -256,39 +253,7 @@ const LoginPage = () => {
             </div>
           </div>
           
-          {/* 管理者アカウント復元ボタン */}
-          <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-            <h4 className="text-orange-800 font-medium mb-2">管理者アカウント復元</h4>
-            <p className="text-sm text-orange-700 mb-3">
-              データベースが初期化されて管理者アカウントが消えた場合、このボタンで復元できます。
-            </p>
-            <button 
-              onClick={async () => {
-                try {
-                  console.log('管理者アカウント復元開始');
-                  const response = await fetch('http://localhost:5000/restore-admin', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json'
-                    }
-                  });
-                  const data = await response.json();
-                  console.log('管理者アカウント復元結果:', data);
-                  if (data.success) {
-                    alert('管理者アカウントが復元されました。\n\nユーザー名: admin001\nパスワード: admin123\n\n上記の情報でログインしてください。');
-                  } else {
-                    alert('管理者アカウント復元に失敗しました: ' + data.message);
-                  }
-                } catch (error) {
-                  console.error('管理者アカウント復元エラー:', error);
-                  alert('管理者アカウント復元でエラーが発生しました。\nバックエンドサーバーが起動しているか確認してください。');
-                }
-              }}
-              className="w-full bg-orange-500 text-white py-2 px-4 rounded-lg font-medium text-sm transition-colors hover:bg-orange-600"
-            >
-              🔑 管理者アカウントを復元
-            </button>
-          </div>
+
         </div>
 
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">

@@ -1,112 +1,72 @@
-import React, { useState } from 'react';
-import { addOperationLog } from '../utils/operationLogManager';
+import React, { useState, useEffect, useRef } from 'react';
+import { apiGet, apiPost, apiPut, apiDelete } from '../utils/api';
 
 const CurriculumPathManagement = () => {
-  // カリキュラムパスのサンプルデータ
-  const [curriculumPaths, setCurriculumPaths] = useState([
-    {
-      id: 'path001',
-      name: 'デジタルマーケティングコース',
-      description: 'SNS運用からLP制作まで、デジタルマーケティングの実践スキルを習得',
-      targetAudience: 'マーケティング職志望者',
-      duration: '12ヶ月',
-      totalCourses: 4,
-      courses: [
-        {
-          courseId: 'course002', // ITリテラシー・AIの基本
-          order: 1,
-          isRequired: true,
-          estimatedDuration: '3ヶ月'
-        },
-        {
-          courseId: 'course003', // SNS運用の基礎・画像生成編集
-          order: 2,
-          isRequired: true,
-          estimatedDuration: '6ヶ月'
-        },
-        {
-          courseId: 'course004', // LP制作(HTML・CSS)
-          order: 3,
-          isRequired: true,
-          estimatedDuration: '3ヶ月'
-        },
-        {
-          courseId: 'course005', // SNS管理代行・LP制作案件対応
-          order: 4,
-          isRequired: true,
-          estimatedDuration: '3ヶ月'
-        }
-      ],
-      status: 'active',
-      createdAt: '2024-01-01',
-      updatedAt: '2024-01-15'
-    },
-    {
-      id: 'path002',
-      name: 'オフィススキルアップコース',
-      description: '基本的なオフィスソフトの操作から実務活用まで',
-      targetAudience: '事務職志望者・社会人',
-      duration: '3ヶ月',
-      totalCourses: 1,
-      courses: [
-        {
-          courseId: 'course001', // オフィスソフトの操作・文書作成
-          order: 1,
-          isRequired: true,
-          estimatedDuration: '3ヶ月'
-        }
-      ],
-      status: 'active',
-      createdAt: '2024-01-01',
-      updatedAt: '2024-01-10'
-    },
-    {
-      id: 'path003',
-      name: 'Web制作フルコース',
-      description: 'Web制作の基礎から実践まで、包括的なスキルを習得',
-      targetAudience: 'Web制作職志望者',
-      duration: '9ヶ月',
-      totalCourses: 3,
-      courses: [
-        {
-          courseId: 'course002', // ITリテラシー・AIの基本
-          order: 1,
-          isRequired: true,
-          estimatedDuration: '3ヶ月'
-        },
-        {
-          courseId: 'course004', // LP制作(HTML・CSS)
-          order: 2,
-          isRequired: true,
-          estimatedDuration: '3ヶ月'
-        },
-        {
-          courseId: 'course005', // SNS管理代行・LP制作案件対応
-          order: 3,
-          isRequired: true,
-          estimatedDuration: '3ヶ月'
-        }
-      ],
-      status: 'draft',
-      createdAt: '2024-01-05',
-      updatedAt: '2024-01-12'
-    }
-  ]);
-
-  // 利用可能なコースデータ（実際はpropsで渡される）
-  const availableCourses = [
-    { id: 'course001', title: 'オフィスソフトの操作・文書作成', category: '選択科目' },
-    { id: 'course002', title: 'ITリテラシー・AIの基本', category: '必修科目' },
-    { id: 'course003', title: 'SNS運用の基礎・画像生成編集', category: '必修科目' },
-    { id: 'course004', title: 'LP制作(HTML・CSS)', category: '必修科目' },
-    { id: 'course005', title: 'SNS管理代行・LP制作案件対応', category: '必修科目' }
-  ];
-
+  const [curriculumPaths, setCurriculumPaths] = useState([]);
+  const [availableCourses, setAvailableCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedPath, setSelectedPath] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [isAuthError, setIsAuthError] = useState(false);
+  
+  // 重複操作防止用のref
+  const isProcessingRef = useRef(false);
+
+  // カリキュラムパス一覧取得
+  const fetchCurriculumPaths = async () => {
+    // 認証エラーが発生している場合はスキップ
+    if (isAuthError) {
+      console.log('認証エラーのため、カリキュラムパス取得をスキップします');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await apiGet('/api/curriculum-paths');
+      console.log('カリキュラムパス取得レスポンス:', response);
+      if (response.success) {
+        setCurriculumPaths(response.data);
+      } else {
+        setError('カリキュラムパスの取得に失敗しました');
+      }
+    } catch (err) {
+      // 認証エラーの場合
+      if (err.message === 'Authentication failed' || err.message === 'Authentication error handling in progress') {
+        console.log('認証エラーが発生しました。処理を停止します。');
+        setIsAuthError(true);
+        setError('認証エラーが発生しました。ログインページにリダイレクトされます。');
+        return;
+      }
+      
+      setError('カリキュラムパスの取得中にエラーが発生しました');
+      console.error('Error fetching curriculum paths:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 利用可能なコース一覧取得
+  const fetchAvailableCourses = async () => {
+    try {
+      const response = await apiGet('/api/curriculum-paths/available-courses');
+      if (response.success) {
+        setAvailableCourses(response.data);
+      }
+    } catch (err) {
+      console.error('Error fetching available courses:', err);
+    }
+  };
+
+  // 初期データ取得
+  useEffect(() => {
+    fetchCurriculumPaths();
+    fetchAvailableCourses();
+  }, []);
 
   // コース名を取得
   const getCourseName = (courseId) => {
@@ -122,7 +82,7 @@ const CurriculumPathManagement = () => {
       filtered = filtered.filter(path =>
         path.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         path.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        path.targetAudience.toLowerCase().includes(searchTerm.toLowerCase())
+        path.target_audience.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -163,23 +123,155 @@ const CurriculumPathManagement = () => {
 
   // パス編集処理
   const handleEditPath = (path) => {
+    console.log('編集対象のパスデータ:', path);
+    console.log('パスのコースデータ:', path.courses);
     setSelectedPath(path);
     setShowEditModal(true);
   };
 
   // パス新規作成処理
-  const handleAddPath = (newPath) => {
-    setCurriculumPaths([...curriculumPaths, newPath]);
-    addOperationLog('カリキュラムパス作成', `カリキュラムパス「${newPath.name}」を作成しました`);
+  const handleAddPath = async (newPath) => {
+    // 重複操作防止
+    if (isProcessingRef.current) {
+      console.log('処理中のため、重複操作をスキップします');
+      return;
+    }
+
+    // 認証エラーが発生している場合はスキップ
+    if (isAuthError) {
+      console.log('認証エラーのため、カリキュラムパス作成をスキップします');
+      return;
+    }
+
+    // デバッグ情報を出力
+    console.log('送信するカリキュラムパスデータ:', newPath);
+    console.log('コース数:', newPath.courses?.length || 0);
+
+    isProcessingRef.current = true;
+
+    try {
+      const response = await apiPost('/api/curriculum-paths', newPath);
+      if (response.success) {
+        fetchCurriculumPaths();
+        // バックエンドで操作ログが記録されるため、フロントエンドでは記録しない
+      } else {
+        setError('カリキュラムパスの作成に失敗しました');
+      }
+    } catch (err) {
+      // 認証エラーの場合
+      if (err.message === 'Authentication failed' || err.message === 'Authentication error handling in progress') {
+        console.log('認証エラーが発生しました。処理を停止します。');
+        setIsAuthError(true);
+        setError('認証エラーが発生しました。ログインページにリダイレクトされます。');
+        return;
+      }
+      
+      setError('カリキュラムパスの作成中にエラーが発生しました');
+      console.error('Error creating curriculum path:', err);
+    } finally {
+      // 処理完了後、少し待ってからフラグをリセット（重複操作防止）
+      setTimeout(() => {
+        isProcessingRef.current = false;
+      }, 1000);
+    }
+  };
+
+  // パス更新処理
+  const handleUpdatePath = async (updatedPath) => {
+    // 重複操作防止
+    if (isProcessingRef.current) {
+      console.log('処理中のため、重複操作をスキップします');
+      return;
+    }
+
+    // 認証エラーが発生している場合はスキップ
+    if (isAuthError) {
+      console.log('認証エラーのため、カリキュラムパス更新をスキップします');
+      return;
+    }
+
+    isProcessingRef.current = true;
+
+    try {
+      const response = await apiPut(`/api/curriculum-paths/${updatedPath.id}`, updatedPath);
+      if (response.success) {
+        fetchCurriculumPaths();
+        setShowEditModal(false);
+        setSelectedPath(null);
+        // バックエンドで操作ログが記録されるため、フロントエンドでは記録しない
+      } else {
+        setError('カリキュラムパスの更新に失敗しました');
+      }
+    } catch (err) {
+      // 認証エラーの場合
+      if (err.message === 'Authentication failed' || err.message === 'Authentication error handling in progress') {
+        console.log('認証エラーが発生しました。処理を停止します。');
+        setIsAuthError(true);
+        setError('認証エラーが発生しました。ログインページにリダイレクトされます。');
+        return;
+      }
+      
+      setError('カリキュラムパスの更新中にエラーが発生しました');
+      console.error('Error updating curriculum path:', err);
+    } finally {
+      // 処理完了後、少し待ってからフラグをリセット（重複操作防止）
+      setTimeout(() => {
+        isProcessingRef.current = false;
+      }, 1000);
+    }
   };
 
   // パス削除処理
-  const handleDeletePath = (pathId) => {
-    if (window.confirm('このカリキュラムパスを削除してもよろしいですか？\n※削除すると元に戻せません。')) {
-      const pathToDelete = curriculumPaths.find(path => path.id === pathId);
-      setCurriculumPaths(curriculumPaths.filter(path => path.id !== pathId));
-      alert('カリキュラムパスが削除されました。');
-      addOperationLog('カリキュラムパス削除', `カリキュラムパス「${pathToDelete.name}」を削除しました`);
+  const handleDeletePath = async (pathId) => {
+    if (!window.confirm('このカリキュラムパスを削除してもよろしいですか？\n※削除すると元に戻せません。')) {
+      return;
+    }
+
+    // 重複操作防止
+    if (isProcessingRef.current) {
+      console.log('処理中のため、重複操作をスキップします');
+      return;
+    }
+
+    // 認証エラーが発生している場合はスキップ
+    if (isAuthError) {
+      console.log('認証エラーのため、カリキュラムパス削除をスキップします');
+      return;
+    }
+
+    // 削除対象のパス情報を取得
+    const pathToDelete = curriculumPaths.find(path => path.id === pathId);
+    if (!pathToDelete) {
+      setError('削除対象のカリキュラムパスが見つかりません');
+      return;
+    }
+
+    isProcessingRef.current = true;
+
+    try {
+      const response = await apiDelete(`/api/curriculum-paths/${pathId}`);
+      if (response.success) {
+        fetchCurriculumPaths();
+        // バックエンドで操作ログが記録されるため、フロントエンドでは記録しない
+      } else {
+        setError('カリキュラムパスの削除に失敗しました');
+      }
+    } catch (err) {
+      // 認証エラーの場合
+      if (err.message === 'Authentication failed' || err.message === 'Authentication error handling in progress') {
+        console.log('認証エラーが発生しました。処理を停止します。');
+        setIsAuthError(true);
+        setError('認証エラーが発生しました。ログインページにリダイレクトされます。');
+        return;
+      }
+      
+      setError('カリキュラムパスの削除中にエラーが発生しました');
+      console.error('Error deleting curriculum path:', err);
+    } finally {
+      // 処理完了後、少し待ってからフラグをリセット（重複操作防止）
+      setTimeout(() => {
+        isProcessingRef.current = false;
+      }, 1000);
     }
   };
 
@@ -192,6 +284,42 @@ const CurriculumPathManagement = () => {
       default: return status;
     }
   };
+
+  // ローディング表示
+  if (loading) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto">
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">カリキュラムパスを読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // エラー表示
+  if (error) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto">
+        <div className="text-center py-12">
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <p className="font-bold">エラーが発生しました</p>
+            <p>{error}</p>
+          </div>
+          <button 
+            onClick={() => {
+              setError(null);
+              setIsAuthError(false);
+              fetchCurriculumPaths();
+            }}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-300 hover:bg-indigo-700"
+          >
+            再試行
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -261,10 +389,10 @@ const CurriculumPathManagement = () => {
               </th>
               <th 
                 className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200"
-                onClick={() => handleSort('targetAudience')}
+                onClick={() => handleSort('target_audience')}
               >
                 👥 対象者
-                {sortConfig.key === 'targetAudience' && (
+                {sortConfig.key === 'target_audience' && (
                   <span className="ml-1">
                     {sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}
                   </span>
@@ -283,10 +411,10 @@ const CurriculumPathManagement = () => {
               </th>
               <th 
                 className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200"
-                onClick={() => handleSort('totalCourses')}
+                onClick={() => handleSort('total_courses')}
               >
                 📚 コース数
-                {sortConfig.key === 'totalCourses' && (
+                {sortConfig.key === 'total_courses' && (
                   <span className="ml-1">
                     {sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}
                   </span>
@@ -318,13 +446,13 @@ const CurriculumPathManagement = () => {
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">{path.targetAudience}</span>
+                  <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">{path.target_audience}</span>
                 </td>
                 <td className="px-6 py-4">
                   <span className="text-gray-700 font-medium">{path.duration}</span>
                 </td>
                 <td className="px-6 py-4">
-                  <span className="font-medium text-gray-800">{path.totalCourses}コース</span>
+                  <span className="font-medium text-gray-800">{path.total_courses}コース</span>
                 </td>
                 <td className="px-6 py-4">
                   <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
@@ -339,21 +467,25 @@ const CurriculumPathManagement = () => {
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    {path.courses.map((course, index) => (
-                      <div key={course.courseId} className="flex items-center gap-1">
-                        <span className="w-6 h-6 bg-indigo-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
-                          {course.order}
-                        </span>
-                        <span className="text-gray-700 text-sm">{getCourseName(course.courseId)}</span>
-                        {index < path.courses.length - 1 && (
-                          <span className="text-gray-400 text-sm">→</span>
-                        )}
-                      </div>
-                    ))}
+                    {path.courses && path.courses.length > 0 ? (
+                      path.courses.map((course, index) => (
+                        <div key={course.id} className="flex items-center gap-1">
+                          <span className="w-6 h-6 bg-indigo-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                            {course.order_index}
+                          </span>
+                          <span className="text-gray-700 text-sm">{course.course_title}</span>
+                          {index < path.courses.length - 1 && (
+                            <span className="text-gray-400 text-sm">→</span>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <span className="text-gray-500 text-sm">コース未設定</span>
+                    )}
                   </div>
                 </td>
                 <td className="px-6 py-4 text-gray-600 text-sm">
-                  📅 {path.updatedAt}
+                  📅 {new Date(path.updated_at).toLocaleDateString('ja-JP')}
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex gap-2">
@@ -409,16 +541,16 @@ const CurriculumPathManagement = () => {
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 text-center transition-transform duration-300 hover:-translate-y-1 hover:shadow-lg">
           <h3 className="text-gray-700 font-semibold mb-4">平均コース数</h3>
           <p className="text-3xl font-bold text-blue-600 mb-2">
-            {Math.round(curriculumPaths.reduce((sum, p) => sum + p.totalCourses, 0) / curriculumPaths.length)}
+            {curriculumPaths.length > 0 ? Math.round(curriculumPaths.reduce((sum, p) => sum + (p.total_courses || 0), 0) / curriculumPaths.length) : 0}
           </p>
           <small className="text-gray-500">パスあたり</small>
         </div>
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 text-center transition-transform duration-300 hover:-translate-y-1 hover:shadow-lg">
-          <h3 className="text-gray-700 font-semibold mb-4">最長期間</h3>
+          <h3 className="text-gray-700 font-semibold mb-4">下書きパス</h3>
           <p className="text-3xl font-bold text-purple-600 mb-2">
-            {Math.max(...curriculumPaths.map(p => parseInt(p.duration)))}
+            {curriculumPaths.filter(p => p.status === 'draft').length}
           </p>
-          <small className="text-gray-500">ヶ月</small>
+          <small className="text-gray-500">編集中</small>
         </div>
       </div>
 
@@ -436,13 +568,7 @@ const CurriculumPathManagement = () => {
         <PathEditModal
           path={selectedPath}
           availableCourses={availableCourses}
-          onUpdate={(updatedPath) => {
-            setCurriculumPaths(curriculumPaths.map(path => 
-              path.id === updatedPath.id ? updatedPath : path
-            ));
-            setShowEditModal(false);
-            setSelectedPath(null);
-          }}
+          onUpdate={handleUpdatePath}
           onClose={() => {
             setShowEditModal(false);
             setSelectedPath(null);
@@ -455,13 +581,25 @@ const CurriculumPathManagement = () => {
 
 // パス新規作成モーダルコンポーネント
 const PathAddModal = ({ availableCourses, onAdd, onClose }) => {
+  // コースデータを正しい形式に変換（新規作成時は空配列）
+  const convertCoursesData = (courses) => {
+    if (!courses || !Array.isArray(courses)) return [];
+    
+    return courses.map(course => ({
+      courseId: course.course_id || course.courseId,
+      order: course.order_index || course.order || 1,
+      isRequired: course.is_required !== false,
+      estimatedDuration: course.estimated_duration || course.estimatedDuration || '3ヶ月'
+    }));
+  };
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    targetAudience: '',
+    target_audience: '',
     duration: '',
     status: 'draft',
-    courses: []
+    courses: convertCoursesData([])
   });
 
   const handleInputChange = (e) => {
@@ -554,12 +692,13 @@ const PathAddModal = ({ availableCourses, onAdd, onClose }) => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">対象者 *</label>
-              <input
-                type="text"
-                name="targetAudience"
-                value={formData.targetAudience}
+              <textarea
+                name="target_audience"
+                value={formData.target_audience}
                 onChange={handleInputChange}
                 required
+                rows={3}
+                placeholder="例：Web制作職志望者&#10;デジタルマーケティングに興味がある方&#10;個人事業主・フリーランス志望者"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
               />
             </div>
@@ -623,7 +762,7 @@ const PathAddModal = ({ availableCourses, onAdd, onClose }) => {
               <div key={index} className="flex items-center gap-4 mb-4 p-4 bg-white rounded-lg border">
                 <div className="flex-1">
                   <select
-                    value={course.courseId}
+                    value={course.courseId || ''}
                     onChange={(e) => {
                       const updatedCourses = [...formData.courses];
                       updatedCourses[index].courseId = e.target.value;
@@ -641,7 +780,7 @@ const PathAddModal = ({ availableCourses, onAdd, onClose }) => {
                 <div className="w-20">
                   <input
                     type="number"
-                    value={course.order}
+                    value={course.order || 1}
                     onChange={(e) => handleCourseOrderChange(index, e.target.value)}
                     min="1"
                     className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400"
@@ -650,7 +789,7 @@ const PathAddModal = ({ availableCourses, onAdd, onClose }) => {
                 <div className="w-32">
                   <input
                     type="text"
-                    value={course.estimatedDuration}
+                    value={course.estimatedDuration || '3ヶ月'}
                     onChange={(e) => {
                       const updatedCourses = [...formData.courses];
                       updatedCourses[index].estimatedDuration = e.target.value;
@@ -694,13 +833,28 @@ const PathAddModal = ({ availableCourses, onAdd, onClose }) => {
 
 // パス編集モーダルコンポーネント
 const PathEditModal = ({ path, availableCourses, onUpdate, onClose }) => {
+  // コースデータを正しい形式に変換
+  const convertCoursesData = (courses) => {
+    if (!courses || !Array.isArray(courses)) return [];
+    
+    return courses.map(course => ({
+      courseId: course.course_id || course.courseId, // course_id または courseId のどちらかを使用
+      order: course.order_index || course.order || 1,
+      isRequired: course.is_required !== false,
+      estimatedDuration: course.estimated_duration || course.estimatedDuration || '3ヶ月'
+    }));
+  };
+
+  const convertedCourses = convertCoursesData(path.courses);
+  console.log('変換後のコースデータ:', convertedCourses);
+  
   const [formData, setFormData] = useState({
     name: path.name,
     description: path.description,
-    targetAudience: path.targetAudience,
+    target_audience: path.target_audience,
     duration: path.duration,
     status: path.status,
-    courses: [...path.courses]
+    courses: convertedCourses
   });
 
   const handleInputChange = (e) => {
@@ -760,7 +914,7 @@ const PathEditModal = ({ path, availableCourses, onUpdate, onClose }) => {
     };
     
     onUpdate(updatedPath);
-    addOperationLog('カリキュラムパス更新', `カリキュラムパス「${formData.name}」を更新しました`);
+    // バックエンドで操作ログが記録されるため、フロントエンドでは記録しない
   };
 
   return (
@@ -792,12 +946,13 @@ const PathEditModal = ({ path, availableCourses, onUpdate, onClose }) => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">対象者</label>
-              <input
-                type="text"
-                name="targetAudience"
-                value={formData.targetAudience}
+              <textarea
+                name="target_audience"
+                value={formData.target_audience}
                 onChange={handleInputChange}
                 required
+                rows={3}
+                placeholder="例：Web制作職志望者&#10;デジタルマーケティングに興味がある方&#10;個人事業主・フリーランス志望者"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
               />
             </div>
@@ -860,12 +1015,12 @@ const PathEditModal = ({ path, availableCourses, onUpdate, onClose }) => {
             <div className="space-y-4">
               {formData.courses.map((course, index) => (
                 <div key={index} className="bg-white rounded-lg p-4 border border-gray-200">
-                  <div className="grid md:grid-cols-4 gap-4 items-center">
+                  <div className="grid md:grid-cols-5 gap-4 items-center">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">順序</label>
                       <input
                         type="number"
-                        value={course.order}
+                        value={course.order || 1}
                         onChange={(e) => handleCourseOrderChange(index, e.target.value)}
                         min="1"
                         className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
@@ -875,7 +1030,7 @@ const PathEditModal = ({ path, availableCourses, onUpdate, onClose }) => {
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-2">コース</label>
                       <select
-                        value={course.courseId}
+                        value={course.courseId || ''}
                         onChange={(e) => {
                           const updatedCourses = [...formData.courses];
                           updatedCourses[index].courseId = e.target.value;
@@ -891,6 +1046,21 @@ const PathEditModal = ({ path, availableCourses, onUpdate, onClose }) => {
                           </option>
                         ))}
                       </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">期間</label>
+                      <input
+                        type="text"
+                        value={course.estimatedDuration || '3ヶ月'}
+                        onChange={(e) => {
+                          const updatedCourses = [...formData.courses];
+                          updatedCourses[index].estimatedDuration = e.target.value;
+                          setFormData(prev => ({ ...prev, courses: updatedCourses }));
+                        }}
+                        placeholder="例: 3ヶ月"
+                        className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
+                      />
                     </div>
                     
                     <div className="flex items-end">

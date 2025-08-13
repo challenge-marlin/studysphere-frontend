@@ -1355,49 +1355,7 @@ const LocationManagement = () => {
         >
           🏢 企業一覧
         </button>
-        <button 
-          className="bg-green-600 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-300 hover:bg-green-700"
-          onClick={async () => {
-            try {
-              console.log('データベーステスト開始');
-              const response = await fetch('http://localhost:5000/test-db');
-              const data = await response.json();
-              console.log('データベーステスト結果:', data);
-              alert('データベーステスト完了。コンソールを確認してください。');
-            } catch (error) {
-              console.error('データベーステストエラー:', error);
-              alert('データベーステストでエラーが発生しました。');
-            }
-          }}
-        >
-          🔧 DBテスト
-        </button>
-        <button 
-          className="bg-orange-600 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-300 hover:bg-orange-700"
-          onClick={async () => {
-            try {
-              console.log('管理者アカウント復元開始');
-              const response = await fetch('http://localhost:5000/restore-admin', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json'
-                }
-              });
-              const data = await response.json();
-              console.log('管理者アカウント復元結果:', data);
-              if (data.success) {
-                alert('管理者アカウントが復元されました。\nユーザー名: admin001\nパスワード: admin123');
-              } else {
-                alert('管理者アカウント復元に失敗しました: ' + data.message);
-              }
-            } catch (error) {
-              console.error('管理者アカウント復元エラー:', error);
-              alert('管理者アカウント復元でエラーが発生しました。');
-            }
-          }}
-        >
-          🔑 管理者復元
-        </button>
+
 
       </div>
 

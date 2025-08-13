@@ -379,6 +379,12 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('currentUser');
     clearStoredTokens();
     
+    // 追加のクリア処理（確実性のため）
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    console.log('LocalStorageとSessionStorageを完全にクリアしました');
+    
     // 状態をリセット
     setIsAuthenticated(false);
     setCurrentUser(null);

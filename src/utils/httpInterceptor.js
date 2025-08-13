@@ -14,6 +14,7 @@ const isAuthRequiredEndpoint = (url) => {
   // 認証が不要なエンドポイントのリスト
   const authExcludedEndpoints = [
     '/login',
+    '/instructor-login',
     '/refresh',
     '/register',
     '/forgot-password'
@@ -25,7 +26,7 @@ const isAuthRequiredEndpoint = (url) => {
 
 // ログインエンドポイントかどうかを判定
 const isLoginEndpoint = (url) => {
-  return url.includes('/login') || url.endsWith('/login');
+  return url.includes('/login') || url.endsWith('/login') || url.includes('/instructor-login');
 };
 
 // 既存のfetchを拡張するためのプロキシ

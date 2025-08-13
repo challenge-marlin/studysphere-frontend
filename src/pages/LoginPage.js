@@ -10,8 +10,23 @@ const LoginPage = () => {
   const [credentials, setCredentials] = useState({ id: '', password: '' });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showDashboardSelection, setShowDashboardSelection] = useState(false);
+  const [showCompanySelection, setShowCompanySelection] = useState(false);
+  const [showSatelliteSelection, setShowSatelliteSelection] = useState(false);
+  const [userData, setUserData] = useState(null);
+  const [companies, setCompanies] = useState([]);
+  const [satellites, setSatellites] = useState([]);
+  const [selectedCompany, setSelectedCompany] = useState('');
+  const [selectedSatellite, setSelectedSatellite] = useState('');
   const navigate = useNavigate();
   const { login, isAuthenticated, currentUser } = useAuth();
+
+  // キャッシュクリア機能
+  const clearCache = () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.reload();
+  };
 
   // 認証済みユーザーがログインページにアクセスした場合のリダイレクト
   useEffect(() => {
@@ -32,40 +47,6 @@ const LoginPage = () => {
       }
     }
   }, [isAuthenticated, currentUser, navigate]);
-
-  // モックユーザーデータ（指導員のみ）
-  const users = {
-    instructor1: {
-      id: 'instructor001',
-      password: 'instructor123',
-      role: 'instructor', 
-      name: '佐藤指導員',
-      locationId: 'location001',
-      locationName: '東京本校',
-      facilityId: 'facility001',
-      facilityName: 'スタディスフィア東京校'
-    },
-    instructor2: {
-      id: 'instructor002',
-      password: 'instructor456',
-      role: 'instructor', 
-      name: '田中指導員',
-      locationId: 'location001',
-      locationName: '東京本校',
-      facilityId: 'facility001',
-      facilityName: 'スタディスフィア東京校'
-    },
-    instructor3: {
-      id: 'instructor003',
-      password: 'instructor789',
-      role: 'instructor', 
-      name: '鈴木指導員',
-      locationId: 'location002',
-      locationName: '大阪支校',
-      facilityId: 'facility001',
-      facilityName: 'スタディスフィア大阪校'
-    },
-  };
 
   // 管理者ログインAPI呼び出し
   const adminLoginAPI = async (username, password) => {
@@ -97,6 +78,61 @@ const LoginPage = () => {
     }
   };
 
+  // 企業・拠点情報取得API
+  const getUserCompaniesAPI = async (username) => {
+    try {
+      console.log('=== getUserCompaniesAPI Debug ===');
+      console.log('Username:', username);
+      console.log('API URL:', `http://localhost:5000/api/user-companies/${username}`);
+      
+      const response = await fetch(`http://localhost:5000/api/user-companies/${username}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
+      const data = await response.json();
+      console.log('Response data:', data);
+      
+      if (!response.ok) {
+        throw new Error(data.message || '企業・拠点情報の取得に失敗しました');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('LoginPage: Get user companies API error:', error);
+      throw error;
+    }
+  };
+
+  // 指導員ログインAPI
+  const instructorLoginAPI = async (username, password, companyId, satelliteId) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/instructor-login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password, companyId, satelliteId }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || '指導員ログインに失敗しました');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('LoginPage: Instructor login API error:', error);
+      throw error;
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setCredentials(prev => ({
@@ -113,71 +149,515 @@ const LoginPage = () => {
 
     try {
       // 管理者ログインの試行
-      try {
-        const adminData = await adminLoginAPI(credentials.id, credentials.password);
+      const adminData = await adminLoginAPI(credentials.id, credentials.password);
+      
+      if (adminData.success && adminData.data) {
+        console.log('=== Login Success Debug ===');
+        console.log('Full adminData:', adminData);
+        console.log('adminData.data:', adminData.data);
         
-        if (adminData.success && adminData.data) {
-          const userData = {
-            id: adminData.data.user_id,
-            name: adminData.data.user_name,
-            email: adminData.data.login_code,
-            role: 'admin',
-            access_token: adminData.data.access_token,
-            refresh_token: adminData.data.refresh_token
-          };
-          
-          // 認証コンテキストを使用してログイン
-          login(userData, adminData.data.access_token, adminData.data.refresh_token);
-          
-          // 操作ログを記録
-          await addOperationLog({
-            action: 'ログイン',
-            details: `管理者「${userData.name}」がログインしました`,
-            adminId: userData.id,
-            adminName: userData.name
-          });
-          
-          navigate('/admin/dashboard');
+        const user = adminData.data;
+        console.log('User data:', user);
+        console.log('User role:', user.role);
+        console.log('Role >= 9:', user.role >= 9);
+        console.log('Role >= 4:', user.role >= 4);
+        
+        // ロール9以上（システム管理者）の場合はダッシュボード選択を表示
+        if (user.role >= 9) {
+          console.log('Showing dashboard selection for role 9+');
+          setUserData(user);
+          setShowDashboardSelection(true);
+          setIsLoading(false);
           return;
-        } else {
-          throw new Error(adminData.message || '管理者ログインに失敗しました');
         }
-      } catch (adminError) {
-        console.log('管理者ログイン失敗:', adminError);
         
-        // 管理者ログインが失敗した場合、指導員ログインを試行するため、エラーをクリア
-        console.log('管理者ログイン失敗、指導員ログインを試行:', adminError.message);
-        // エラーをクリアして指導員ログインを試行
-      }
-
-      // 指導員ログインの試行（モックデータ）
-      const user = Object.values(users).find(
-        u => u.id === credentials.id && u.password === credentials.password
-      );
-
-      if (user) {
-        // 指導員でログイン（モックログイン）
-        login(user);
+        // ロール4-5（指導者）の場合は拠点選択を表示
+        if (user.role >= 4 && user.role <= 5) {
+          console.log('Showing satellite selection for instructor (role 4-5)');
+          setUserData(user);
+          
+          // 企業・拠点情報を取得
+          console.log('Fetching companies data for user:', credentials.id);
+          const companiesData = await getUserCompaniesAPI(credentials.id);
+          console.log('Companies data response:', companiesData);
+          
+          if (companiesData.success && companiesData.data.companies.length > 0) {
+            console.log('Companies found:', companiesData.data.companies.length);
+            // 指導者は所属企業をまたがないので、最初の企業の拠点のみを表示
+            const firstCompany = companiesData.data.companies[0];
+            setSatellites(firstCompany.satellites || []);
+            setSelectedCompany(firstCompany.id.toString());
+            setShowSatelliteSelection(true);
+            setIsLoading(false);
+            return;
+          } else {
+            console.log('No companies found, proceeding to instructor dashboard');
+            // 企業・拠点が割り当てられていない場合は直接指導員ダッシュボードへ
+            const instructorData = {
+              id: user.user_id,
+              name: user.user_name,
+              email: user.email || '',
+              login_code: user.login_code,
+              role: 'instructor',
+              access_token: user.access_token,
+              refresh_token: user.refresh_token
+            };
+            
+            login(instructorData, user.access_token, user.refresh_token);
+            
+            await addOperationLog({
+              action: 'ログイン',
+              details: `指導員「${user.user_name}」がログインしました`,
+              adminId: user.user_id,
+              adminName: user.user_name
+            });
+            
+            navigate('/instructor/dashboard');
+            return;
+          }
+        }
         
-        // 操作ログを記録
+        // ロール6-8（一般管理者）の場合は企業・拠点選択を表示
+        if (user.role >= 6) {
+          console.log('Showing company selection for admin (role 6-8)');
+          setUserData(user);
+          
+          // 企業・拠点情報を取得
+          console.log('Fetching companies data for user:', credentials.id);
+          const companiesData = await getUserCompaniesAPI(credentials.id);
+          console.log('Companies data response:', companiesData);
+          
+          if (companiesData.success && companiesData.data.companies.length > 0) {
+            console.log('Companies found:', companiesData.data.companies.length);
+            setCompanies(companiesData.data.companies);
+            setShowCompanySelection(true);
+            setIsLoading(false);
+            return;
+          } else {
+            console.log('No companies found, proceeding to admin dashboard');
+            // 企業・拠点が割り当てられていない場合は直接管理者ダッシュボードへ
+            const adminUserData = {
+              id: user.user_id,
+              name: user.user_name,
+              email: user.email || '',
+              login_code: user.login_code,
+              role: 'admin',
+              access_token: user.access_token,
+              refresh_token: user.refresh_token
+            };
+            
+            login(adminUserData, user.access_token, user.refresh_token);
+            
+            await addOperationLog({
+              action: 'ログイン',
+              details: `管理者「${user.user_name}」がログインしました`,
+              adminId: user.user_id,
+              adminName: user.user_name
+            });
+            
+            navigate('/admin/dashboard');
+            return;
+          }
+        }
+        
+        console.log('Proceeding to admin dashboard for other roles');
+        // その他のロールの場合は管理者ダッシュボードへ
+        const adminUserData = {
+          id: user.user_id,
+          name: user.user_name,
+          email: user.email || '',
+          login_code: user.login_code,
+          role: 'admin',
+          access_token: user.access_token,
+          refresh_token: user.refresh_token
+        };
+        
+        login(adminUserData, user.access_token, user.refresh_token);
+        
         await addOperationLog({
           action: 'ログイン',
-          details: `指導員「${user.name}」がログインしました`,
-          adminId: user.id,
-          adminName: user.name
+          details: `管理者「${user.user_name}」がログインしました`,
+          adminId: user.user_id,
+          adminName: user.user_name
+        });
+        
+        navigate('/admin/dashboard');
+      } else {
+        throw new Error(adminData.message || '管理者ログインに失敗しました');
+      }
+    } catch (error) {
+      const errorMessage = error.message || 'ログイン処理中にエラーが発生しました';
+      if (errorMessage.includes('ユーザー名またはパスワードが正しくありません')) {
+        setError(`${errorMessage}\n\n※ キャッシュの問題の可能性があります。「キャッシュをクリアして再ログイン」ボタンを試してください。`);
+      } else {
+        setError(errorMessage);
+      }
+      setIsLoading(false);
+    }
+  };
+
+  const handleDashboardSelection = async (dashboardType) => {
+    if (dashboardType === 'admin') {
+      const adminUserData = {
+        id: userData.user_id,
+        name: userData.user_name,
+        email: userData.email || '',
+        login_code: userData.login_code,
+        role: 'admin',
+        access_token: userData.access_token,
+        refresh_token: userData.refresh_token
+      };
+      
+      login(adminUserData, userData.access_token, userData.refresh_token);
+      
+      addOperationLog({
+        action: 'ログイン',
+        details: `管理者「${userData.user_name}」が管理者ダッシュボードでログインしました`,
+        adminId: userData.user_id,
+        adminName: userData.user_name
+      });
+      
+      navigate('/admin/dashboard');
+    } else if (dashboardType === 'instructor') {
+      console.log('=== Instructor Dashboard Selection Debug ===');
+      console.log('User data for instructor selection:', userData);
+      
+      // 企業・拠点情報を取得
+      console.log('Fetching companies data for instructor dashboard selection');
+      const companiesData = await getUserCompaniesAPI(credentials.id);
+      console.log('Companies data response for instructor selection:', companiesData);
+      
+      if (companiesData.success && companiesData.data.companies.length > 0) {
+        console.log('Companies found for instructor selection:', companiesData.data.companies.length);
+        setCompanies(companiesData.data.companies);
+        setShowDashboardSelection(false);
+        setShowCompanySelection(true);
+      } else {
+        console.log('No companies found for instructor selection, proceeding to instructor dashboard');
+        // 企業・拠点が割り当てられていない場合は直接指導員ダッシュボードへ
+        const instructorData = {
+          id: userData.user_id,
+          name: userData.user_name,
+          email: userData.email || '',
+          login_code: userData.login_code,
+          role: 'instructor',
+          access_token: userData.access_token,
+          refresh_token: userData.refresh_token
+        };
+        
+        login(instructorData, userData.access_token, userData.refresh_token);
+        
+        addOperationLog({
+          action: 'ログイン',
+          details: `指導員「${userData.user_name}」がログインしました`,
+          adminId: userData.user_id,
+          adminName: userData.user_name
+        });
+        
+        navigate('/instructor/dashboard');
+      }
+    }
+  };
+
+  const handleCompanySelection = async () => {
+    if (!selectedCompany || !selectedSatellite) {
+      setError('企業と拠点を選択してください');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const instructorData = await instructorLoginAPI(
+        credentials.id, 
+        credentials.password, 
+        selectedCompany, 
+        selectedSatellite
+      );
+
+      if (instructorData.success && instructorData.data) {
+        const user = instructorData.data;
+        const userData = {
+          id: user.user_id,
+          name: user.user_name,
+          email: user.email || '',
+          login_code: user.login_code,
+          role: 'instructor',
+          company_id: user.company_id,
+          company_name: user.company_name,
+          satellite_id: user.satellite_id,
+          satellite_name: user.satellite_name,
+          access_token: user.access_token,
+          refresh_token: user.refresh_token
+        };
+        
+        login(userData, user.access_token, user.refresh_token);
+        
+        await addOperationLog({
+          action: 'ログイン',
+          details: `指導員「${user.user_name}」が${user.company_name}の${user.satellite_name}でログインしました`,
+          adminId: user.user_id,
+          adminName: user.user_name
         });
         
         navigate('/instructor/dashboard');
       } else {
-        setError('ユーザーIDまたはパスワードが正しくありません。');
+        throw new Error(instructorData.message || '指導員ログインに失敗しました');
       }
     } catch (error) {
-      setError(error.message || 'ログイン処理中にエラーが発生しました');
+      setError(error.message || '指導員ログイン処理中にエラーが発生しました');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleSatelliteSelection = async () => {
+    if (!selectedSatellite) {
+      setError('拠点を選択してください');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      // 指導者の場合は所属企業のIDを使用
+      const companyId = selectedCompany || (userData && userData.company_id);
+      console.log('=== Satellite Selection Debug ===');
+      console.log('selectedSatellite:', selectedSatellite);
+      console.log('companyId:', companyId);
+      console.log('userData:', userData);
+      
+      const instructorData = await instructorLoginAPI(
+        credentials.id, 
+        credentials.password, 
+        companyId, 
+        selectedSatellite
+      );
+
+      if (instructorData.success && instructorData.data) {
+        const user = instructorData.data;
+        const userData = {
+          id: user.user_id,
+          name: user.user_name,
+          email: user.email || '',
+          login_code: user.login_code,
+          role: 'instructor',
+          company_id: user.company_id,
+          company_name: user.company_name,
+          satellite_id: user.satellite_id,
+          satellite_name: user.satellite_name,
+          access_token: user.access_token,
+          refresh_token: user.refresh_token
+        };
+        
+        login(userData, user.access_token, user.refresh_token);
+        
+        await addOperationLog({
+          action: 'ログイン',
+          details: `指導員「${user.user_name}」が${user.company_name}の${user.satellite_name}でログインしました`,
+          adminId: user.user_id,
+          adminName: user.user_name
+        });
+        
+        navigate('/instructor/dashboard');
+      } else {
+        throw new Error(instructorData.message || '指導員ログインに失敗しました');
+      }
+    } catch (error) {
+      setError(error.message || '指導員ログイン処理中にエラーが発生しました');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBackToLogin = () => {
+    setShowDashboardSelection(false);
+    setShowCompanySelection(false);
+    setShowSatelliteSelection(false);
+    setUserData(null);
+    setCompanies([]);
+    setSelectedCompany('');
+    setSelectedSatellite('');
+    setError('');
+  };
+
+  // ダッシュボード選択画面
+  if (showDashboardSelection) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-purple-600 flex items-center justify-center p-5">
+        <div className="bg-white rounded-2xl p-8 shadow-2xl w-full max-w-md">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-indigo-600 mb-2">Study Sphere</h1>
+            <h2 className="text-2xl font-semibold text-gray-800 mb-2">ダッシュボード選択</h2>
+            <p className="text-gray-600">ログインするダッシュボードを選択してください</p>
+          </div>
+
+          <div className="space-y-4">
+            <button
+              onClick={() => handleDashboardSelection('admin')}
+              className="w-full bg-gradient-to-r from-red-500 to-red-400 text-white py-3 px-4 rounded-lg hover:from-red-600 hover:to-red-500 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+            >
+              🏢 管理者ダッシュボード
+            </button>
+            <button
+              onClick={() => handleDashboardSelection('instructor')}
+              className="w-full bg-gradient-to-r from-indigo-600 to-purple-700 text-white py-3 px-4 rounded-lg hover:from-indigo-700 hover:to-purple-800 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+            >
+              👨‍🏫 指導員ダッシュボード
+            </button>
+            <button
+              onClick={handleBackToLogin}
+              className="w-full bg-gray-500 text-white py-3 px-4 rounded-lg hover:bg-gray-600 transition-colors"
+            >
+              ← 戻る
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 拠点選択画面（指導者用）
+  if (showSatelliteSelection) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-purple-600 flex items-center justify-center p-5">
+        <div className="bg-white rounded-2xl p-8 shadow-2xl w-full max-w-md">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-indigo-600 mb-2">Study Sphere</h1>
+            <h2 className="text-2xl font-semibold text-gray-800 mb-2">拠点選択</h2>
+            <p className="text-gray-600">ログインする拠点を選択してください</p>
+          </div>
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                拠点
+              </label>
+              <select
+                value={selectedSatellite}
+                onChange={(e) => setSelectedSatellite(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="">拠点を選択してください</option>
+                {satellites.map(satellite => (
+                  <option key={satellite.id} value={satellite.id}>
+                    {satellite.name} {satellite.isManager ? '(管理者)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={handleSatelliteSelection}
+              disabled={isLoading || !selectedSatellite}
+              className="w-full bg-gradient-to-r from-indigo-600 to-purple-700 text-white py-3 px-4 rounded-lg hover:from-indigo-700 hover:to-purple-800 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? 'ログイン中...' : 'ログイン'}
+            </button>
+
+            <button
+              onClick={handleBackToLogin}
+              className="w-full bg-gray-500 text-white py-3 px-4 rounded-lg hover:bg-gray-600 transition-colors"
+            >
+              ← 戻る
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 企業・拠点選択画面（管理者用）
+  if (showCompanySelection) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-purple-600 flex items-center justify-center p-5">
+        <div className="bg-white rounded-2xl p-8 shadow-2xl w-full max-w-md">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-indigo-600 mb-2">Study Sphere</h1>
+            <h2 className="text-2xl font-semibold text-gray-800 mb-2">企業・拠点選択</h2>
+            <p className="text-gray-600">ログインする企業と拠点を選択してください（管理者用）</p>
+          </div>
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+              <div style={{ whiteSpace: 'pre-line' }}>
+                {error}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                企業
+              </label>
+              <select
+                value={selectedCompany}
+                onChange={(e) => {
+                  setSelectedCompany(e.target.value);
+                  setSelectedSatellite('');
+                }}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="">企業を選択してください</option>
+                {companies.map(company => (
+                  <option key={company.id} value={company.id}>
+                    {company.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                拠点
+              </label>
+              <select
+                value={selectedSatellite}
+                onChange={(e) => setSelectedSatellite(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                disabled={!selectedCompany}
+              >
+                <option value="">拠点を選択してください</option>
+                {selectedCompany && companies
+                  .find(c => c.id === parseInt(selectedCompany))
+                  ?.satellites.map(satellite => (
+                    <option key={satellite.id} value={satellite.id}>
+                      {satellite.name} {satellite.isManager ? '(管理者)' : ''}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <button
+              onClick={handleCompanySelection}
+              disabled={isLoading || !selectedCompany || !selectedSatellite}
+              className="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {isLoading ? 'ログイン中...' : 'ログイン'}
+            </button>
+
+            <button
+              onClick={handleBackToLogin}
+              className="w-full bg-gray-500 text-white py-3 px-4 rounded-lg hover:bg-gray-600 transition-colors"
+            >
+              ← 戻る
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 通常のログイン画面
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-purple-600 flex items-center justify-center p-5">
       <div className="bg-white rounded-2xl p-8 shadow-2xl w-full max-w-md">
@@ -199,14 +679,13 @@ const LoginPage = () => {
               value={credentials.id}
               onChange={handleInputChange}
               required
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder="ユーザーIDを入力"
-              sanitizeMode={SANITIZE_OPTIONS.LIGHT}
-              debounceMs={200}
-              className="w-full px-3 py-3 border-2 border-gray-200 rounded-lg text-base transition-colors focus:outline-none focus:border-indigo-500"
+              options={SANITIZE_OPTIONS}
             />
           </div>
 
-          <div className="mb-4">
+          <div className="mb-6">
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
               パスワード
             </label>
@@ -217,63 +696,36 @@ const LoginPage = () => {
               value={credentials.password}
               onChange={handleInputChange}
               required
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder="パスワードを入力"
-              sanitizeMode={SANITIZE_OPTIONS.NONE}
-              className="w-full px-3 py-3 border-2 border-gray-200 rounded-lg text-base transition-colors focus:outline-none focus:border-indigo-500"
+              options={SANITIZE_OPTIONS}
             />
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
-              {error}
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+              <div style={{ whiteSpace: 'pre-line' }}>
+                {error}
+              </div>
             </div>
           )}
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={isLoading}
-            className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white py-3 px-4 rounded-lg font-medium text-base transition-all duration-200 hover:from-indigo-600 hover:to-purple-700 hover:shadow-lg hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none"
+            className="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
             {isLoading ? 'ログイン中...' : 'ログイン'}
           </button>
         </form>
 
-        <div className="mb-8 p-4 bg-gray-50 rounded-lg">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">デモ用アカウント</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-3 bg-white rounded-lg shadow-sm">
-              <h4 className="text-indigo-600 font-medium mb-2">管理者</h4>
-              <p className="text-sm text-gray-600 mb-1">ID: admin001</p>
-              <p className="text-sm text-gray-600">パスワード: admin123</p>
-            </div>
-            <div className="p-3 bg-white rounded-lg shadow-sm">
-              <h4 className="text-indigo-600 font-medium mb-2">指導員</h4>
-              <p className="text-sm text-gray-600 mb-1">ID: instructor001</p>
-              <p className="text-sm text-gray-600">パスワード: instructor123</p>
-            </div>
-          </div>
-          
-
-        </div>
-
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <h3 className="text-lg font-semibold text-blue-800 mb-2">生徒用ログイン</h3>
-          <p className="text-blue-700 mb-4">生徒は指導員から送られたログインURLでアクセスします</p>
-          <div className="space-y-2">
-            <p className="font-medium text-blue-800">サンプルURL:</p>
-            {['token123', 'token456'].map(token => {
-              const url = `${window.location.origin}${process.env.PUBLIC_URL}/#/student/login/${token}`;
-              return (
-                <a 
-                  key={token} 
-                  href={url} 
-                  className="block text-blue-600 p-2 bg-white border border-blue-200 rounded text-sm transition-colors hover:bg-blue-50"
-                >
-                  {url}
-                </a>
-              );
-            })}
-          </div>
+        <div className="text-center mt-4">
+          <button
+            onClick={clearCache}
+            className="text-sm text-gray-600 hover:underline"
+          >
+            キャッシュをクリアして再ログイン
+          </button>
         </div>
       </div>
     </div>

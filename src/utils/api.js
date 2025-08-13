@@ -268,3 +268,24 @@ export const getSatellitesByIds = async (satelliteIds) => {
   
   return apiGet(`/api/satellites/by-ids?ids=${encodeURIComponent(idsParam)}`);
 }; 
+
+/**
+ * 企業一覧を取得
+ */
+export const getCompanies = () => {
+  return apiGet('/api/companies');
+};
+
+/**
+ * 拠点一覧を取得
+ */
+export const getSatellites = () => {
+  return apiGet('/api/satellites');
+};
+
+/**
+ * 現在のユーザーの企業・拠点情報を取得
+ */
+export const getUserInfo = () => {
+  return apiGet('/api/user-info');
+}; 

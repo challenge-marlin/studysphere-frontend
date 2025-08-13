@@ -26,6 +26,12 @@ const InstructorDashboard = () => {
   useEffect(() => {
     if (!currentUser) return;
 
+    // 生徒のデータが混入している場合は警告
+    const storedUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    if (storedUser.name === '末吉　元気' || storedUser.email === 'FSLE-P1WP-D2C5') {
+      console.warn('⚠️ 生徒のデータが混入しています。ログアウトして正しい指導員アカウントでログインし直してください。');
+    }
+
     // 初期の拠点情報を設定
     const initialLocation = {
       id: 'office001',
@@ -245,8 +251,8 @@ const InstructorDashboard = () => {
                   <h3 className="text-xl font-semibold text-gray-800 mb-4">🏷️ アカウント情報</h3>
                   <div className="grid grid-cols-2 gap-3 text-gray-700">
                     <div>
-                      <span className="font-medium">指導員ID:</span>
-                      <span>{localUser.id}</span>
+                      <span className="font-medium">個人トークン:</span>
+                      <span>{localUser.login_code || localUser.id || '未設定'}</span>
                     </div>
                     <div>
                       <span className="font-medium">名前:</span>

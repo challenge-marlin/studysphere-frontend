@@ -25,6 +25,7 @@ const InstructorManagement = () => {
   
   const [newInstructor, setNewInstructor] = useState({
     name: '',
+    username: '', // ログインIDを追加
     email: '',
     department: '',
     company_id: '',
@@ -135,6 +136,7 @@ const InstructorManagement = () => {
       // ロール4、5のユーザーのみをフィルタリング
       const instructorUsers = data.filter(user => user.role >= 4 && user.role <= 5);
       console.log('指導者ユーザー:', instructorUsers);
+      console.log('指導者ユーザーのusername確認:', instructorUsers.map(u => ({ id: u.id, name: u.name, username: u.username })));
       
       // 指導者ユーザーが空の場合は空配列を設定
       if (instructorUsers.length === 0) {
@@ -175,6 +177,7 @@ const InstructorManagement = () => {
             return {
               id: user.id.toString(),
               name: user.name,
+              username: user.username || '', // ログインIDを追加
               email: user.email || '',
               department: specData.success && specData.data.length > 0 ? specData.data[0].specialization : '',
               facilityLocationIds: facilityLocationIds,
@@ -213,6 +216,7 @@ const InstructorManagement = () => {
             return {
               id: user.id.toString(),
               name: user.name,
+              username: user.username || '', // ログインIDを追加
               email: user.email || '',
               department: '',
               facilityLocationIds: facilityLocationIds,
@@ -226,6 +230,7 @@ const InstructorManagement = () => {
         })
       );
 
+      console.log('最終的なinstructorsデータ:', instructorsWithSpecializations.map(i => ({ id: i.id, name: i.name, username: i.username })));
       setInstructors(instructorsWithSpecializations);
     } catch (error) {
       console.error('指導者一覧取得エラー:', error);
@@ -320,6 +325,16 @@ const InstructorManagement = () => {
     e.preventDefault();
     
     // バリデーション
+    if (!newInstructor.username) {
+      alert('ログインIDを入力してください。');
+      return;
+    }
+    
+    if (!/^[a-zA-Z0-9_]+$/.test(newInstructor.username)) {
+      alert('ログインIDは半角英数字とアンダースコアのみ使用可能です。');
+      return;
+    }
+    
     if (!newInstructor.company_id) {
       alert('企業を選択してください。');
       return;
@@ -331,9 +346,11 @@ const InstructorManagement = () => {
     }
     
     try {
-      // 新しい指導者を追加するAPI呼び出し
-      const data = await apiPost('/api/users', {
+      // 送信データをログ出力
+      const requestData = {
         name: newInstructor.name,
+        username: newInstructor.username, // ログインIDを追加
+        password: newInstructor.password, // パスワードを追加
         role: 4, // 指導員ロール
         status: 1,
         login_code: (() => {
@@ -351,7 +368,14 @@ const InstructorManagement = () => {
         company_id: newInstructor.company_id, // 選択された企業ID
         satellite_ids: newInstructor.facilityLocationIds,
         email: newInstructor.email
-      });
+      };
+      
+      console.log('=== 指導員追加API呼び出し ===');
+      console.log('送信データ:', requestData);
+      
+      // 新しい指導者を追加するAPI呼び出し
+      const data = await apiPost('/api/users', requestData);
+      console.log('APIレスポンス:', data);
 
       // 管理者設定を処理
       const managerSatellites = Object.keys(newInstructor.managerSettings)
@@ -392,6 +416,7 @@ const InstructorManagement = () => {
       
       setNewInstructor({
         name: '',
+        username: '', // ログインIDを追加
         email: '',
         department: '',
         company_id: '',
@@ -494,6 +519,7 @@ const InstructorManagement = () => {
     
     setSelectedInstructor({
       ...instructor,
+      username: instructor.username || '', // ログインIDを追加
       isManager: isManagerData
     });
     setShowEditForm(true);
@@ -502,10 +528,22 @@ const InstructorManagement = () => {
   const handleUpdateInstructor = async (e) => {
     e.preventDefault();
     
+    // バリデーション
+    if (!selectedInstructor.username) {
+      alert('ログインIDを入力してください。');
+      return;
+    }
+    
+    if (!/^[a-zA-Z0-9_]+$/.test(selectedInstructor.username)) {
+      alert('ログインIDは半角英数字とアンダースコアのみ使用可能です。');
+      return;
+    }
+    
     try {
       // 指導員情報を更新するAPI呼び出し
       await apiPut(`/api/users/${selectedInstructor.id}`, {
         name: selectedInstructor.name,
+        username: selectedInstructor.username, // ログインIDを追加
         email: selectedInstructor.email,
         satellite_ids: selectedInstructor.facilityLocationIds
       });
@@ -807,6 +845,17 @@ const InstructorManagement = () => {
                  </th>
                  <th 
                    className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200"
+                   onClick={() => handleSort('username')}
+                 >
+                   🔑 ログインID
+                   {sortConfig.key === 'username' && (
+                     <span className="ml-1">
+                       {sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}
+                     </span>
+                   )}
+                 </th>
+                 <th 
+                   className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200"
                    onClick={() => handleSort('email')}
                  >
                    📧 メールアドレス
@@ -864,6 +913,11 @@ const InstructorManagement = () => {
                         <strong className="text-gray-800">{instructor.name}</strong>
                       </div>
                     </div>
+                  </td>
+                  <td className="px-6 py-4 text-gray-600">
+                    <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono">
+                      {instructor.username || '-'}
+                    </code>
                   </td>
                    <td className="px-6 py-4 text-gray-600">
                      📧 {instructor.email}
@@ -1055,9 +1109,9 @@ const InstructorManagement = () => {
 
       {/* 指導員追加フォームモーダル */}
       {showAddForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center p-6 border-b border-gray-200">
               <h3 className="text-xl font-bold text-gray-800">新しい指導員を追加</h3>
               <button 
                 className="text-gray-400 hover:text-gray-600 text-2xl font-bold transition-colors duration-200"
@@ -1067,7 +1121,8 @@ const InstructorManagement = () => {
               </button>
             </div>
             
-            <form onSubmit={handleAddInstructor} className="space-y-4">
+            <div className="flex-1 overflow-y-auto p-6">
+              <form onSubmit={handleAddInstructor} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">指導員名:</label>
                 <input
@@ -1078,6 +1133,22 @@ const InstructorManagement = () => {
                   required
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
                 />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ログインID: <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  name="username"
+                  value={newInstructor.username}
+                  onChange={handleInputChange}
+                  required
+                  pattern="[a-zA-Z0-9_]+"
+                  title="半角英数字とアンダースコアのみ使用可能です"
+                  placeholder="例: instructor001"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
+                />
+                <p className="text-xs text-gray-500 mt-1">半角英数字とアンダースコアのみ使用可能です</p>
               </div>
               
               <div>
@@ -1213,15 +1284,16 @@ const InstructorManagement = () => {
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}
 
       {/* 指導員編集フォームモーダル */}
       {showEditForm && selectedInstructor && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center p-6 border-b border-gray-200">
               <h3 className="text-xl font-bold text-gray-800">指導員情報を編集</h3>
               <button 
                 className="text-gray-400 hover:text-gray-600 text-2xl font-bold transition-colors duration-200"
@@ -1234,7 +1306,8 @@ const InstructorManagement = () => {
               </button>
             </div>
             
-            <form onSubmit={handleUpdateInstructor} className="space-y-4">
+            <div className="flex-1 overflow-y-auto p-6">
+              <form onSubmit={handleUpdateInstructor} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">指導員名:</label>
                 <input
@@ -1245,6 +1318,22 @@ const InstructorManagement = () => {
                   required
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
                 />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ログインID: <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  name="username"
+                  value={selectedInstructor.username}
+                  onChange={handleEditInputChange}
+                  required
+                  pattern="[a-zA-Z0-9_]+"
+                  title="半角英数字とアンダースコアのみ使用可能です"
+                  placeholder="例: instructor001"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
+                />
+                <p className="text-xs text-gray-500 mt-1">半角英数字とアンダースコアのみ使用可能です</p>
               </div>
               
               <div>
@@ -1277,7 +1366,8 @@ const InstructorManagement = () => {
                   name="company_id"
                   value={selectedInstructor.company_id}
                   onChange={handleEditInputChange}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
+                  disabled={selectedInstructor.role >= 4 && selectedInstructor.role <= 5}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300 disabled:bg-gray-100 disabled:cursor-not-allowed"
                 >
                   <option value="">選択してください</option>
                   {companies.map(company => (
@@ -1286,6 +1376,7 @@ const InstructorManagement = () => {
                     </option>
                   ))}
                 </select>
+
               </div>
 
               <div>
@@ -1351,6 +1442,7 @@ const InstructorManagement = () => {
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}

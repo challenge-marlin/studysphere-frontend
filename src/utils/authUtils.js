@@ -205,8 +205,21 @@ export const isAuthRequiredPage = (pathname) => {
 
 // ログアウト処理
 export const handleLogout = (navigate) => {
+  console.log('=== handleLogout 実行 ===');
+  
+  // トークンをクリア
   clearStoredTokens();
+  
+  // ユーザーデータをクリア
   localStorage.removeItem('currentUser');
+  
+  // 追加のクリア処理（確実性のため）
+  localStorage.clear();
+  sessionStorage.clear();
+  
+  console.log('LocalStorageとSessionStorageを完全にクリアしました');
+  
+  // ログインページにリダイレクト
   navigate('/');
 };
 
@@ -224,6 +237,10 @@ export const handleTokenInvalid = (navigate, reason = 'トークンが無効に�
   
   clearStoredTokens();
   localStorage.removeItem('currentUser');
+  
+  // 追加のクリア処理（確実性のため）
+  localStorage.clear();
+  sessionStorage.clear();
   
   // 現在のパスを取得
   const currentPath = window.location.pathname;

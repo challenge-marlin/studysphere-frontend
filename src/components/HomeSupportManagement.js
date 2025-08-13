@@ -6,60 +6,7 @@ import AddHomeSupportUserModal from './AddHomeSupportUserModal';
 
 const HomeSupportManagement = () => {
   const navigate = useNavigate();
-  const [students, setStudents] = useState([
-    { 
-      id: 'student001', 
-      name: '末吉　元気', 
-      email: 'sueyoshi@example.com', 
-      class: 'ITリテラシー・AIの基本',
-      instructorId: 'instructor001',
-      instructorName: '佐藤指導員',
-      locationId: 'location001',
-      locationName: '東京本校',
-      progress: 75,
-      lastLogin: '2024-01-15',
-      status: 'active',
-      loginToken: 'f9Ul-7OlL-OPZE',
-      joinDate: '2024-01-01',
-      canStudyAtHome: true,
-      tags: ['佐藤指導員', 'ITリテラシー・AIの基本', '東京本校', '中級者', '必修科目', '初級コース']
-    },
-    { 
-      id: 'student003', 
-      name: '田中花子', 
-      email: 'tanaka.h@example.com', 
-      class: 'SNS運用の基礎・画像生成編集',
-      instructorId: 'instructor001',
-      instructorName: '佐藤指導員',
-      locationId: 'location001',
-      locationName: '東京本校',
-      progress: 60,
-      lastLogin: '2024-01-14',
-      status: 'active',
-      loginToken: 'aBc3-Def6-GhI9',
-      joinDate: '2024-01-02',
-      canStudyAtHome: true,
-      tags: ['佐藤指導員', 'SNS運用の基礎・画像生成編集', '東京本校', '中級者', '必修科目', '中級コース']
-    },
-    { 
-      id: 'student005', 
-      name: '山田一郎', 
-      email: 'yamada.i@example.com', 
-      class: 'LP制作(HTML・CSS)',
-      instructorId: 'instructor004',
-      instructorName: '山田指導員',
-      locationId: 'location003',
-      locationName: '新宿サテライト',
-      progress: 90,
-      lastLogin: '2024-01-15',
-      status: 'active',
-      loginToken: 'mNp2-Qrs5-Tuv8',
-      joinDate: '2024-01-01',
-      canStudyAtHome: true,
-      tags: ['山田指導員', 'LP制作(HTML・CSS)', '新宿サテライト', '上級者', '必修科目', '中級コース']
-    },
-    // 他のユーザーはcanStudyAtHome: falseで追加してもOK
-  ]);
+  const [students, setStudents] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTags, setSelectedTags] = useState([]);
@@ -69,64 +16,8 @@ const HomeSupportManagement = () => {
   const [showMonthlyModal, setShowMonthlyModal] = useState(false);
 
   useEffect(() => {
-    const fetchStudents = () => {
-      const mockStudents = [
-        { 
-          id: 'student001', 
-          name: '末吉　元気', 
-          email: 'sueyoshi@example.com', 
-          class: 'ITリテラシー・AIの基本',
-          instructorId: 'instructor001',
-          instructorName: '佐藤指導員',
-          locationId: 'location001',
-          locationName: '東京本校',
-          progress: 75,
-          lastLogin: '2024-01-15',
-          status: 'active',
-          loginToken: 'f9Ul-7OlL-OPZE',
-          joinDate: '2024-01-01',
-          canStudyAtHome: true,
-          tags: ['佐藤指導員', 'ITリテラシー・AIの基本', '東京本校', '中級者', '必修科目', '初級コース']
-        },
-        { 
-          id: 'student003', 
-          name: '田中花子', 
-          email: 'tanaka.h@example.com', 
-          class: 'SNS運用の基礎・画像生成編集',
-          instructorId: 'instructor001',
-          instructorName: '佐藤指導員',
-          locationId: 'location001',
-          locationName: '東京本校',
-          progress: 60,
-          lastLogin: '2024-01-14',
-          status: 'active',
-          loginToken: 'aBc3-Def6-GhI9',
-          joinDate: '2024-01-02',
-          canStudyAtHome: true,
-          tags: ['佐藤指導員', 'SNS運用の基礎・画像生成編集', '東京本校', '中級者', '必修科目', '中級コース']
-        },
-        { 
-          id: 'student005', 
-          name: '山田一郎', 
-          email: 'yamada.i@example.com', 
-          class: 'LP制作(HTML・CSS)',
-          instructorId: 'instructor004',
-          instructorName: '山田指導員',
-          locationId: 'location003',
-          locationName: '新宿サテライト',
-          progress: 90,
-          lastLogin: '2024-01-15',
-          status: 'active',
-          loginToken: 'mNp2-Qrs5-Tuv8',
-          joinDate: '2024-01-01',
-          canStudyAtHome: true,
-          tags: ['山田指導員', 'LP制作(HTML・CSS)', '新宿サテライト', '上級者', '必修科目', '中級コース']
-        },
-        // 他のユーザーはcanStudyAtHome: falseで追加してもOK
-      ];
-      setStudents(mockStudents);
-    };
-    fetchStudents();
+    // 生徒データの取得（現在は空配列）
+    setStudents([]);
   }, []);
 
   const getFilteredStudents = () => {

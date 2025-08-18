@@ -23,7 +23,7 @@ const AdminHeader = ({ user }) => {
   const getRoleName = (roleId) => {
     const roleMap = {
       4: '指導員',
-      5: '管理者',
+      5: '拠点管理者',
       9: 'アドミンユーザ',
       10: 'マスターユーザ'
     };

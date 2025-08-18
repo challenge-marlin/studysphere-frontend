@@ -175,27 +175,7 @@ export const refreshTokenAPI = async (refreshToken) => {
   }
 };
 
-// モックログインかどうかを判定
-export const isMockLogin = () => {
-  const currentUser = localStorage.getItem('currentUser');
-  if (!currentUser) return false;
-  
-  try {
-    const userData = JSON.parse(currentUser);
-    // 管理者でaccess_tokenがない場合はモックログイン
-    if (userData.role === 'admin' && !userData.access_token) {
-      return true;
-    }
-    // 指導員または生徒の場合はモックログイン
-    if (userData.role === 'instructor' || userData.role === 'student') {
-      return true;
-    }
-    return false;
-  } catch (error) {
-    console.error('Mock login check error:', error);
-    return false;
-  }
-};
+
 
 // 認証が必要なページかどうかを判定
 export const isAuthRequiredPage = (pathname) => {

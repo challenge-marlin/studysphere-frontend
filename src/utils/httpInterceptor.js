@@ -42,8 +42,8 @@ export const setupFetchInterceptor = () => {
       return originalFetch(url, options);
     }
     
-    // 認証エラー処理中は新しいリクエストをブロック
-    if (isAuthErrorHandling) {
+    // 認証エラー処理中は新しいリクエストをブロック（ただし、IP取得などの重要なリクエストは除外）
+    if (isAuthErrorHandling && !url.includes('/client-ip') && !url.includes('/health')) {
       console.log('Fetchインターセプター: 認証エラー処理中のため、リクエストをスキップします');
       throw new Error('Authentication error handling in progress');
     }
@@ -57,14 +57,24 @@ export const setupFetchInterceptor = () => {
           ...options.headers,
           'Authorization': `Bearer ${accessToken}`
         };
-        console.log('Fetchインターセプター: Authorizationヘッダーを追加');
+        console.log('Fetchインターセプター: Authorizationヘッダーを追加', { 
+          hasToken: !!accessToken, 
+          tokenLength: accessToken ? accessToken.length : 0 
+        });
+      } else if (isAuthRequiredEndpoint(url) && !accessToken) {
+        console.warn('Fetchインターセプター: 認証が必要なエンドポイントですが、トークンがありません', { url });
       }
 
       const response = await originalFetch(url, options);
       
       // 401 Unauthorized または 403 Forbidden の場合
       if (response.status === 401 || response.status === 403) {
-        console.warn('Fetchインターセプター: 認証エラーを検出', { url, status: response.status });
+        console.warn('Fetchインターセプター: 認証エラーを検出', { 
+          url, 
+          status: response.status, 
+          hasToken: !!accessToken,
+          tokenLength: accessToken ? accessToken.length : 0
+        });
         
         // ログインエンドポイントの場合は処理をスキップ
         if (isLoginEndpoint(url)) {
@@ -90,6 +100,34 @@ export const setupFetchInterceptor = () => {
             handleTokenInvalid(globalNavigate, 'セッションが期限切れです。再度ログインしてください。');
           }
           throw new Error('Refresh token expired');
+        }
+        
+        // リフレッシュトークンを使用して自動再認証を試行
+        if (refreshToken && !isRefreshTokenExpired(refreshToken)) {
+          try {
+            console.log('Fetchインターセプター: リフレッシュトークンを使用して自動再認証を試行');
+            const { refreshTokenAPI, storeTokens } = await import('./authUtils');
+            const refreshResult = await refreshTokenAPI(refreshToken);
+            
+            if (refreshResult.success && refreshResult.data) {
+              storeTokens(refreshResult.data.access_token, refreshResult.data.refresh_token);
+              console.log('Fetchインターセプター: トークン更新成功、リクエストを再実行');
+              
+              // 更新されたトークンでリクエストを再実行
+              const newOptions = {
+                ...options,
+                headers: {
+                  ...options.headers,
+                  'Authorization': `Bearer ${refreshResult.data.access_token}`
+                }
+              };
+              
+              const retryResponse = await originalFetch(url, newOptions);
+              return retryResponse;
+            }
+          } catch (refreshError) {
+            console.error('Fetchインターセプター: トークン更新に失敗:', refreshError);
+          }
         }
         
         // 認証エラーの場合はログインページにリダイレクト

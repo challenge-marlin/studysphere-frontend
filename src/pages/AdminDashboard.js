@@ -8,6 +8,7 @@ import CourseManagement from '../components/CourseManagement';
 import LessonManagement from '../components/LessonManagement';
 import CurriculumPathManagement from '../components/CurriculumPathManagement';
 import AdminManagement from '../components/AdminManagement';
+import AdminPasswordChangeModal from '../components/AdminPasswordChangeModal';
 
 const AdminDashboard = () => {
   // 保存されたタブ状態を取得、デフォルトは'locations'
@@ -15,8 +16,49 @@ const AdminDashboard = () => {
     const savedTab = sessionStorage.getItem('adminDashboardActiveTab');
     return savedTab || 'locations';
   });
+  const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
   const navigate = useNavigate();
   const { currentUser } = useAdminGuard();
+
+  // パスワード変更要求があるかチェック
+  useEffect(() => {
+    if (currentUser?.passwordResetRequired) {
+      setShowPasswordChangeModal(true);
+    }
+  }, [currentUser]);
+
+  const handlePasswordChange = async (currentPassword, newPassword) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(`/api/users/${currentUser.id}/change-password`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        alert('パスワードが正常に変更されました。');
+        // パスワード変更要求フラグをクリア
+        const updatedUser = { ...currentUser, passwordResetRequired: false };
+        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        window.location.reload(); // ページをリロードして状態を更新
+      } else {
+        throw new Error(data.message || 'パスワード変更に失敗しました');
+      }
+    } catch (error) {
+      console.error('パスワード変更に失敗:', error);
+      alert(`パスワード変更に失敗しました: ${error.message}`);
+      throw error;
+    }
+  };
 
   if (!currentUser) {
     return (
@@ -37,11 +79,13 @@ const AdminDashboard = () => {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
-      <AdminHeader user={currentUser} />
+      <div className={showPasswordChangeModal ? 'pointer-events-none opacity-50' : ''}>
+        <AdminHeader user={currentUser} />
+      </div>
       
       <div className="flex flex-col flex-1 h-[calc(100vh-80px)] overflow-hidden">
         <aside className="w-full bg-white border-b border-gray-200 flex-shrink-0">
-          <nav className="p-4 flex flex-row gap-2 overflow-x-auto">
+          <nav className={`p-4 flex flex-row gap-2 overflow-x-auto ${showPasswordChangeModal ? 'pointer-events-none opacity-50' : ''}`}>
             {navItems.map((item) => (
               <button 
                 key={item.id}
@@ -63,9 +107,27 @@ const AdminDashboard = () => {
         </aside>
 
         <main className="flex-1 p-8 overflow-y-auto bg-white">
-          {navItems.find(item => item.id === activeTab)?.component}
+          {/* パスワード変更モーダルが表示されている場合はダッシュボード内容を非表示 */}
+          {showPasswordChangeModal ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">パスワード変更画面を読み込み中...</p>
+              </div>
+            </div>
+          ) : (
+            navItems.find(item => item.id === activeTab)?.component
+          )}
         </main>
       </div>
+
+      {/* パスワード変更モーダル */}
+      <AdminPasswordChangeModal
+        isOpen={showPasswordChangeModal}
+        onClose={() => setShowPasswordChangeModal(false)}
+        onPasswordChange={handlePasswordChange}
+        user={currentUser}
+      />
     </div>
   );
 };

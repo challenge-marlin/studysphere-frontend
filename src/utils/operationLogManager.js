@@ -17,7 +17,7 @@ const DUPLICATE_CHECK_WINDOW = 3000; // 3秒以内の同じ操作は重複とみ
  */
 const getIPFromBackend = async () => {
   try {
-    const response = await apiGet('/api/client-ip');
+    const response = await apiGet('/api/operation-logs/client-ip');
     if (response.success && response.data && response.data.ip) {
       return response.data.ip;
     }

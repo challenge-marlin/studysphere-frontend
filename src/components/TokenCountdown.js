@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getStoredTokens, getTokenExpiryTime, isMockLogin } from '../utils/authUtils';
+import { getStoredTokens, getTokenExpiryTime } from '../utils/authUtils';
 import { useLocation } from 'react-router-dom';
 
 const TokenCountdown = () => {
@@ -20,11 +20,7 @@ const TokenCountdown = () => {
       return;
     }
 
-    // モックログインの場合は表示しない
-    if (isMockLogin()) {
-      setIsVisible(false);
-      return;
-    }
+
 
     const { accessToken } = getStoredTokens();
     if (accessToken) {

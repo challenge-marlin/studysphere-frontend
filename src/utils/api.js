@@ -288,4 +288,39 @@ export const getSatellites = () => {
  */
 export const getUserInfo = () => {
   return apiGet('/api/user-info');
+};
+
+/**
+ * 拠点詳細を取得
+ */
+export const getSatelliteById = (id) => {
+  return apiGet(`/api/satellites/${id}`);
+};
+
+/**
+ * 拠点情報を更新
+ */
+export const updateSatellite = (id, data) => {
+  return apiPut(`/api/satellites/${id}`, data);
+};
+
+/**
+ * 拠点の指導員一覧を取得
+ */
+export const getSatelliteInstructors = (satelliteId) => {
+  return apiGet(`/api/satellites/${satelliteId}/instructors`);
+};
+
+/**
+ * 拠点の利用者一覧を取得
+ */
+export const getSatelliteUsers = (satelliteId) => {
+  return apiGet(`/api/satellites/${satelliteId}/users`);
+};
+
+/**
+ * ユーザー情報を更新
+ */
+export const updateUser = (userId, data) => {
+  return apiPut(`/api/users/${userId}`, data);
 }; 

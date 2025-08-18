@@ -184,7 +184,7 @@ const InstructorManagement = () => {
               facilityLocationNames: facilityLocationNames,
               status: user.status === 1 ? 'active' : 'inactive',
               lastLogin: user.last_login_at ? new Date(user.last_login_at).toLocaleDateString('ja-JP') : '-',
-              passwordResetRequired: false,
+              passwordResetRequired: user.password_reset_required === 1,
               specializations: specData.success ? specData.data : []
             };
           } catch (error) {
@@ -223,7 +223,7 @@ const InstructorManagement = () => {
               facilityLocationNames: facilityLocationNames,
               status: user.status === 1 ? 'active' : 'inactive',
               lastLogin: user.last_login_at ? new Date(user.last_login_at).toLocaleDateString('ja-JP') : '-',
-              passwordResetRequired: false,
+              passwordResetRequired: user.password_reset_required === 1,
               specializations: []
             };
           }
@@ -289,20 +289,36 @@ const InstructorManagement = () => {
     setShowPasswordResetModal(true);
   };
 
-  const executePasswordReset = async (resetType) => {
+  const executePasswordReset = async (action) => {
     if (!selectedInstructor) return;
 
     try {
-      const tempPassword = generateTempPassword();
-      setGeneratedTempPassword(tempPassword);
-      setShowTempPasswordDialog(true);
-      setShowPasswordResetModal(false);
-      
-      // 実際のパスワードリセットAPIを呼び出す
-      await apiPost(`/api/users/${selectedInstructor.id}/reset-password`, {
-        resetType,
-        tempPassword
-      });
+      if (action === 'issue_temp_password') {
+        // 一時パスワード発行
+        const result = await apiPost(`/api/users/${selectedInstructor.id}/reset-password`, {
+          action: 'issue_temp_password'
+        });
+        
+        if (result.success) {
+          setGeneratedTempPassword(result.data.tempPassword);
+          setShowTempPasswordDialog(true);
+          setShowPasswordResetModal(false);
+        } else {
+          alert(`一時パスワード発行に失敗しました: ${result.message}`);
+        }
+      } else if (action === 'require_password_change') {
+        // パスワード変更要求
+        const result = await apiPost(`/api/users/${selectedInstructor.id}/reset-password`, {
+          action: 'require_password_change'
+        });
+        
+        if (result.success) {
+          alert('パスワード変更要求が送信されました。');
+          setShowPasswordResetModal(false);
+        } else {
+          alert(`パスワード変更要求に失敗しました: ${result.message}`);
+        }
+      }
 
       // 指導者一覧を再取得
       await fetchInstructors();
@@ -899,6 +915,7 @@ const InstructorManagement = () => {
                     </span>
                   )}
                 </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">🔐 パスワード</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">⚙️ 操作</th>
               </tr>
             </thead>
@@ -955,6 +972,17 @@ const InstructorManagement = () => {
                     }`}>
                       {getStatusLabel(instructor.status)}
                     </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    {instructor.passwordResetRequired ? (
+                      <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold">
+                        ⚠️ 変更要求
+                      </span>
+                    ) : (
+                      <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold">
+                        ✅ 正常
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex gap-2">
@@ -1019,7 +1047,7 @@ const InstructorManagement = () => {
                 <p className="text-gray-600 text-sm mb-4">新しい一時パスワードを発行します。指導員は次回ログイン時に新しいパスワードを設定する必要があります。</p>
                 <button 
                   className="bg-blue-500 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-300 hover:bg-blue-600"
-                  onClick={() => executePasswordReset('temporary')}
+                  onClick={() => executePasswordReset('issue_temp_password')}
                 >
                   一時パスワードを発行
                 </button>
@@ -1030,7 +1058,7 @@ const InstructorManagement = () => {
                 <p className="text-gray-600 text-sm mb-4">指導員に次回ログイン時のパスワード変更を要求します。現在のパスワードは無効になりません。</p>
                 <button 
                   className="bg-orange-500 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-300 hover:bg-orange-600"
-                  onClick={() => executePasswordReset('force_change')}
+                  onClick={() => executePasswordReset('require_password_change')}
                 >
                   パスワード変更を要求
                 </button>
@@ -1068,7 +1096,15 @@ const InstructorManagement = () => {
                   />
                   <button
                     className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-200 hover:bg-gray-300 p-2 rounded transition-colors duration-200"
-                    onClick={() => navigator.clipboard.writeText(generatedTempPassword)}
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(generatedTempPassword);
+                        alert('パスワードをクリップボードにコピーしました！');
+                      } catch (error) {
+                        console.error('クリップボードへのコピーに失敗しました:', error);
+                        alert('クリップボードへのコピーに失敗しました。手動でコピーしてください。');
+                      }
+                    }}
                     title="コピー"
                   >
                     📋
@@ -1085,9 +1121,16 @@ const InstructorManagement = () => {
               <div className="flex gap-3 justify-center">
                 <button
                   className="bg-blue-500 text-white px-6 py-2 rounded-lg font-medium transition-colors duration-300 hover:bg-blue-600"
-                  onClick={() => {
-                    navigator.clipboard.writeText(generatedTempPassword);
-                    alert('パスワードをクリップボードにコピーしました！');
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(generatedTempPassword);
+                      alert('パスワードをクリップボードにコピーしました！');
+                      setShowTempPasswordDialog(false);
+                      setSelectedInstructor(null);
+                    } catch (error) {
+                      console.error('クリップボードへのコピーに失敗しました:', error);
+                      alert('クリップボードへのコピーに失敗しました。手動でコピーしてください。');
+                    }
                   }}
                 >
                   コピーして閉じる

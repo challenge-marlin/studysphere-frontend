@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPut } from '../utils/api';
 
-const LocationManagementForInstructor = ({ currentUser }) => {
+const LocationManagementForInstructor = ({ currentUser, onLocationChange }) => {
   const [locationInfo, setLocationInfo] = useState({
     id: null,
     name: '',
     facilityName: '',
     maxStudents: 0,
     currentStudents: 0,
+    instructorCount: 0,
     address: '',
     phone: '',
     manager: ''
@@ -35,71 +36,232 @@ const LocationManagementForInstructor = ({ currentUser }) => {
 
   // 現在のユーザーの拠点IDを取得
   const getCurrentUserSatelliteId = () => {
+    console.log('現在のユーザー情報:', currentUser);
+    console.log('satellite_ids:', currentUser?.satellite_ids);
+    
+    // 1. ユーザーのsatellite_idsから取得
     if (currentUser && currentUser.satellite_ids && currentUser.satellite_ids.length > 0) {
-      return currentUser.satellite_ids[0]; // 最初の拠点を使用
+      const satelliteId = currentUser.satellite_ids[0];
+      console.log('ユーザーから取得した拠点ID:', satelliteId);
+      return satelliteId;
     }
+    
+    // 2. localStorageから拠点情報を取得
+    try {
+      const storedUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      console.log('localStorageのユーザー情報:', storedUser);
+      
+      if (storedUser.satellite_ids && storedUser.satellite_ids.length > 0) {
+        const satelliteId = storedUser.satellite_ids[0];
+        console.log('localStorageから取得した拠点ID:', satelliteId);
+        return satelliteId;
+      }
+    } catch (error) {
+      console.error('localStorageの読み込みエラー:', error);
+    }
+    
+    // 3. 選択中の拠点情報を取得
+    try {
+      const selectedSatellite = localStorage.getItem('selectedSatellite');
+      if (selectedSatellite) {
+        const satellite = JSON.parse(selectedSatellite);
+        console.log('選択中の拠点情報:', satellite);
+        return satellite.id;
+      }
+    } catch (error) {
+      console.error('選択中拠点の読み込みエラー:', error);
+    }
+    
+    console.log('拠点IDが見つかりません');
     return null;
   };
 
   // 拠点情報と統計を取得
   const fetchLocationData = async () => {
-    const satelliteId = getCurrentUserSatelliteId();
+    let satelliteId = getCurrentUserSatelliteId();
+    
+    // 拠点IDが見つからない場合、ユーザー情報を更新してから再試行
     if (!satelliteId) {
-      setError('拠点情報が見つかりません');
-      setLoading(false);
-      return;
+      try {
+        console.log('拠点IDが見つからないため、ユーザー情報を更新して再試行...');
+        
+        // ユーザー情報を最新の状態に更新
+        const userInfoResponse = await apiGet('/api/user-info');
+        if (userInfoResponse && userInfoResponse.satellite_ids && userInfoResponse.satellite_ids.length > 0) {
+          satelliteId = userInfoResponse.satellite_ids[0];
+          console.log('更新されたユーザー情報から拠点IDを取得:', satelliteId);
+        } else {
+          // 拠点一覧からユーザーの拠点を特定
+          console.log('拠点IDが見つからないため、拠点一覧から特定を試行...');
+          const satellitesResponse = await apiGet('/api/satellites');
+          console.log('拠点一覧:', satellitesResponse);
+          
+          // APIレスポンスの形式を確認（success/data形式または直接データ形式）
+          const satellitesData = satellitesResponse.success ? satellitesResponse.data : satellitesResponse;
+          
+          if (satellitesData && satellitesData.length > 0) {
+            // 最初の拠点を使用（または適切な拠点を選択）
+            satelliteId = satellitesData[0].id;
+            console.log('フォールバック拠点ID:', satelliteId);
+          } else {
+            setError('利用可能な拠点が見つかりません');
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('拠点一覧取得エラー:', error);
+        setError('拠点情報の取得に失敗しました');
+        setLoading(false);
+        return;
+      }
     }
 
     try {
       console.log('拠点情報を取得中...', satelliteId);
+      
       // 拠点詳細情報を取得
-      const satelliteData = await apiGet(`/api/satellites/${satelliteId}`);
-      console.log('拠点データ:', satelliteData);
+      const satelliteResponse = await apiGet(`/api/satellites/${satelliteId}`);
+      console.log('拠点データ:', satelliteResponse);
+      
+      // APIレスポンスの形式を確認（success/data形式または直接データ形式）
+      const satelliteData = satelliteResponse.success ? satelliteResponse.data : satelliteResponse;
+      
+      if (!satelliteData || !satelliteData.id) {
+        throw new Error('拠点データの取得に失敗しました');
+      }
 
       // 拠点統計情報を取得
-      const statsData = await apiGet(`/api/satellites/${satelliteId}/stats`);
-      console.log('統計データ:', statsData);
+      let statsData = { stats: { current_students: 0, instructor_count: 0 } };
+      try {
+        const statsResponse = await apiGet(`/api/satellites/${satelliteId}/stats`);
+        console.log('統計データ:', statsResponse);
+        // APIレスポンスの形式を確認
+        const statsResponseData = statsResponse.success ? statsResponse.data : statsResponse;
+        console.log('統計データ（処理後）:', statsResponseData);
+        if (statsResponseData && statsResponseData.stats) {
+          statsData = statsResponseData;
+          console.log('統計データ設定完了:', statsData);
+        } else {
+          console.warn('統計データの形式が不正です:', statsResponseData);
+          // フォールバック: 指導者一覧から数を計算
+          try {
+            const instructorsResponse = await apiGet(`/api/satellites/${satelliteId}/instructors`);
+            const instructorsData = instructorsResponse.success ? instructorsResponse.data : instructorsResponse;
+            const activeInstructors = Array.isArray(instructorsData) ? instructorsData.filter(i => i.status === 1).length : 0;
+            statsData = { stats: { current_students: 0, instructor_count: activeInstructors } };
+            console.log('フォールバック統計データ:', statsData);
+          } catch (fallbackError) {
+            console.warn('フォールバック統計データ取得にも失敗:', fallbackError);
+          }
+        }
+      } catch (statsError) {
+        console.warn('統計データの取得に失敗しました:', statsError);
+        // フォールバック: 指導者一覧から数を計算
+        try {
+          const instructorsResponse = await apiGet(`/api/satellites/${satelliteId}/instructors`);
+          const instructorsData = instructorsResponse.success ? instructorsResponse.data : instructorsResponse;
+          const activeInstructors = Array.isArray(instructorsData) ? instructorsData.filter(i => i.status === 1).length : 0;
+          statsData = { stats: { current_students: 0, instructor_count: activeInstructors } };
+          console.log('フォールバック統計データ:', statsData);
+        } catch (fallbackError) {
+          console.warn('フォールバック統計データ取得にも失敗:', fallbackError);
+        }
+      }
 
       // 拠点情報を更新
-      setLocationInfo({
+      const updatedLocationInfo = {
         id: satelliteData.id,
-        name: satelliteData.name,
-        facilityName: satelliteData.company_name || '',
-        maxStudents: satelliteData.max_users,
-        currentStudents: statsData.stats.current_students,
-        address: satelliteData.address || '',
-        phone: satelliteData.phone || '',
-        manager: currentUser.name
+        name: satelliteData.name || '未設定',
+        facilityName: satelliteData.company_name || '未設定',
+        maxStudents: satelliteData.max_users || 10,
+        currentStudents: statsData.stats?.current_students || 0,
+        instructorCount: statsData.stats?.instructor_count || 0,
+        address: satelliteData.address || '未設定',
+        phone: satelliteData.phone || '未設定',
+        manager: currentUser?.name || '未設定'
+      };
+      
+      console.log('更新される拠点情報:', updatedLocationInfo);
+      console.log('統計データ詳細:', {
+        statsData: statsData,
+        currentStudents: statsData.stats?.current_students,
+        instructorCount: statsData.stats?.instructor_count
       });
+      
+      setLocationInfo(updatedLocationInfo);
+      
+      // 親コンポーネントに拠点情報の更新を通知（初回のみ）
+      if (onLocationChange && !locationInfo.id) {
+        onLocationChange({
+          id: satelliteData.id,
+          name: satelliteData.name,
+          company_name: satelliteData.company_name,
+          max_users: satelliteData.max_users,
+          address: satelliteData.address,
+          phone: satelliteData.phone
+        });
+      }
 
       // 編集用の状態も更新
       setEditLocation({
-        name: satelliteData.name,
-        maxStudents: satelliteData.max_users,
+        name: satelliteData.name || '',
+        maxStudents: satelliteData.max_users || 10,
         address: satelliteData.address || '',
         phone: satelliteData.phone || ''
       });
 
     } catch (error) {
       console.error('拠点情報取得エラー:', error);
-      setError(error.message);
+      console.error('エラー詳細:', {
+        satelliteId,
+        currentUser: currentUser?.id,
+        errorMessage: error.message,
+        errorStack: error.stack
+      });
+      setError(`拠点情報の取得に失敗しました: ${error.message}`);
     }
   };
 
   // 指導者一覧を取得
   const fetchInstructors = async () => {
-    const satelliteId = getCurrentUserSatelliteId();
-    if (!satelliteId) return;
+    let satelliteId = getCurrentUserSatelliteId();
+    if (!satelliteId) {
+      // 拠点IDが見つからない場合、拠点一覧から取得
+      try {
+        const satellitesResponse = await apiGet('/api/satellites');
+        // APIレスポンスの形式を確認（success/data形式または直接データ形式）
+        const satellitesData = satellitesResponse.success ? satellitesResponse.data : satellitesResponse;
+        if (satellitesData && satellitesData.length > 0) {
+          satelliteId = satellitesData[0].id;
+        } else {
+          return;
+        }
+      } catch (error) {
+        console.error('拠点一覧取得エラー:', error);
+        return;
+      }
+    }
 
     try {
       console.log('指導者一覧を取得中...', satelliteId);
-      const data = await apiGet(`/api/satellites/${satelliteId}/instructors`);
-      console.log('指導者データ:', data);
+      const response = await apiGet(`/api/satellites/${satelliteId}/instructors`);
+      console.log('指導者データ:', response);
 
-      setInstructors(data.data || []);
+      // APIレスポンスの形式を確認（success/data形式または直接データ形式）
+      const instructorsData = response.success ? response.data : response;
+      
+      if (instructorsData && instructorsData.data) {
+        setInstructors(instructorsData.data);
+      } else if (Array.isArray(instructorsData)) {
+        setInstructors(instructorsData);
+      } else {
+        setInstructors([]);
+      }
     } catch (error) {
       console.error('指導者一覧取得エラー:', error);
-      setError(error.message);
+      // 指導者一覧の取得に失敗しても拠点情報は表示する
+      setInstructors([]);
     }
   };
 
@@ -110,6 +272,16 @@ const LocationManagementForInstructor = ({ currentUser }) => {
       setError(null);
       
       try {
+        // 現在のユーザー情報を確認
+        console.log('コンポーネント初期化 - 現在のユーザー:', currentUser);
+        
+        if (!currentUser) {
+          setError('ユーザー情報が取得できません');
+          setLoading(false);
+          return;
+        }
+        
+        // 拠点情報と指導者一覧を並行して取得
         await Promise.all([
           fetchLocationData(),
           fetchInstructors()
@@ -122,12 +294,68 @@ const LocationManagementForInstructor = ({ currentUser }) => {
       }
     };
 
+    // 初回のみ実行
     loadData();
-  }, [currentUser]);
+  }, []); // 空の依存配列で初回のみ実行
+
+  // ユーザー情報を最新の状態に更新
+  const updateUserInfo = async () => {
+    try {
+      console.log('ユーザー情報を最新の状態に更新中...');
+      const response = await apiGet('/api/user-info');
+      console.log('最新のユーザー情報:', response);
+      
+      // APIレスポンスの形式を確認（success/data形式または直接データ形式）
+      const userData = response.success ? response.data : response;
+      
+      if (userData && userData.id) {
+        // localStorageを更新（無限ループを避けるため、現在のユーザー情報と比較）
+        const currentStoredUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+        if (JSON.stringify(currentStoredUser) !== JSON.stringify(userData)) {
+          localStorage.setItem('currentUser', JSON.stringify(userData));
+          console.log('ユーザー情報を更新しました');
+        } else {
+          console.log('ユーザー情報は既に最新です');
+        }
+        return userData;
+      } else {
+        console.warn('ユーザー情報の形式が不正です:', response);
+        return null;
+      }
+    } catch (error) {
+      console.error('ユーザー情報更新エラー:', error);
+      console.error('エラー詳細:', {
+        errorMessage: error.message,
+        errorStack: error.stack
+      });
+      // エラーが発生しても処理を継続
+      return null;
+    }
+  };
 
   // 学習可能状況の判定
   const isOverCapacity = locationInfo.currentStudents > locationInfo.maxStudents;
   const capacityPercentage = locationInfo.maxStudents > 0 ? (locationInfo.currentStudents / locationInfo.maxStudents) * 100 : 0;
+  
+  // 拠点情報が取得できているかチェック
+  const hasLocationInfo = locationInfo.id && locationInfo.name !== '未設定';
+
+  // データを手動でリフレッシュする関数
+  const refreshData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await Promise.all([
+        fetchLocationData(),
+        fetchInstructors()
+      ]);
+    } catch (error) {
+      console.error('データリフレッシュエラー:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddTeacher = async (e) => {
     e.preventDefault();
@@ -155,19 +383,17 @@ const LocationManagementForInstructor = ({ currentUser }) => {
         department: newTeacher.department
       });
 
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || '指導員の追加に失敗しました');
+      if (response.success) {
+        // 指導者一覧を再取得
+        await fetchInstructors();
+        
+        setNewTeacher({ name: '', email: '', department: '', password: '' });
+        setShowAddTeacherForm(false);
+        
+        alert(`指導員が追加されました！\nログイン情報:\nID: ${response.data?.login_code}\nパスワード: ${newTeacher.password}`);
+      } else {
+        throw new Error(response.message || '指導員の追加に失敗しました');
       }
-
-      // 指導者一覧を再取得
-      await fetchInstructors();
-      
-      setNewTeacher({ name: '', email: '', department: '', password: '' });
-      setShowAddTeacherForm(false);
-      
-      alert(`指導員が追加されました！\nログイン情報:\nID: ${data.data.login_code}\nパスワード: ${newTeacher.password}`);
     } catch (error) {
       console.error('指導員追加エラー:', error);
       alert(`指導員の追加に失敗しました: ${error.message}`);
@@ -181,29 +407,21 @@ const LocationManagementForInstructor = ({ currentUser }) => {
     if (!satelliteId) return;
 
     try {
-      const response = await fetch(`/api/satellites/${satelliteId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: editLocation.name,
-          max_users: parseInt(editLocation.maxStudents),
-          address: editLocation.address,
-          phone: editLocation.phone
-        })
+      const response = await apiPut(`/api/satellites/${satelliteId}`, {
+        name: editLocation.name,
+        max_users: parseInt(editLocation.maxStudents),
+        address: editLocation.address,
+        phone: editLocation.phone
       });
 
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || '拠点情報の更新に失敗しました');
+      if (response.success) {
+        // 拠点情報を再取得
+        await fetchLocationData();
+        setShowEditLocationForm(false);
+        alert('拠点情報が更新されました。');
+      } else {
+        throw new Error(response.message || '拠点情報の更新に失敗しました');
       }
-
-      // 拠点情報を再取得
-      await fetchLocationData();
-      setShowEditLocationForm(false);
-      alert('拠点情報が更新されました。');
     } catch (error) {
       console.error('拠点更新エラー:', error);
       alert(`拠点情報の更新に失敗しました: ${error.message}`);
@@ -212,24 +430,16 @@ const LocationManagementForInstructor = ({ currentUser }) => {
 
   const toggleTeacherStatus = async (teacherId) => {
     try {
-      const response = await fetch(`/api/users/${teacherId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status: instructors.find(t => t.id === teacherId)?.status === 1 ? 0 : 1
-        })
+      const response = await apiPut(`/api/users/${teacherId}`, {
+        status: instructors.find(t => t.id === teacherId)?.status === 1 ? 0 : 1
       });
 
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || '指導員ステータスの更新に失敗しました');
+      if (response.success) {
+        // 指導者一覧を再取得
+        await fetchInstructors();
+      } else {
+        throw new Error(response.message || '指導員ステータスの更新に失敗しました');
       }
-
-      // 指導者一覧を再取得
-      await fetchInstructors();
     } catch (error) {
       console.error('指導員ステータス更新エラー:', error);
       alert(`指導員ステータスの更新に失敗しました: ${error.message}`);
@@ -260,12 +470,18 @@ const LocationManagementForInstructor = ({ currentUser }) => {
           <div className="text-red-500 text-4xl mb-4">⚠️</div>
           <h3 className="text-xl font-bold text-gray-800 mb-2">エラーが発生しました</h3>
           <p className="text-gray-600 mb-4">{error}</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
-          >
-            再読み込み
-          </button>
+          <div className="text-sm text-gray-500 mb-4">
+            <p>現在のユーザー情報:</p>
+            <p>名前: {currentUser?.name || '未設定'}</p>
+            <p>ロール: {currentUser?.role || '未設定'}</p>
+            <p>拠点ID: {currentUser?.satellite_ids ? JSON.stringify(currentUser.satellite_ids) : '未設定'}</p>
+          </div>
+                     <button 
+             onClick={refreshData}
+             className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
+           >
+             データを再取得
+           </button>
         </div>
       </div>
     );
@@ -278,12 +494,49 @@ const LocationManagementForInstructor = ({ currentUser }) => {
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div className="flex-1">
             <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
-              🏢 拠点管理 - {locationInfo.name}
+              🏢 拠点管理 - {hasLocationInfo ? locationInfo.name : '拠点情報を読み込み中...'}
             </h2>
-            <p className="text-lg text-gray-600">{locationInfo.facilityName}</p>
+            <p className="text-lg text-gray-600">{hasLocationInfo ? locationInfo.facilityName : '情報を取得中...'}</p>
           </div>
         </div>
       </div>
+
+             {/* 拠点情報が取得できない場合のメッセージ */}
+       {!hasLocationInfo && !loading && (
+         <div className="bg-gradient-to-r from-yellow-50 to-orange-100 border border-yellow-200 rounded-2xl p-6 mb-6">
+           <div className="flex items-center gap-3 mb-4">
+             <span className="text-2xl">ℹ️</span>
+             <h3 className="text-xl font-bold text-yellow-800">拠点情報の確認</h3>
+           </div>
+           <p className="text-yellow-700 mb-4">
+             拠点情報が正しく取得できていません。以下の点を確認してください：
+           </p>
+           <ul className="text-yellow-700 list-disc pl-5 mb-4">
+             <li>ユーザーに拠点が正しく割り当てられているか</li>
+             <li>データベースに拠点情報が存在するか</li>
+             <li>APIサーバーが正常に動作しているか</li>
+           </ul>
+           <div className="text-sm text-gray-600">
+             <p><strong>現在のユーザー情報:</strong></p>
+             <p>名前: {currentUser?.name || '未設定'}</p>
+             <p>ロール: {currentUser?.role || '未設定'}</p>
+             <p>拠点ID: {currentUser?.satellite_ids ? JSON.stringify(currentUser.satellite_ids) : '未設定'}</p>
+             <p>企業ID: {currentUser?.company_id || '未設定'}</p>
+             <p>ユーザーID: {currentUser?.id || '未設定'}</p>
+           </div>
+           <div className="mt-4 p-3 bg-gray-100 rounded-lg">
+             <p className="text-sm font-medium text-gray-700 mb-2">デバッグ情報:</p>
+             <p className="text-xs text-gray-600">localStorage currentUser: {localStorage.getItem('currentUser') ? '存在' : 'なし'}</p>
+             <p className="text-xs text-gray-600">localStorage selectedSatellite: {localStorage.getItem('selectedSatellite') ? '存在' : 'なし'}</p>
+             <button 
+               onClick={refreshData}
+               className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+             >
+               データを再取得
+             </button>
+           </div>
+         </div>
+       )}
 
       {/* 容量警告 */}
       {isOverCapacity && (
@@ -331,9 +584,9 @@ const LocationManagementForInstructor = ({ currentUser }) => {
         <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
           <h3 className="text-lg font-semibold text-gray-700 mb-2">指導員数</h3>
           <p className="text-3xl font-bold text-indigo-600 mb-2">
-            {instructors.filter(t => t.status === 1).length}名
+            {locationInfo.instructorCount > 0 ? locationInfo.instructorCount : instructors.filter(t => t.status === 1).length}名
           </p>
-          <small className="text-gray-500">アクティブ</small>
+          <small className="text-gray-500">責任者含む</small>
         </div>
         <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
           <h3 className="text-lg font-semibold text-gray-700 mb-2">容量使用率</h3>

@@ -5,19 +5,22 @@ import InstructorHeader from '../components/InstructorHeader';
 import VoiceCareSystem from '../components/VoiceCareSystem';
 import StudentManagement from '../components/StudentManagement';
 import LocationManagementForInstructor from '../components/LocationManagementForInstructor';
+import SatelliteManagement from '../components/SatelliteManagement';
 import HomeSupportEvaluationsPage from './HomeSupportEvaluationsPage';
 import SanitizedInput from '../components/SanitizedInput';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
+import InstructorPasswordChangeModal from '../components/InstructorPasswordChangeModal';
 
 const InstructorDashboard = () => {
+  console.log('=== InstructorDashboard Component Mounted ===');
+  console.log('Current location:', window.location.href);
+  console.log('Current pathname:', window.location.pathname);
+  console.log('Current hash:', window.location.hash);
+  
   const [activeTab, setActiveTab] = useState('overview');
   const [showPasswordChangeForm, setShowPasswordChangeForm] = useState(false);
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
-  const [passwordErrors, setPasswordErrors] = useState({});
+  const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
+  const [authError, setAuthError] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser, logout } = useInstructorGuard();
@@ -54,102 +57,84 @@ const InstructorDashboard = () => {
 
     // パスワード変更要求があるかチェック
     if (currentUser.passwordResetRequired) {
-      setActiveTab('settings');
-      setShowPasswordChangeForm(true);
+      setShowPasswordChangeModal(true);
     }
+
+    // パスワード変更申請一覧を取得
+    // fetchPasswordRequests(); // この関数は削除されたため、ここでは呼び出さない
   }, [currentUser, location]);
 
 
 
-  const validatePassword = (password) => {
-    const errors = [];
-    if (password.length < 8) errors.push('8文字以上で入力してください');
-    if (!/[A-Z]/.test(password)) errors.push('大文字を含めてください');
-    if (!/[a-z]/.test(password)) errors.push('小文字を含めてください');
-    if (!/[0-9]/.test(password)) errors.push('数字を含めてください');
-    return errors;
-  };
 
-  const handlePasswordChange = (e) => {
-    e.preventDefault();
-    setPasswordErrors({});
 
-    // バリデーション
-    const errors = {};
-    
-    if (!passwordForm.currentPassword) {
-      errors.currentPassword = '現在のパスワードを入力してください';
-    }
-    
-    if (!passwordForm.newPassword) {
-      errors.newPassword = '新しいパスワードを入力してください';
-    } else {
-      const passwordValidation = validatePassword(passwordForm.newPassword);
-      if (passwordValidation.length > 0) {
-        errors.newPassword = passwordValidation.join(', ');
+  // パスワード変更
+  const handlePasswordChange = async (currentPassword, newPassword) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(`/api/users/${currentUser.id}/change-password`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        alert('パスワードが正常に変更されました。');
+        setShowPasswordChangeForm(false);
+        // パスワード変更要求フラグをクリア
+        if (localUser) {
+          setLocalUser(prev => ({
+            ...prev,
+            passwordResetRequired: false
+          }));
+        }
+        // LocalStorageも更新
+        const updatedUser = { ...currentUser, passwordResetRequired: false };
+        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+      } else {
+        throw new Error(data.message || 'パスワード変更に失敗しました');
       }
-    }
-    
-    if (!passwordForm.confirmPassword) {
-      errors.confirmPassword = 'パスワードの確認を入力してください';
-    } else if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      errors.confirmPassword = 'パスワードが一致しません';
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setPasswordErrors(errors);
-      return;
-    }
-
-    // モック認証 - 実際の実装では API を呼び出します
-    if (passwordForm.currentPassword !== 'instructor123' && passwordForm.currentPassword !== 'teacher123') {
-      setPasswordErrors({ currentPassword: '現在のパスワードが間違っています' });
-      return;
-    }
-
-    // パスワード変更成功
-    alert('パスワードが正常に変更されました。\n次回ログイン時から新しいパスワードをご利用ください。');
-    
-    // パスワード変更要求フラグをクリア
-    const updatedUser = { ...localUser, passwordResetRequired: false };
-    setLocalUser(updatedUser);
-    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-    
-    // フォームをリセット
-    setPasswordForm({
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: ''
-    });
-    setShowPasswordChangeForm(false);
-  };
-
-  const handlePasswordFormChange = (e) => {
-    const { name, value } = e.target;
-    setPasswordForm(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    
-    // エラーをクリア
-    if (passwordErrors[name]) {
-      setPasswordErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
+    } catch (error) {
+      console.error('パスワード変更に失敗:', error);
+      alert(`パスワード変更に失敗しました: ${error.message}`);
+      throw error;
     }
   };
+
+
 
   const handleLocationChange = (newLocation) => {
-    // 新しい拠点情報でユーザー情報を更新
-    const updatedUser = {
-      ...localUser,
-      location: newLocation
-    };
-    setLocalUser(updatedUser);
+    console.log('拠点情報が変更されました:', newLocation);
     
-    // LocalStorageも更新
-    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+    // LocationManagementForInstructorからの拠点情報更新の場合
+    if (newLocation.id && newLocation.name) {
+      // 拠点情報をlocalStorageに保存
+      localStorage.setItem('selectedSatellite', JSON.stringify(newLocation));
+      
+      // ユーザー情報のsatellite_idsを更新
+      const updatedUser = {
+        ...localUser,
+        satellite_ids: [newLocation.id]
+      };
+      setLocalUser(updatedUser);
+      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+    } else {
+      // 従来の拠点情報更新の場合
+      const updatedUser = {
+        ...localUser,
+        location: newLocation
+      };
+      setLocalUser(updatedUser);
+      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+    }
   };
 
   if (!currentUser || !localUser) {
@@ -158,14 +143,16 @@ const InstructorDashboard = () => {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
-      <InstructorHeader 
-        user={localUser} 
-        onLocationChange={handleLocationChange}
-      />
+      <div className={showPasswordChangeModal ? 'pointer-events-none opacity-50' : ''}>
+        <InstructorHeader 
+          user={localUser} 
+          onLocationChange={handleLocationChange}
+        />
+      </div>
       
       <div className="flex flex-col flex-1 h-[calc(100vh-80px)] overflow-hidden">
         <aside className="w-full bg-white text-gray-800 flex-shrink-0 overflow-y-auto border-b border-gray-200">
-          <nav className="p-4 flex flex-row gap-2 overflow-x-auto">
+          <nav className={`p-4 flex flex-row gap-2 overflow-x-auto ${showPasswordChangeModal ? 'pointer-events-none opacity-50' : ''}`}>
             <button 
               className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'overview' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
               onClick={() => setActiveTab('overview')}
@@ -182,8 +169,16 @@ const InstructorDashboard = () => {
               className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'location' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
               onClick={() => setActiveTab('location')}
             >
-              🏢 拠点管理
+              🏢 拠点情報
             </button>
+            {localUser.role >= 5 && (
+              <button 
+                className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'satellite-management' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
+                onClick={() => setActiveTab('satellite-management')}
+              >
+                🏢 拠点管理
+              </button>
+            )}
             <button 
               className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'home-support' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
               onClick={() => setActiveTab('home-support')}
@@ -217,9 +212,28 @@ const InstructorDashboard = () => {
         </aside>
 
         <main className="flex-1 p-8 overflow-y-auto bg-white">
+          {/* 認証エラーメッセージ */}
+          {authError && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <span className="text-red-500 mr-2">⚠️</span>
+                  <span className="text-red-700 font-medium">{authError}</span>
+                </div>
+                <button
+                  onClick={() => setAuthError(null)}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
+          
           {activeTab === 'overview' && <VoiceCareSystem instructorId={localUser.id} />}
           {activeTab === 'students' && <StudentManagement instructorId={localUser.id} />}
-          {activeTab === 'location' && <LocationManagementForInstructor currentUser={localUser} />}
+          {activeTab === 'location' && <LocationManagementForInstructor currentUser={localUser} onLocationChange={handleLocationChange} />}
+          {activeTab === 'satellite-management' && <SatelliteManagement currentUser={localUser} />}
           {activeTab === 'home-support' && <HomeSupportEvaluationsPage />}
           {activeTab === 'learning-preview' && (
             <div className="p-8 bg-white rounded-lg shadow-lg text-center text-gray-600">
@@ -283,7 +297,7 @@ const InstructorDashboard = () => {
                   
                   {!showPasswordChangeForm ? (
                     <div className="text-gray-700 mb-4">
-                      <p>セキュリティ向上のため、定期的なパスワード変更をお勧めします。</p>
+                      <p>指導員は自身のパスワードをいつでも変更できます。</p>
                       <button 
                         className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors duration-300"
                         onClick={() => setShowPasswordChangeForm(true)}
@@ -292,82 +306,22 @@ const InstructorDashboard = () => {
                       </button>
                     </div>
                   ) : (
-                    <form className="grid grid-cols-1 gap-4" onSubmit={handlePasswordChange}>
-                      <div className="flex flex-col">
-                        <label htmlFor="currentPassword" className="text-gray-700 font-medium mb-1">現在のパスワード <span className="text-red-500">*</span></label>
-                        <SanitizedInput
-                          type="password"
-                          id="currentPassword"
-                          name="currentPassword"
-                          value={passwordForm.currentPassword}
-                          onChange={handlePasswordFormChange}
-                          sanitizeMode={SANITIZE_OPTIONS.NONE}
-                          className={`px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${passwordErrors.currentPassword ? 'border-red-500 focus:ring-red-500' : ''}`}
-                        />
-                        {passwordErrors.currentPassword && (
-                          <p className="text-red-500 text-sm mt-1">{passwordErrors.currentPassword}</p>
-                        )}
-                      </div>
-
-                      <div className="flex flex-col">
-                        <label htmlFor="newPassword" className="text-gray-700 font-medium mb-1">新しいパスワード <span className="text-red-500">*</span></label>
-                        <SanitizedInput
-                          type="password"
-                          id="newPassword"
-                          name="newPassword"
-                          value={passwordForm.newPassword}
-                          onChange={handlePasswordFormChange}
-                          sanitizeMode={SANITIZE_OPTIONS.NONE}
-                          className={`px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${passwordErrors.newPassword ? 'border-red-500 focus:ring-red-500' : ''}`}
-                        />
-                        {passwordErrors.newPassword && (
-                          <p className="text-red-500 text-sm mt-1">{passwordErrors.newPassword}</p>
-                        )}
-                        <div className="text-gray-500 text-sm mt-1">
-                          パスワード要件: 8文字以上、大文字・小文字・数字を含む
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col">
-                        <label htmlFor="confirmPassword" className="text-gray-700 font-medium mb-1">新しいパスワード（確認） <span className="text-red-500">*</span></label>
-                        <SanitizedInput
-                          type="password"
-                          id="confirmPassword"
-                          name="confirmPassword"
-                          value={passwordForm.confirmPassword}
-                          onChange={handlePasswordFormChange}
-                          sanitizeMode={SANITIZE_OPTIONS.NONE}
-                          className={`px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${passwordErrors.confirmPassword ? 'border-red-500 focus:ring-red-500' : ''}`}
-                        />
-                        {passwordErrors.confirmPassword && (
-                          <p className="text-red-500 text-sm mt-1">{passwordErrors.confirmPassword}</p>
-                        )}
-                      </div>
-
-                      <div className="flex justify-end gap-3">
-                        <button 
-                          type="submit" 
-                          className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors duration-300"
-                        >
-                          パスワードを変更
-                        </button>
-                        <button 
-                          type="button" 
-                          className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-300"
-                          onClick={() => {
-                            setShowPasswordChangeForm(false);
-                            setPasswordForm({
-                              currentPassword: '',
-                              newPassword: '',
-                              confirmPassword: ''
-                            });
-                            setPasswordErrors({});
-                          }}
-                        >
-                          キャンセル
-                        </button>
-                      </div>
-                    </form>
+                    <div className="bg-white p-4 rounded-lg border border-gray-200">
+                      <h4 className="text-lg font-medium text-gray-800 mb-4">パスワード変更</h4>
+                      <p className="text-gray-600 mb-4">新しいパスワードを設定してください。</p>
+                      <button 
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors duration-300"
+                        onClick={() => setShowPasswordChangeModal(true)}
+                      >
+                        パスワード変更モーダルを開く
+                      </button>
+                      <button 
+                        className="ml-2 px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-300"
+                        onClick={() => setShowPasswordChangeForm(false)}
+                      >
+                        キャンセル
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -389,6 +343,14 @@ const InstructorDashboard = () => {
           )}
         </main>
       </div>
+
+      {/* パスワード変更モーダル */}
+      <InstructorPasswordChangeModal
+        isOpen={showPasswordChangeModal}
+        onClose={() => setShowPasswordChangeModal(false)}
+        onPasswordChange={handlePasswordChange}
+        user={currentUser}
+      />
     </div>
   );
 };

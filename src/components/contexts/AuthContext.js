@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   getStoredTokens, 
   handleTokenInvalid, 
-  isMockLogin, 
   isAuthRequiredPage, 
   handleLogout,
   isRefreshTokenExpired,
@@ -79,14 +78,6 @@ export const AuthProvider = ({ children }) => {
         console.log('ユーザー情報:', { role: user.role, name: user.name });
         setCurrentUser(user);
 
-        // モックログインの場合は認証済みとして扱う
-        if (isMockLogin()) {
-          console.log('モックログインとして認証');
-          setIsAuthenticated(true);
-          setIsLoading(false);
-          return;
-        }
-
         // JWT認証の場合
         const { accessToken, refreshToken } = getStoredTokens();
         console.log('保存されたトークン:', { 
@@ -94,10 +85,11 @@ export const AuthProvider = ({ children }) => {
           refreshToken: refreshToken ? '存在' : 'なし' 
         });
         
-        // トークンがない場合はモックログインとして扱う
+        // トークンがない場合は認証されていないとして扱う
         if (!accessToken || !refreshToken) {
-          console.log('トークンが見つかりません - モックログインとして処理');
-          setIsAuthenticated(true);
+          console.log('トークンが見つかりません - 認証されていません');
+          setIsAuthenticated(false);
+          setCurrentUser(null);
           setIsLoading(false);
           return;
         }
@@ -314,7 +306,7 @@ export const AuthProvider = ({ children }) => {
 
   // 定期的なトークンチェック（認証済みの場合のみ）
   useEffect(() => {
-    if (!isAuthenticated || isMockLogin()) {
+    if (!isAuthenticated) {
       return;
     }
 

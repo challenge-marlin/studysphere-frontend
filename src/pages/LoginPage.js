@@ -18,6 +18,8 @@ const LoginPage = () => {
   const [satellites, setSatellites] = useState([]);
   const [selectedCompany, setSelectedCompany] = useState('');
   const [selectedSatellite, setSelectedSatellite] = useState('');
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [restoreMessage, setRestoreMessage] = useState('');
   const navigate = useNavigate();
   const { login, isAuthenticated, currentUser } = useAuth();
 
@@ -26,6 +28,34 @@ const LoginPage = () => {
     localStorage.clear();
     sessionStorage.clear();
     window.location.reload();
+  };
+
+  // マスターユーザー復旧機能
+  const restoreMasterUser = async () => {
+    setIsRestoring(true);
+    setRestoreMessage('');
+    
+    try {
+      const response = await fetch('http://localhost:5000/api/restore-master-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setRestoreMessage(`✅ ${data.message}\n\nユーザーID: ${data.data.user_id}\nパスワード: ${data.data.password}\nロール: ${data.data.role}`);
+      } else {
+        setRestoreMessage(`❌ ${data.message}`);
+      }
+    } catch (error) {
+      console.error('Master user restoration error:', error);
+      setRestoreMessage('❌ マスターユーザー復旧処理中にエラーが発生しました');
+    } finally {
+      setIsRestoring(false);
+    }
   };
 
   // 認証済みユーザーがログインページにアクセスした場合のリダイレクト
@@ -199,6 +229,7 @@ const LoginPage = () => {
               email: user.email || '',
               login_code: user.login_code,
               role: 'instructor',
+              passwordResetRequired: user.password_reset_required || false,
               access_token: user.access_token,
               refresh_token: user.refresh_token
             };
@@ -242,6 +273,7 @@ const LoginPage = () => {
               email: user.email || '',
               login_code: user.login_code,
               role: 'admin',
+              passwordResetRequired: user.password_reset_required || false,
               access_token: user.access_token,
               refresh_token: user.refresh_token
             };
@@ -268,6 +300,7 @@ const LoginPage = () => {
           email: user.email || '',
           login_code: user.login_code,
           role: 'admin',
+          password_reset_required: user.password_reset_required || false,
           access_token: user.access_token,
           refresh_token: user.refresh_token
         };
@@ -304,6 +337,7 @@ const LoginPage = () => {
         email: userData.email || '',
         login_code: userData.login_code,
         role: 'admin',
+        password_reset_required: userData.password_reset_required || false,
         access_token: userData.access_token,
         refresh_token: userData.refresh_token
       };
@@ -341,6 +375,7 @@ const LoginPage = () => {
           email: userData.email || '',
           login_code: userData.login_code,
           role: 'instructor',
+          passwordResetRequired: userData.password_reset_required || false,
           access_token: userData.access_token,
           refresh_token: userData.refresh_token
         };
@@ -383,11 +418,12 @@ const LoginPage = () => {
           name: user.user_name,
           email: user.email || '',
           login_code: user.login_code,
-          role: 'instructor',
+          role: user.role, // バックエンドから返された実際のロールを使用
           company_id: user.company_id,
           company_name: user.company_name,
           satellite_id: user.satellite_id,
           satellite_name: user.satellite_name,
+          passwordResetRequired: user.password_reset_required || false,
           access_token: user.access_token,
           refresh_token: user.refresh_token
         };
@@ -429,12 +465,23 @@ const LoginPage = () => {
       console.log('companyId:', companyId);
       console.log('userData:', userData);
       
+      console.log('=== Instructor Login API Call ===');
+      console.log('Calling instructorLoginAPI with:', {
+        username: credentials.id,
+        password: credentials.password ? '***' : 'undefined',
+        companyId: companyId,
+        satelliteId: selectedSatellite
+      });
+      
       const instructorData = await instructorLoginAPI(
         credentials.id, 
         credentials.password, 
         companyId, 
         selectedSatellite
       );
+
+      console.log('=== Instructor Login API Response ===');
+      console.log('Response:', instructorData);
 
       if (instructorData.success && instructorData.data) {
         const user = instructorData.data;
@@ -443,14 +490,21 @@ const LoginPage = () => {
           name: user.user_name,
           email: user.email || '',
           login_code: user.login_code,
-          role: 'instructor',
+          role: user.role, // バックエンドから返された実際のロールを使用
           company_id: user.company_id,
           company_name: user.company_name,
           satellite_id: user.satellite_id,
           satellite_name: user.satellite_name,
+          passwordResetRequired: user.password_reset_required || false,
           access_token: user.access_token,
           refresh_token: user.refresh_token
         };
+        
+        // 選択された企業・拠点情報を明示的に保存
+        console.log('=== Satellite Selection Login Success Debug ===');
+        console.log('Selected company_id:', user.company_id);
+        console.log('Selected satellite_id:', user.satellite_id);
+        console.log('User data to be saved:', userData);
         
         login(userData, user.access_token, user.refresh_token);
         
@@ -461,11 +515,27 @@ const LoginPage = () => {
           adminName: user.user_name
         });
         
-        navigate('/instructor/dashboard');
+        console.log('=== Navigation Debug ===');
+        console.log('About to navigate to /instructor/dashboard');
+        console.log('Current location:', window.location.href);
+        console.log('Current pathname:', window.location.pathname);
+        console.log('Current hash:', window.location.hash);
+        
+        // 強制的にリロードしてナビゲーションを確実にする
+        navigate('/instructor/dashboard', { replace: true });
+        
+        console.log('Navigation completed');
+        console.log('New location after navigation:', window.location.href);
       } else {
+        console.error('=== Instructor Login Failed ===');
+        console.error('Response not successful:', instructorData);
         throw new Error(instructorData.message || '指導員ログインに失敗しました');
       }
     } catch (error) {
+      console.error('=== Instructor Login Error ===');
+      console.error('Error details:', error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
       setError(error.message || '指導員ログイン処理中にエラーが発生しました');
     } finally {
       setIsLoading(false);
@@ -719,13 +789,34 @@ const LoginPage = () => {
           </button>
         </form>
 
-        <div className="text-center mt-4">
+        <div className="text-center mt-4 space-y-2">
           <button
             onClick={clearCache}
-            className="text-sm text-gray-600 hover:underline"
+            className="text-sm text-gray-600 hover:underline block"
           >
             キャッシュをクリアして再ログイン
           </button>
+          
+          <div className="border-t border-gray-200 pt-4">
+            <button
+              onClick={restoreMasterUser}
+              disabled={isRestoring}
+              className="text-sm bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isRestoring ? '復旧中...' : 'マスターユーザー復旧'}
+            </button>
+            <p className="text-xs text-gray-500 mt-1">
+              データ消失時の緊急復旧用
+            </p>
+          </div>
+          
+          {restoreMessage && (
+            <div className="mt-3 p-3 bg-gray-100 border border-gray-300 rounded text-sm">
+              <div style={{ whiteSpace: 'pre-line' }}>
+                {restoreMessage}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

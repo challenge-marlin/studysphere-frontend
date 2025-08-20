@@ -3,8 +3,50 @@ import SanitizedInput from './SanitizedInput';
 import SanitizedTextarea from './SanitizedTextarea';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 import { apiGet, apiPost, apiPut, apiDelete, apiCall } from '../utils/api';
+import { useAuth } from './contexts/AuthContext';
 
 const InstructorManagement = () => {
+  const { currentUser } = useAuth();
+  
+  // JWTトークンをデコードする関数
+  const decodeJWT = (token) => {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(jsonPayload);
+    } catch (error) {
+      console.error('JWTデコードエラー:', error);
+      return null;
+    }
+  };
+
+  // ユーザーの実際のロール番号を取得
+  const getActualRoleId = () => {
+    // まずJWTトークンからロール情報を取得
+    const accessToken = localStorage.getItem('accessToken');
+    if (accessToken) {
+      const decodedToken = decodeJWT(accessToken);
+      if (decodedToken && decodedToken.role) {
+        // 拠点管理者判定をチェック（簡易版）
+        if (decodedToken.role === 4) {
+          // 拠点管理者の場合はロール5として扱う
+          return 5;
+        }
+        return decodedToken.role;
+      }
+    }
+    
+    // JWTから取得できない場合は、ユーザーオブジェクトのroleを試行
+    return currentUser?.role;
+  };
+  
+  // 権限チェック（ロール5以上のみアクセス可能）
+  const actualRoleId = getActualRoleId();
+  const hasPermission = actualRoleId >= 5;
+  
   const [instructors, setInstructors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -73,9 +115,12 @@ const InstructorManagement = () => {
   const fetchFacilityLocations = async () => {
     try {
       console.log('拠点一覧を取得中...');
-      const data = await apiGet('/api/satellites');
-      console.log('拠点データ:', data);
+      const response = await apiGet('/api/satellites');
+      console.log('拠点データ:', response);
 
+      // APIレスポンスの形式を確認（success/data形式）
+      const data = response.success ? response.data : [];
+      
       // データが配列かどうかチェック
       if (!Array.isArray(data)) {
         console.warn('拠点データが配列ではありません:', data);
@@ -118,13 +163,15 @@ const InstructorManagement = () => {
   // 指導者一覧を取得
   const fetchInstructors = async () => {
     try {
-      console.log('指導者一覧を取得中...');
+      console.log('=== 指導者一覧取得開始 ===');
       console.log('apiGet を呼び出します: /api/users');
-      console.log('apiGet の前');
+      
       const data = await apiGet('/api/users');
-      console.log('apiGet の後');
+      console.log('APIレスポンス取得成功');
+      console.log('取得したデータの型:', typeof data);
+      console.log('取得したデータが配列か:', Array.isArray(data));
+      console.log('取得したデータの長さ:', Array.isArray(data) ? data.length : '配列ではありません');
       console.log('取得したデータ:', data);
-      console.log('取得したデータの詳細:', JSON.stringify(data, null, 2));
 
       // データが配列かどうかチェック
       if (!Array.isArray(data)) {
@@ -133,10 +180,28 @@ const InstructorManagement = () => {
         return;
       }
 
+      // 全ユーザーのロールを確認
+      console.log('全ユーザーのロール確認:');
+      data.forEach((user, index) => {
+        console.log(`ユーザー${index + 1}: ID=${user.id}, 名前=${user.name}, ロール=${user.role}, ロール型=${typeof user.role}`);
+      });
+
       // ロール4、5のユーザーのみをフィルタリング
-      const instructorUsers = data.filter(user => user.role >= 4 && user.role <= 5);
-      console.log('指導者ユーザー:', instructorUsers);
-      console.log('指導者ユーザーのusername確認:', instructorUsers.map(u => ({ id: u.id, name: u.name, username: u.username })));
+      const instructorUsers = data.filter(user => {
+        const isInstructor = user.role >= 4 && user.role <= 5;
+        console.log(`ユーザー ${user.name} (ID: ${user.id}): ロール=${user.role}, 指導員判定=${isInstructor}`);
+        return isInstructor;
+      });
+      
+      console.log('フィルタリング後の指導者ユーザー:', instructorUsers);
+      console.log('指導者ユーザー数:', instructorUsers.length);
+      console.log('指導者ユーザーの詳細:', instructorUsers.map(u => ({ 
+        id: u.id, 
+        name: u.name, 
+        username: u.username, 
+        role: u.role,
+        email: u.email 
+      })));
       
       // 指導者ユーザーが空の場合は空配列を設定
       if (instructorUsers.length === 0) {
@@ -200,7 +265,8 @@ const InstructorManagement = () => {
             } else if (user.satellite_ids) {
               // satellite_detailsが空の場合、satellite_idsから拠点情報を取得
               try {
-                const satelliteIds = Array.isArray(user.satellite_ids) ? user.satellite_ids : JSON.parse(user.satellite_ids);
+                const parsed = Array.isArray(user.satellite_ids) ? user.satellite_ids : JSON.parse(user.satellite_ids);
+                const satelliteIds = Array.isArray(parsed) ? parsed : [parsed];
                 facilityLocationIds = satelliteIds.map(id => id.toString());
                 
                 // 拠点名を取得（facilityLocationsから）
@@ -403,6 +469,14 @@ const InstructorManagement = () => {
         for (const satelliteId of managerSatellites) {
           const currentManagers = satelliteManagers[satelliteId] || [];
           const updatedManagers = [...currentManagers, data.data.id];
+          
+          console.log(`新規指導員追加時の管理者設定:`, {
+            satelliteId,
+            currentManagers,
+            newInstructorId: data.data.id,
+            updatedManagers
+          });
+          
           await apiPut(`/api/satellites/${satelliteId}/managers`, {
             manager_ids: updatedManagers
           });
@@ -574,33 +648,85 @@ const InstructorManagement = () => {
       // 拠点管理者の設定を更新
       for (const locationId of selectedInstructor.facilityLocationIds) {
         const shouldBeManager = selectedInstructor.isManager[locationId] || false;
-        const currentManagers = satelliteManagers[locationId] || [];
-        const isCurrentlyManager = currentManagers.includes(Number(selectedInstructor.id));
         
-        if (shouldBeManager && !isCurrentlyManager) {
-          // 管理者として追加
-          const updatedManagers = [...currentManagers, Number(selectedInstructor.id)];
-          await apiPut(`/api/satellites/${locationId}/managers`, {
-            manager_ids: updatedManagers
-          });
+        // 現在の管理者情報を最新の状態で取得
+        try {
+          const satelliteResponse = await apiGet(`/api/satellites/${locationId}`);
+          if (!satelliteResponse.success) {
+            console.error(`拠点${locationId}の情報取得に失敗しました`);
+            continue;
+          }
           
-          // ローカル状態も即座に更新
-          setSatelliteManagers(prev => ({
-            ...prev,
-            [locationId]: updatedManagers
-          }));
-        } else if (!shouldBeManager && isCurrentlyManager) {
-          // 管理者から削除
-          const updatedManagers = currentManagers.filter(id => id !== Number(selectedInstructor.id));
-          await apiPut(`/api/satellites/${locationId}/managers`, {
-            manager_ids: updatedManagers
-          });
+          const satellite = satelliteResponse.data;
+          let currentManagerIds = [];
           
-          // ローカル状態も即座に更新
-          setSatelliteManagers(prev => ({
-            ...prev,
-            [locationId]: updatedManagers
-          }));
+          if (satellite.manager_ids) {
+            // データの型と内容をログ出力
+            console.log('manager_ids の生データ:', satellite.manager_ids);
+            console.log('manager_ids の型:', typeof satellite.manager_ids);
+            console.log('manager_ids が配列か:', Array.isArray(satellite.manager_ids));
+            
+            // 既に配列の場合はそのまま使用
+            if (Array.isArray(satellite.manager_ids)) {
+              currentManagerIds = satellite.manager_ids;
+              console.log('既に配列形式です:', currentManagerIds);
+            } else if (typeof satellite.manager_ids === 'string') {
+              // 文字列の場合はJSONパースを試行
+              try {
+                const parsed = JSON.parse(satellite.manager_ids);
+                // パース結果が配列の場合はそのまま、そうでなければ配列に変換
+                currentManagerIds = Array.isArray(parsed) ? parsed : [parsed];
+                console.log('文字列からパース成功:', currentManagerIds);
+              } catch (e) {
+                console.error('管理者IDのパースエラー:', e);
+                console.error('パースに失敗したデータ:', satellite.manager_ids);
+                currentManagerIds = [];
+              }
+            } else if (satellite.manager_ids !== null && satellite.manager_ids !== undefined) {
+              // その他の型（数値、オブジェクトなど）の場合は配列に変換
+              currentManagerIds = [satellite.manager_ids];
+              console.log('その他の型を配列に変換:', currentManagerIds);
+            } else {
+              // null や undefined の場合は空配列
+              currentManagerIds = [];
+              console.log('null/undefinedのため空配列に設定');
+            }
+          }
+          
+          const isCurrentlyManager = currentManagerIds.includes(Number(selectedInstructor.id));
+          
+          if (shouldBeManager && !isCurrentlyManager) {
+            // 管理者として追加
+            const updatedManagers = [...currentManagerIds, Number(selectedInstructor.id)];
+            console.log(`拠点${locationId}の管理者設定:`, {
+              currentManagerIds,
+              selectedInstructorId: selectedInstructor.id,
+              updatedManagers,
+              shouldBeManager,
+              isCurrentlyManager
+            });
+            
+            await apiPut(`/api/satellites/${locationId}/managers`, {
+              manager_ids: updatedManagers
+            });
+            
+            // ローカル状態も即座に更新
+            setSatelliteManagers(prev => ({
+              ...prev,
+              [locationId]: updatedManagers
+            }));
+          } else if (!shouldBeManager && isCurrentlyManager) {
+            // 管理者から削除（専用エンドポイントを使用）
+            await apiDelete(`/api/satellites/${locationId}/managers/${selectedInstructor.id}`);
+            
+            // ローカル状態も即座に更新
+            setSatelliteManagers(prev => ({
+              ...prev,
+              [locationId]: currentManagerIds.filter(id => id !== Number(selectedInstructor.id))
+            }));
+          }
+        } catch (error) {
+          console.error(`拠点${locationId}の管理者更新エラー:`, error);
         }
       }
 
@@ -676,6 +802,57 @@ const InstructorManagement = () => {
     }
   };
 
+  // 管理者設定/解除の切り替え機能
+  const handleToggleManagerStatus = async (instructor) => {
+    const isCurrentlyManager = instructor.facilityLocationIds.some(locationId => 
+      isSatelliteManager(instructor.id, locationId)
+    );
+    
+    const action = isCurrentlyManager ? '解除' : '設定';
+    if (!window.confirm(`指導員「${instructor.name}」の管理者権限を${action}しますか？`)) {
+      return;
+    }
+
+    try {
+      // 各拠点で管理者設定/解除を実行
+      for (const locationId of instructor.facilityLocationIds) {
+        const currentManagerIds = satelliteManagers[locationId] || [];
+        const isManagerInThisLocation = currentManagerIds.includes(Number(instructor.id));
+        
+        if (isCurrentlyManager && isManagerInThisLocation) {
+          // 管理者から削除
+          await apiDelete(`/api/satellites/${locationId}/managers/${instructor.id}`);
+          
+          // ローカル状態も即座に更新
+          setSatelliteManagers(prev => ({
+            ...prev,
+            [locationId]: currentManagerIds.filter(id => id !== Number(instructor.id))
+          }));
+        } else if (!isCurrentlyManager && !isManagerInThisLocation) {
+          // 管理者として追加
+          const updatedManagers = [...currentManagerIds, Number(instructor.id)];
+          await apiPut(`/api/satellites/${locationId}/managers`, {
+            manager_ids: updatedManagers
+          });
+          
+          // ローカル状態も即座に更新
+          setSatelliteManagers(prev => ({
+            ...prev,
+            [locationId]: updatedManagers
+          }));
+        }
+      }
+      
+      // 指導者一覧を再取得
+      await fetchInstructors();
+      
+      alert(`管理者権限を${action}しました。`);
+    } catch (error) {
+      console.error('管理者権限切り替えエラー:', error);
+      alert(`管理者権限の${action}に失敗しました: ${error.message}`);
+    }
+  };
+
   const handleDeleteInstructor = async (instructor) => {
     if (!window.confirm(`指導員「${instructor.name}」を削除しますか？\nこの操作は取り消せません。`)) {
       return;
@@ -746,6 +923,23 @@ const InstructorManagement = () => {
           >
             再読み込み
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 権限チェック
+  if (!hasPermission) {
+    return (
+      <div className="p-6">
+        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+          <div className="text-red-600 mb-4">
+            <svg className="w-16 h-16 mx-auto mb-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            <h2 className="text-2xl font-bold mb-4">閲覧権限がありません</h2>
+            <p className="text-gray-600">拠点情報は拠点管理者のみ閲覧できます。</p>
+          </div>
         </div>
       </div>
     );
@@ -928,6 +1122,16 @@ const InstructorManagement = () => {
                     <div className="flex items-center">
                       <div>
                         <strong className="text-gray-800">{instructor.name}</strong>
+                        {/* 管理者状態を表示 */}
+                        {instructor.facilityLocationIds.some(locationId => 
+                          isSatelliteManager(instructor.id, locationId)
+                        ) && (
+                          <div className="mt-1">
+                            <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-semibold">
+                              👑 拠点管理者
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>
@@ -952,9 +1156,16 @@ const InstructorManagement = () => {
                           const locationId = instructor.facilityLocationIds[index];
                           const isManager = isSatelliteManager(instructor.id, locationId);
                           return (
-                            <span key={index} className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium block">
-                              {isManager && '👑 '}{name}
-                            </span>
+                            <div key={index} className="flex items-center gap-1">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium block ${
+                                isManager ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+                              }`}>
+                                {isManager && '👑 '}{name}
+                              </span>
+                              {isManager && (
+                                <span className="text-xs text-gray-500">(管理者)</span>
+                              )}
+                            </div>
                           );
                         })}
                       </div>
@@ -987,19 +1198,46 @@ const InstructorManagement = () => {
                   <td className="px-6 py-4">
                     <div className="flex gap-2">
                       <button 
-                        className="bg-blue-500 text-white px-3 py-1 rounded text-sm font-medium transition-colors duration-300 hover:bg-blue-600"
-                        onClick={() => handleEditInstructor(instructor)}
-                        title="編集"
-                      >
-                        ✏️ 編集
-                      </button>
-                      <button 
                         className="bg-orange-500 text-white px-3 py-1 rounded text-sm font-medium transition-colors duration-300 hover:bg-orange-600"
                         onClick={() => handlePasswordReset(instructor)}
                         title="パスワードリセット"
                       >
                         🔑 リセット
                       </button>
+                      <button 
+                        className="bg-blue-500 text-white px-3 py-1 rounded text-sm font-medium transition-colors duration-300 hover:bg-blue-600"
+                        onClick={() => handleEditInstructor(instructor)}
+                        title="編集"
+                      >
+                        ✏️ 編集
+                      </button>
+                      {/* 管理者設定/解除ボタン - 拠点管理者の場合のみ表示 */}
+                      {instructor.facilityLocationIds.length > 0 && (
+                        <button 
+                          className={`px-3 py-1 rounded text-sm font-medium transition-colors duration-300 ${
+                            instructor.facilityLocationIds.some(locationId => 
+                              isSatelliteManager(instructor.id, locationId)
+                            )
+                              ? 'bg-red-500 text-white hover:bg-red-600'
+                              : 'bg-yellow-500 text-white hover:bg-yellow-600'
+                          }`}
+                          onClick={() => handleToggleManagerStatus(instructor)}
+                          title={
+                            instructor.facilityLocationIds.some(locationId => 
+                              isSatelliteManager(instructor.id, locationId)
+                            )
+                              ? '管理者権限を解除'
+                              : '管理者権限を付与'
+                          }
+                        >
+                          {instructor.facilityLocationIds.some(locationId => 
+                            isSatelliteManager(instructor.id, locationId)
+                          )
+                            ? '👑 管理者解除'
+                            : '👑 管理者設定'
+                          }
+                        </button>
+                      )}
                       <button 
                         className="bg-red-500 text-white px-3 py-1 rounded text-sm font-medium transition-colors duration-300 hover:bg-red-600"
                         onClick={() => handleDeleteInstructor(instructor)}

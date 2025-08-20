@@ -48,21 +48,71 @@ const SatelliteManagement = ({ currentUser }) => {
   const [selectedInstructor, setSelectedInstructor] = useState(null);
   const [unassignedUsers, setUnassignedUsers] = useState([]);
 
-  // 権限チェック
-  const hasPermission = currentUser && currentUser.role >= 5;
+  // JWTトークンをデコードする関数
+  const decodeJWT = (token) => {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(jsonPayload);
+    } catch (error) {
+      console.error('JWTデコードエラー:', error);
+      return null;
+    }
+  };
+
+  // ユーザーの実際のロール番号を取得
+  const getActualRoleId = () => {
+    // まずJWTトークンからロール情報を取得
+    const accessToken = localStorage.getItem('accessToken');
+    if (accessToken) {
+      const decodedToken = decodeJWT(accessToken);
+      if (decodedToken && decodedToken.role) {
+        // 拠点管理者判定をチェック（簡易版）
+        if (decodedToken.role === 4) {
+          // 拠点管理者の場合はロール5として扱う
+          return 5;
+        }
+        return decodedToken.role;
+      }
+    }
+    
+    // JWTから取得できない場合は、ユーザーオブジェクトのroleを試行
+    return currentUser?.role;
+  };
+
+  // 権限チェック（拠点管理者以上またはシステム管理者）
+  const actualRoleId = getActualRoleId();
+  const hasPermission = actualRoleId >= 5 || actualRoleId >= 9;
 
   useEffect(() => {
     if (hasPermission) {
       fetchSatellites();
     }
-  }, [hasPermission]);
+  }, []); // hasPermissionを依存配列から削除
 
   // 拠点一覧を取得
   const fetchSatellites = async () => {
     try {
       setLoading(true);
-      const data = await getSatellites();
+      const response = await getSatellites();
+      const data = response.success ? response.data : [];
       setSatellites(data);
+      
+      // 管理者の場合、ログイン時選択した拠点を自動選択
+      if (currentUser && currentUser.role >= 9 && currentUser.satellite_id && data.length > 0) {
+        const selectedSatellite = data.find(s => s.id === currentUser.satellite_id);
+        if (selectedSatellite) {
+          console.log('管理者用: ログイン時選択拠点を自動選択:', selectedSatellite);
+          await fetchSatelliteDetails(selectedSatellite.id);
+        }
+      } else if (currentUser && currentUser.role >= 9 && data.length > 0) {
+        // 管理者で拠点IDが設定されていない場合は最初の拠点を選択
+        console.log('管理者用: 最初の拠点を自動選択:', data[0]);
+        await fetchSatelliteDetails(data[0].id);
+      }
     } catch (error) {
       console.error('拠点一覧取得エラー:', error);
       setError('拠点一覧の取得に失敗しました');
@@ -234,7 +284,7 @@ const SatelliteManagement = ({ currentUser }) => {
       <div className="p-8 bg-white rounded-lg shadow-lg">
         <div className="text-center text-red-600">
           <h2 className="text-2xl font-bold mb-4">アクセス権限がありません</h2>
-          <p>拠点管理機能は管理者（ロール5以上）のみ利用できます。</p>
+          <p>拠点管理機能は拠点管理者のみ利用できます。</p>
         </div>
       </div>
     );
@@ -264,28 +314,7 @@ const SatelliteManagement = ({ currentUser }) => {
         </div>
       )}
 
-      {/* 拠点選択 */}
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          拠点を選択
-        </label>
-        <select
-          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          onChange={(e) => {
-            const satellite = satellites.find(s => s.id === parseInt(e.target.value));
-            if (satellite) {
-              fetchSatelliteDetails(satellite.id);
-            }
-          }}
-        >
-          <option value="">拠点を選択してください</option>
-          {satellites.map(satellite => (
-            <option key={satellite.id} value={satellite.id}>
-              {satellite.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* 拠点選択は削除（ヘッダーに拠点選択機能があるため） */}
 
       {selectedSatellite && (
         <div className="space-y-6">
@@ -513,7 +542,12 @@ const SatelliteManagement = ({ currentUser }) => {
                 <tbody>
                   {instructors.map(instructor => (
                     <tr key={instructor.id} className="border-b border-gray-200">
-                      <td className="px-4 py-2">{instructor.name}</td>
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-2">
+                          <span>{instructor.name}</span>
+                          {instructor.role === 5 && <span className="text-yellow-500 text-lg">👑</span>}
+                        </div>
+                      </td>
                       <td className="px-4 py-2">{instructor.username}</td>
                       <td className="px-4 py-2">{instructor.email || '-'}</td>
                       <td className="px-4 py-2">
@@ -563,7 +597,7 @@ const SatelliteManagement = ({ currentUser }) => {
                       <option value="">指導員を選択してください</option>
                       {instructors.map(instructor => (
                         <option key={instructor.id} value={instructor.id}>
-                          {instructor.name}
+                          {instructor.role === 5 ? '👑 ' : ''}{instructor.name}
                         </option>
                       ))}
                     </select>

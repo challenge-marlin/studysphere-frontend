@@ -324,3 +324,17 @@ export const getSatelliteUsers = (satelliteId) => {
 export const updateUser = (userId, data) => {
   return apiPut(`/api/users/${userId}`, data);
 }; 
+
+/**
+ * 拠点変更時の再認証
+ */
+export const reauthenticateForSatellite = (satelliteId) => {
+  // 現在のユーザー情報を取得
+  const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+  const userId = currentUser.user_id || currentUser.id;
+  
+  return apiPost('/api/reauthenticate-satellite', { 
+    userId: userId,
+    satelliteId: satelliteId 
+  });
+}; 

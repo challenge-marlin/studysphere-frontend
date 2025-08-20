@@ -85,9 +85,10 @@ export const useInstructorGuard = () => {
       return;
     }
 
-    if (currentUser && (currentUser.role < 4 || currentUser.role > 8)) {
+    // 管理者（ロール9以上）と指導員（ロール4-8）を許可
+    if (currentUser && currentUser.role < 4) {
       console.log('User role not authorized for instructor pages, redirecting to /');
-      console.log('User role:', currentUser.role, 'Expected: 4-8');
+      console.log('User role:', currentUser.role, 'Expected: 4+ (instructor or admin)');
       navigate('/');
       return;
     }

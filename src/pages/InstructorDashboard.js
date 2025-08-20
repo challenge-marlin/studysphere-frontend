@@ -116,8 +116,8 @@ const InstructorDashboard = () => {
     
     // LocationManagementForInstructorからの拠点情報更新の場合
     if (newLocation.id && newLocation.name) {
-      // 拠点情報をlocalStorageに保存
-      localStorage.setItem('selectedSatellite', JSON.stringify(newLocation));
+      // 拠点情報をsessionStorageに保存
+      sessionStorage.setItem('selectedSatellite', JSON.stringify(newLocation));
       
       // ユーザー情報のsatellite_idsを更新
       const updatedUser = {

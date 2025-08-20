@@ -275,7 +275,7 @@ const StudentManagement = ({ teacherId }) => {
     }
     if (statusFilter !== 'all') {
       filteredStudents = filteredStudents.filter(student =>
-        student.status === statusFilter
+        student.status === parseInt(statusFilter)
       );
     }
     return filteredStudents;
@@ -285,19 +285,19 @@ const StudentManagement = ({ teacherId }) => {
   const [newStudent, setNewStudent] = useState({
     name: '',
     email: '',
-    locationId: '',
-    recipientNumber: ''
+    recipientNumber: '',
+    instructorId: ''
   });
   
   // 一括入力用のstate
   const [bulkInputMode, setBulkInputMode] = useState(false);
   const [bulkInputText, setBulkInputText] = useState('');
-  const [bulkLocationId, setBulkLocationId] = useState('');
+  const [bulkInstructorId, setBulkInstructorId] = useState('');
   
   // 検索・フィルター関連のstate
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTags, setSelectedTags] = useState([]);
-  const [statusFilter, setStatusFilter] = useState('all'); // all, active, inactive
+  const [statusFilter, setStatusFilter] = useState('all'); // all, 1, 0
   
   // 全てのタグを取得
   const getAllTags = () => {
@@ -309,37 +309,120 @@ const StudentManagement = ({ teacherId }) => {
   };
 
   const generateLoginToken = () => {
-    return 'token' + Math.random().toString(36).substr(2, 9);
+    // XXXX-XXXX-XXXX形式（英数大文字小文字交じり）
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const generatePart = () => {
+      let result = '';
+      for (let i = 0; i < 4; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return result;
+    };
+    return `${generatePart()}-${generatePart()}-${generatePart()}`;
   };
 
-  // 拠点データを取得する関数（APIから取得）
-  const [availableLocations, setAvailableLocations] = useState([]);
-  
-  const fetchAvailableLocations = async () => {
+  // 一時パスワード発行
+  const issueTemporaryPassword = async (userId) => {
     try {
-      const response = await fetch('http://localhost:5000/satellites');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setAvailableLocations(data.data || []);
+      const response = await fetch(`http://localhost:5000/api/users/${userId}/issue-temp-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         }
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        // 利用者リストを更新して最新の一時パスワード情報を取得
+        fetchStudents();
+        alert(`一時パスワードが発行されました。\n\nパスワード: ${result.data.tempPassword}\n有効期限: ${new Date(result.data.expiresAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}`);
+      } else {
+        alert(`一時パスワード発行に失敗しました: ${result.message}`);
       }
     } catch (error) {
-      console.error('拠点データ取得エラー:', error);
+      console.error('一時パスワード発行エラー:', error);
+      alert('一時パスワード発行に失敗しました');
+    }
+  };
+
+  // 指導員データを取得する関数（APIから取得）
+  const [availableInstructors, setAvailableInstructors] = useState([]);
+  
+  const fetchAvailableInstructors = async () => {
+    try {
+      console.log('指導員データ取得開始...');
+      const response = await fetch('http://localhost:5000/api/users');
+      console.log('APIレスポンス:', response);
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('APIから取得した全データ:', result);
+        console.log('データの型:', typeof result);
+        
+        // バックエンドのレスポンス形式に合わせてデータを取得
+        const data = result.data?.users || result;
+        const usersArray = Array.isArray(data) ? data : [];
+        console.log('ユーザー配列:', usersArray);
+        console.log('ユーザー配列の長さ:', usersArray.length);
+        
+        // 全ユーザーのロールを確認
+        usersArray.forEach((user, index) => {
+          console.log(`ユーザー${index + 1}:`, {
+            id: user.id,
+            name: user.name,
+            role: user.role,
+            roleType: typeof user.role
+          });
+        });
+        
+        // ロール4（指導員）のユーザーのみをフィルタリング
+        const instructors = usersArray.filter(user => {
+          const isInstructor = user.role === 4;
+          console.log(`ユーザー ${user.name} (ID: ${user.id}): ロール=${user.role}, 指導員判定=${isInstructor}`);
+          return isInstructor;
+        });
+        
+        console.log('フィルタリング後の指導員データ:', instructors);
+        console.log('指導員数:', instructors.length);
+        setAvailableInstructors(instructors);
+      } else {
+        console.error('APIレスポンスエラー:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('エラーレスポンス:', errorText);
+      }
+    } catch (error) {
+      console.error('指導員データ取得エラー:', error);
+    }
+  };
+
+  // 利用者データを取得する関数
+  const fetchStudents = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/users');
+      if (response.ok) {
+        const result = await response.json();
+        // バックエンドのレスポンス形式に合わせてデータを取得
+        const data = result.data?.users || result;
+        // ロール1（利用者）のユーザーのみをフィルタリング
+        const studentsData = data.filter(user => user.role === 1);
+        setStudents(studentsData);
+      }
+    } catch (error) {
+      console.error('利用者データ取得エラー:', error);
     }
   };
 
   // 初期データ取得
   useEffect(() => {
-    fetchAvailableLocations();
+    fetchAvailableInstructors();
+    fetchStudents();
   }, []);
 
-  const getAvailableLocations = () => {
-    return availableLocations.map(location => ({
-      id: location.id,
-      name: location.name,
-      facilityName: location.company_name || '不明'
-    }));
+  // 現在選択されている拠点IDを取得
+  const getCurrentSatelliteId = () => {
+    const selectedSatellite = JSON.parse(localStorage.getItem('selectedSatellite') || '{}');
+    return selectedSatellite.id || currentInstructor.satellite_ids?.[0] || 1; // デフォルト値
   };
 
   const handleAddStudent = async (e) => {
@@ -350,22 +433,21 @@ const StudentManagement = ({ teacherId }) => {
       return;
     }
     
-    try {
-      const selectedLocation = getAvailableLocations().find(location => location.id === newStudent.locationId);
-      
-      // APIでユーザーを作成
+         try {
+       // APIでユーザーを作成
       const userData = {
         name: newStudent.name,
         role: 1, // 利用者
         status: 1,
         login_code: generateLoginToken(),
         company_id: currentInstructor.company_id || 4, // 既存の企業ID
-        satellite_ids: [parseInt(newStudent.locationId)], // 配列形式で拠点IDを設定
+        satellite_ids: [getCurrentSatelliteId()], // 現在選択されている拠点IDを使用
         is_remote_user: false,
-        recipient_number: newStudent.recipientNumber || null
+        recipient_number: newStudent.recipientNumber || null,
+        instructor_id: newStudent.instructorId ? parseInt(newStudent.instructorId) : null
       };
 
-      const response = await fetch('http://localhost:5000/users', {
+                   const response = await fetch('http://localhost:5000/api/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -379,11 +461,14 @@ const StudentManagement = ({ teacherId }) => {
         throw new Error(result.message || '利用者の追加に失敗しました');
       }
 
-      // 成功時の処理
-      setNewStudent({ name: '', email: '', locationId: '', recipientNumber: '' });
-      setShowAddForm(false);
-      
-      alert('利用者を追加しました。');
+             // 成功時の処理
+       setNewStudent({ name: '', email: '', recipientNumber: '', instructorId: '' });
+       setShowAddForm(false);
+       
+       // 利用者リストを更新
+       fetchStudents();
+       
+       alert('利用者を追加しました。');
     } catch (error) {
       console.error('利用者追加エラー:', error);
       alert(`利用者の追加に失敗しました: ${error.message}`);
@@ -391,61 +476,78 @@ const StudentManagement = ({ teacherId }) => {
   };
 
   // 一括入力で生徒を追加する関数
-  const handleBulkAddStudents = () => {
+  const handleBulkAddStudents = async () => {
     if (!bulkInputText.trim()) {
       alert('生徒情報を入力してください。');
       return;
     }
     
-    if (!bulkLocationId) {
-      alert('拠点を選択してください。');
-      return;
-    }
-    
     const lines = bulkInputText.trim().split('\n').filter(line => line.trim());
-    const selectedLocation = getAvailableLocations().find(location => location.id === bulkLocationId);
     const newStudents = [];
     
-    lines.forEach((line, index) => {
+    for (const line of lines) {
       const parts = line.split(',').map(part => part.trim());
-      if (parts.length >= 2) {
+      if (parts.length >= 1) {
         const name = parts[0];
-        const email = parts[1];
+        const email = parts[1] || ''; // メールアドレスが空の場合は空文字列
         
-        if (name && email) {
-          const studentId = `student${String(students.length + newStudents.length + 1).padStart(3, '0')}`;
-          const student = {
-            id: studentId,
-            name: name,
-            email: email,
-            class: 'ITリテラシー・AIの基本', // デフォルトクラス
-            instructorId: currentInstructor.id,
-            instructorName: currentInstructor.name,
-            locationId: bulkLocationId,
-            locationName: selectedLocation ? selectedLocation.name : '',
-            progress: 0,
-            lastLogin: null,
-            status: 'active',
-            loginToken: generateLoginToken(),
-            joinDate: new Date().toISOString().split('T')[0],
-            canStudyAtHome: false, // デフォルトでfalseに設定
-            tags: generateTags('ITリテラシー・AIの基本', currentInstructor.name, selectedLocation ? selectedLocation.name : '', 0)
-          };
-          newStudents.push(student);
+        if (name) {
+          try {
+            // APIでユーザーを作成
+            const userData = {
+              name: name,
+              email: email || null, // メールアドレスが空の場合はnull
+              role: 1, // 利用者
+              status: 1,
+              login_code: generateLoginToken(),
+              company_id: currentInstructor.company_id || 4,
+              satellite_ids: [getCurrentSatelliteId()],
+              is_remote_user: false,
+              recipient_number: null,
+              instructor_id: bulkInstructorId ? parseInt(bulkInstructorId) : null
+            };
+
+            const response = await fetch('http://localhost:5000/api/users', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(userData)
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+              newStudents.push({ name, email, success: true });
+            } else {
+              newStudents.push({ name, email, success: false, error: result.message });
+            }
+          } catch (error) {
+            newStudents.push({ name, email, success: false, error: error.message });
+          }
         }
       }
-    });
+    }
     
     if (newStudents.length > 0) {
-      setStudents([...students, ...newStudents]);
-      setBulkInputText('');
-      setBulkLocationId('');
-      setBulkInputMode(false);
-      setShowAddForm(false);
+      const successCount = newStudents.filter(s => s.success).length;
+      const failCount = newStudents.filter(s => !s.success).length;
       
-      alert(`${newStudents.length}名の利用者を追加しました。`);
+      setBulkInputText('');
+      setBulkInstructorId('');
+             setBulkInputMode(false);
+       setShowAddForm(false);
+       
+       // 利用者リストを更新
+       fetchStudents();
+       
+       if (failCount === 0) {
+         alert(`${successCount}名の利用者を追加しました。`);
+       } else {
+         alert(`${successCount}名の利用者を追加しました。\n${failCount}名の追加に失敗しました。`);
+       }
     } else {
-      alert('有効な利用者情報が見つかりませんでした。\n形式: 利用者名,メールアドレス');
+      alert('有効な利用者情報が見つかりませんでした。\n形式: 利用者名,メールアドレス（メールアドレスは任意）');
     }
   };
 
@@ -490,14 +592,34 @@ const StudentManagement = ({ teacherId }) => {
   const toggleStudentStatus = (studentId) => {
     setStudents(students.map(student => 
       student.id === studentId 
-        ? { ...student, status: student.status === 'active' ? 'inactive' : 'active' }
+        ? { ...student, status: student.status === 1 ? 0 : 1 }
         : student
     ));
   };
 
-  const deleteStudent = (studentId) => {
+  const deleteStudent = async (studentId) => {
     if (window.confirm('この利用者を削除してもよろしいですか？')) {
-      setStudents(students.filter(student => student.id !== studentId));
+      try {
+        const response = await fetch(`http://localhost:5000/api/users/${studentId}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+          // 成功時はローカルのstateも更新
+          setStudents(students.filter(student => student.id !== studentId));
+          alert('利用者を削除しました。');
+        } else {
+          alert(`削除に失敗しました: ${result.message}`);
+        }
+      } catch (error) {
+        console.error('削除エラー:', error);
+        alert('削除に失敗しました。');
+      }
     }
   };
 
@@ -512,7 +634,7 @@ const StudentManagement = ({ teacherId }) => {
 
     // 本日有効ボタン：選択した利用者にメール送信
   const openTodayActiveModal = () => {
-    const activeStudents = getFilteredStudents().filter(student => student.status === 'active');
+    const activeStudents = getFilteredStudents().filter(student => student.status === 1);
     
     if (activeStudents.length === 0) {
       alert('送信対象の利用者がいません。');
@@ -525,7 +647,7 @@ const StudentManagement = ({ teacherId }) => {
   // 本日有効メール送信実行
   const sendTodayActiveEmails = () => {
     const selectedActiveStudents = getFilteredStudents().filter(student => 
-      student.status === 'active' && selectedStudents.includes(student.id)
+      student.status === 1 && selectedStudents.includes(student.id)
     );
     
     if (selectedActiveStudents.length === 0) {
@@ -562,13 +684,7 @@ const StudentManagement = ({ teacherId }) => {
     setTodayActiveMessage('');
   };
 
-  // 個別メール再送信
-  const resendEmail = (student) => {
-    const loginUrl = `http://localhost:3000/student/login/${student.loginToken}`;
-    if (window.confirm(`${student.name}さんにログインURLを再送信しますか？\n\nメール: ${student.email}\nURL: ${loginUrl}`)) {
-      alert(`${student.name}さんにログインURLを送信しました。`);
-    }
-  };
+  // メール再送信機能は削除（不要なため）
 
   // タグの選択/選択解除
   const toggleTag = (tag) => {
@@ -652,8 +768,8 @@ const StudentManagement = ({ teacherId }) => {
                 className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
               >
                 <option value="all">全てのステータス</option>
-                <option value="active">稼働中</option>
-                <option value="inactive">停止中</option>
+                <option value="1">稼働中</option>
+                <option value="0">停止中</option>
               </select>
               <button 
                 className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-all duration-200"
@@ -721,7 +837,7 @@ const StudentManagement = ({ teacherId }) => {
                     setShowAddForm(false);
                     setBulkInputMode(false);
                     setBulkInputText('');
-                    setBulkLocationId('');
+                    setBulkInstructorId('');
                   }}
                 >
                   ×
@@ -773,42 +889,36 @@ const StudentManagement = ({ teacherId }) => {
                       </div>
                       
                       <div>
-                        <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">メールアドレス</label>
+                        <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">メールアドレス（オプション）</label>
                         <input
                           type="email"
                           id="email"
                           name="email"
                           value={newStudent.email}
                           onChange={handleInputChange}
-                          required
-                          placeholder="メールアドレスを入力"
+                          placeholder="メールアドレスを入力（任意）"
                           className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
                         />
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div>
-                        <label htmlFor="location" className="block text-sm font-semibold text-gray-700 mb-2">拠点</label>
-                        <select
-                          id="location"
-                          name="locationId"
-                          value={newStudent.locationId}
-                          onChange={handleInputChange}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
-                        >
-                          <option value="">拠点を選択</option>
-                          {getAvailableLocations().map(location => (
-                            <option key={location.id} value={location.id}>
-                              {location.name} ({location.facilityName})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      
-
-                    </div>
+                                         <div>
+                       <label htmlFor="instructor" className="block text-sm font-semibold text-gray-700 mb-2">担当指導員（オプション）</label>
+                       <select
+                         id="instructor"
+                         name="instructorId"
+                         value={newStudent.instructorId}
+                         onChange={handleInputChange}
+                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
+                       >
+                         <option value="">担当指導員を選択</option>
+                         {availableInstructors.map(instructor => (
+                           <option key={instructor.id} value={instructor.id}>
+                             {instructor.name}
+                           </option>
+                         ))}
+                       </select>
+                     </div>
                   </>
                 ) : (
                   // 一括入力モード
@@ -819,35 +929,30 @@ const StudentManagement = ({ teacherId }) => {
                         id="bulkInput"
                         value={bulkInputText}
                         onChange={(e) => setBulkInputText(e.target.value)}
-                        placeholder="利用者名,メールアドレス&#10;例:&#10;田中太郎,tanaka@example.com&#10;佐藤花子,sato@example.com"
+                        placeholder="利用者名,メールアドレス（オプション）&#10;例:&#10;田中太郎,tanaka@example.com&#10;佐藤花子,&#10;山田次郎,yamada@example.com"
                         rows={8}
                         required
                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
                       />
-                      <p className="text-sm text-gray-500 mt-2">形式: 利用者名,メールアドレス（カンマ区切り）</p>
+                      <p className="text-sm text-gray-500 mt-2">形式: 利用者名,メールアドレス（カンマ区切り、メールアドレスは任意）</p>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div>
-                        <label htmlFor="bulkLocation" className="block text-sm font-semibold text-gray-700 mb-2">拠点</label>
-                        <select
-                          id="bulkLocation"
-                          value={bulkLocationId}
-                          onChange={(e) => setBulkLocationId(e.target.value)}
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
-                        >
-                          <option value="">拠点を選択</option>
-                          {getAvailableLocations().map(location => (
-                            <option key={location.id} value={location.id}>
-                              {location.name} ({location.facilityName})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      
-
-                    </div>
+                                         <div>
+                       <label htmlFor="bulkInstructor" className="block text-sm font-semibold text-gray-700 mb-2">担当指導員（オプション）</label>
+                       <select
+                         id="bulkInstructor"
+                         value={bulkInstructorId}
+                         onChange={(e) => setBulkInstructorId(e.target.value)}
+                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
+                       >
+                         <option value="">担当指導員を選択</option>
+                         {availableInstructors.map(instructor => (
+                           <option key={instructor.id} value={instructor.id}>
+                             {instructor.name}
+                           </option>
+                         ))}
+                       </select>
+                     </div>
                   </>
                 )}
                 
@@ -859,7 +964,7 @@ const StudentManagement = ({ teacherId }) => {
                       setShowAddForm(false);
                       setBulkInputMode(false);
                       setBulkInputText('');
-                      setBulkLocationId('');
+                      setBulkInstructorId('');
                     }}
                   >
                     キャンセル
@@ -891,14 +996,15 @@ const StudentManagement = ({ teacherId }) => {
                     className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                   />
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">利用者名</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">タグ</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">ログインURL</th>
+                                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">利用者名</th>
+                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">担当指導員</th>
+                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">タグ</th>
+                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">一時パスワード</th>
+                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">パスワード発行</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">状態</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">進行度</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">合格確認</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">成果物確認</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">メール送信</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">一時停止/再開</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">削除</th>
               </tr>
@@ -914,50 +1020,64 @@ const StudentManagement = ({ teacherId }) => {
                       className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                     />
                   </td>
+                                     <td className="px-6 py-4">
+                     <div className="flex flex-col">
+                       <button 
+                         className="text-left font-semibold text-indigo-600 hover:text-indigo-800 transition-colors duration-200"
+                         onClick={() => handleViewStudentDetail(student.id)}
+                         title="利用者詳細を表示"
+                       >
+                         {student.name}
+                       </button>
+                       <div className="text-xs text-gray-500 mt-1 font-mono">
+                         {student.login_code}
+                       </div>
+                     </div>
+                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <button 
-                        className="text-left font-semibold text-indigo-600 hover:text-indigo-800 transition-colors duration-200"
-                        onClick={() => handleViewStudentDetail(student.id)}
-                        title="利用者詳細を表示"
-                      >
-                        {student.name}
-                      </button>
-                      <span className="text-sm text-gray-500">
-                        担当: {student.instructorName}
-                      </span>
-                    </div>
+                    <span className="text-sm text-gray-600">
+                      {student.instructor_name || '未設定'}
+                    </span>
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-wrap gap-1">
-                      {student.tags?.map(tag => (
-                        <span key={tag} className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded-full font-medium">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <code className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded font-mono">
-                        {student.loginToken}
-                      </code>
-                      <button 
-                        className="p-1 text-gray-400 hover:text-indigo-600 transition-colors duration-200"
-                        onClick={() => copyLoginUrl(student.loginToken)}
-                        title="トークンをコピー"
-                      >
-                        📋
-                      </button>
-                    </div>
-                  </td>
+                                     <td className="px-6 py-4">
+                     <div className="flex flex-wrap gap-1">
+                       {student.tags?.map(tag => (
+                         <span key={tag} className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded-full font-medium">
+                           {tag}
+                         </span>
+                       ))}
+                     </div>
+                   </td>
+                   <td className="px-6 py-4">
+                     <div className="text-xs text-gray-600 font-mono">
+                       {student.temp_password ? (
+                         <div>
+                           <div className="font-semibold text-blue-600">{student.temp_password}</div>
+                           <div className="text-gray-500">
+                             {student.expires_at && new Date(student.expires_at) > new Date() ? '有効' : '期限切れ'}
+                           </div>
+                         </div>
+                       ) : (
+                         <span className="text-gray-400">未発行</span>
+                       )}
+                     </div>
+                   </td>
+                   <td className="px-6 py-4">
+                     <button 
+                       className="px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs rounded-lg font-medium hover:from-blue-600 hover:to-blue-700 transition-all duration-200"
+                       onClick={() => issueTemporaryPassword(student.id)}
+                       title="一時パスワードを発行"
+                     >
+                       パスワード発行
+                     </button>
+                   </td>
                   <td className="px-6 py-4">
                     <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      student.status === 'active' 
+                      student.status === 1 
                         ? 'bg-green-100 text-green-800' 
                         : 'bg-red-100 text-red-800'
                     }`}>
-                      {student.status === 'active' ? '稼働中' : '停止中'}
+                      {student.status === 1 ? '稼働中' : '停止中'}
                     </span>
                   </td>
                   <td className="px-6 py-4">
@@ -1011,24 +1131,17 @@ const StudentManagement = ({ teacherId }) => {
                       {student.progress >= 50 ? '確認済' : student.progress > 0 ? '確認待ち' : '未開始'}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
-                    <button 
-                      className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-all duration-200"
-                      onClick={() => resendEmail(student)}
-                    >
-                      📧 再送信
-                    </button>
-                  </td>
+
                   <td className="px-6 py-4">
                     <button 
                       className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200 ${
-                        student.status === 'active' 
+                        student.status === 1 
                           ? 'bg-red-100 text-red-700 hover:bg-red-200' 
                           : 'bg-green-100 text-green-700 hover:bg-green-200'
                       }`}
                       onClick={() => toggleStudentStatus(student.id)}
                     >
-                      {student.status === 'active' ? '停止' : '再開'}
+                      {student.status === 1 ? '停止' : '再開'}
                     </button>
                   </td>
                   <td className="px-6 py-4">

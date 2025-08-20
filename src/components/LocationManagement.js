@@ -2,9 +2,51 @@ import React, { useState, useEffect } from 'react';
 import SanitizedInput from './SanitizedInput';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 import { apiGet, apiPut } from '../utils/api';
+import { useAuth } from './contexts/AuthContext';
 // import { fetch } from '../utils/httpInterceptor'; // 一時的に無効化
 
 const LocationManagement = () => {
+  const { currentUser } = useAuth();
+  
+  // JWTトークンをデコードする関数
+  const decodeJWT = (token) => {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(jsonPayload);
+    } catch (error) {
+      console.error('JWTデコードエラー:', error);
+      return null;
+    }
+  };
+
+  // ユーザーの実際のロール番号を取得
+  const getActualRoleId = () => {
+    // まずJWTトークンからロール情報を取得
+    const accessToken = localStorage.getItem('accessToken');
+    if (accessToken) {
+      const decodedToken = decodeJWT(accessToken);
+      if (decodedToken && decodedToken.role) {
+        // 拠点管理者判定をチェック（簡易版）
+        if (decodedToken.role === 4) {
+          // 拠点管理者の場合はロール5として扱う
+          return 5;
+        }
+        return decodedToken.role;
+      }
+    }
+    
+    // JWTから取得できない場合は、ユーザーオブジェクトのroleを試行
+    return currentUser?.role;
+  };
+  
+  // 権限チェック（ロール5以上のみアクセス可能）
+  const actualRoleId = getActualRoleId();
+  const hasPermission = actualRoleId >= 5;
+  
   // 事業所タイプ（DBから取得）
   const [facilityTypes, setFacilityTypes] = useState([]);
   const [facilityTypesData, setFacilityTypesData] = useState([]); // IDとタイプ名の両方を保持
@@ -20,6 +62,9 @@ const LocationManagement = () => {
   // 管理者情報（DBから取得）
   const [managers, setManagers] = useState([]);
   const [managersLoading, setManagersLoading] = useState(false);
+  
+  // 全ユーザー情報（責任者検索用）
+  const [allUsers, setAllUsers] = useState([]);
 
   // 拠点に所属する指導者情報（DBから取得）
   const [satelliteInstructors, setSatelliteInstructors] = useState({});
@@ -43,7 +88,14 @@ const LocationManagement = () => {
       
       const data = await response.json();
       console.log('管理者情報取得成功:', data);
-      setManagers(data);
+      
+      // 管理者（ロール9、10）のみをフィルタリング
+      const managersOnly = data.filter(user => user.role >= 9);
+      console.log('管理者のみフィルタリング後:', managersOnly);
+      setManagers(managersOnly);
+      
+      // 全ユーザーも保存（責任者検索用）
+      setAllUsers(data);
     } catch (err) {
       console.error('管理者情報取得エラー:', err);
       setManagers([]); // エラー時も空配列を設定
@@ -84,15 +136,41 @@ const LocationManagement = () => {
             return false;
           }
           
-          const hasSatellite = Array.isArray(user.satellite_ids) 
-            ? user.satellite_ids.includes(satelliteId.toString())
-            : user.satellite_ids === satelliteId.toString();
+          // satellite_idsの処理を改善
+          let satelliteIds = user.satellite_ids;
           
+          // 文字列の場合はJSONとしてパースを試行
+          if (typeof satelliteIds === 'string') {
+            try {
+              satelliteIds = JSON.parse(satelliteIds);
+            } catch (e) {
+              console.log(`ユーザー ${user.name} のsatellite_idsパース失敗:`, e);
+              // パースに失敗した場合は文字列として扱う
+              satelliteIds = [satelliteIds];
+            }
+          }
+          
+          // 配列でない場合は配列に変換
+          if (!Array.isArray(satelliteIds)) {
+            satelliteIds = [satelliteIds];
+          }
+          
+          // 数値と文字列の両方で比較
+          const hasSatellite = satelliteIds.some(id => 
+            id.toString() === satelliteId.toString() || 
+            Number(id) === Number(satelliteId)
+          );
+          
+          console.log(`ユーザー ${user.name} の処理済みsatellite_ids:`, satelliteIds);
           console.log(`ユーザー ${user.name} が拠点${satelliteId}に所属:`, hasSatellite);
           return hasSatellite;
         });
         
         console.log(`拠点${satelliteId}の指導員（全ユーザーから抽出）:`, instructorsInSatellite);
+        console.log('抽出された指導員の詳細:');
+        instructorsInSatellite.forEach(instructor => {
+          console.log(`- ID: ${instructor.id}, 名前: ${instructor.name}, ロール: ${instructor.role}, satellite_ids: ${instructor.satellite_ids}`);
+        });
         
         setSatelliteInstructors(prev => {
           const newState = { ...prev, [satelliteId]: instructorsInSatellite };
@@ -121,23 +199,50 @@ const LocationManagement = () => {
     // managerIdsが文字列の場合は配列に変換
     const ids = Array.isArray(managerIds) ? managerIds : [managerIds];
     
+    console.log('getManagerNames呼び出し - managerIds:', managerIds);
+    console.log('処理するID:', ids);
+    console.log('現在のmanagers:', managers);
+    console.log('現在のsatelliteInstructors:', satelliteInstructors);
+    
     // まず拠点に所属する指導者から検索
     const allInstructors = Object.values(satelliteInstructors || {}).flat().filter(instructor => instructor && typeof instructor === 'object');
+    console.log('全指導者:', allInstructors);
+    
     const instructorNames = ids.map(id => {
       if (!id) return null;
-      const instructor = allInstructors.find(i => i && i.id === id);
+      const instructor = allInstructors.find(i => i && i.id === parseInt(id));
+      console.log(`ID ${id} の指導者検索結果:`, instructor);
       return instructor && instructor.name ? instructor.name : null;
     }).filter(name => name !== null);
     
     // 指導者に見つからない場合は管理者から検索
-    const remainingIds = ids.filter(id => id && !allInstructors.find(i => i && i.id === id));
+    const remainingIds = ids.filter(id => id && !allInstructors.find(i => i && i.id === parseInt(id)));
+    console.log('残りのID（管理者から検索）:', remainingIds);
+    
     const managerNames = remainingIds.map(id => {
       if (!id) return null;
-      const manager = managers.find(m => m && m.id === id);
-      return manager && manager.name ? manager.name : `ID: ${id}`;
+      const manager = managers.find(m => m && m.id === parseInt(id));
+      console.log(`ID ${id} の管理者検索結果:`, manager);
+      
+      if (manager && manager.name) {
+        return manager.name;
+      } else {
+        // 管理者が見つからない場合、全ユーザーから検索
+        console.log(`管理者ID ${id} が見つからないため、全ユーザーから検索します`);
+        const allUser = allUsers.find(u => u && u.id === parseInt(id));
+        if (allUser && allUser.name) {
+          console.log(`全ユーザーから見つかった責任者:`, allUser);
+          return allUser.name;
+        } else {
+          console.log(`全ユーザーからも見つからないID: ${id}`);
+          return `ID: ${id}`;
+        }
+      }
     }).filter(name => name !== null);
     
-    return [...instructorNames, ...managerNames];
+    const result = [...instructorNames, ...managerNames];
+    console.log('最終結果:', result);
+    return result;
   };
 
   // 拠点に所属する指導者を取得する関数
@@ -284,8 +389,11 @@ const LocationManagement = () => {
         return;
       }
       
-      const data = await response.json();
-      console.log('satellites一覧取得成功:', data);
+      const responseData = await response.json();
+      console.log('satellites一覧取得成功:', responseData);
+      
+      // APIレスポンスの形式を確認（success/data形式）
+      const data = responseData.success ? responseData.data : [];
       
       // satellitesデータをfacilitiesとして設定
       if (Array.isArray(data)) {
@@ -1258,6 +1366,23 @@ const LocationManagement = () => {
       }
     }
   };
+
+  // 権限チェック
+  if (!hasPermission) {
+    return (
+      <div className="p-6">
+        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+          <div className="text-red-600 mb-4">
+            <svg className="w-16 h-16 mx-auto mb-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            <h2 className="text-2xl font-bold mb-4">閲覧権限がありません</h2>
+            <p className="text-gray-600">拠点情報は拠点管理者のみ閲覧できます。</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
@@ -2417,7 +2542,10 @@ const LocationManagement = () => {
                       />
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <div className="font-medium text-gray-800">{instructor.name}</div>
+                          <div className="font-medium text-gray-800">
+                            {instructor.name}
+                            {instructor.role === 5 && <span className="text-yellow-500 text-lg ml-1">👑</span>}
+                          </div>
                           {isCurrentManager && (
                             <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
                               現在の責任者

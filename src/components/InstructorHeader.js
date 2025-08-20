@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import { logAdminAccountOperation } from '../utils/adminLogger';
-import { getUserInfo } from '../utils/api';
+import { getUserInfo, reauthenticateForSatellite } from '../utils/api';
 import CompanySatelliteSwitchModal from './CompanySatelliteSwitchModal';
 
 const InstructorHeader = ({ user, onLocationChange }) => {
@@ -10,7 +10,7 @@ const InstructorHeader = ({ user, onLocationChange }) => {
   const [currentSatellite, setCurrentSatellite] = useState(null);
   const [userSatellites, setUserSatellites] = useState([]);
   const [loading, setLoading] = useState(false);
-  const { logout } = useAuth();
+  const { logout, updateAuthForSatellite } = useAuth();
 
   // JWTトークンをデコードする関数
   const decodeJWT = (token) => {
@@ -27,12 +27,12 @@ const InstructorHeader = ({ user, onLocationChange }) => {
     }
   };
 
-  // ロール番号からロール名を取得する関数
+    // ロール番号からロール名を取得する関数
   const getRoleName = (roleId) => {
     const roleMap = {
       4: '指導員',
       5: '拠点管理者',
-      9: 'アドミンユーザ',
+      9: 'システム管理者',
       10: 'マスターユーザ'
     };
     
@@ -55,26 +55,34 @@ const InstructorHeader = ({ user, onLocationChange }) => {
       console.log('拠点管理者として表示に変更');
     }
     
-
-    
-    // デバッグ用: 一時的にロール4のユーザーを管理者として表示
-    // if (numericRoleId === 4) {
-    //   roleName = '拠点管理者';
-    //   console.log('デバッグ用: 強制的に拠点管理者として表示');
-    // }
+    // 管理者（ロール9以上）が指導員ダッシュボードにいる場合は「システム管理者」と表示
+    if (numericRoleId >= 9) {
+      roleName = 'システム管理者';
+      console.log('システム管理者として表示');
+    }
     
     console.log('最終的なロール名:', roleName);
     return roleName;
   };
 
-  // ユーザーの実際のロール番号を取得
+  // ユーザーの実際のロール番号を取得（無限ループ防止版）
   const getActualRoleId = () => {
     // まずJWTトークンからロール情報を取得
     const accessToken = localStorage.getItem('accessToken');
     if (accessToken) {
       const decodedToken = decodeJWT(accessToken);
+      console.log('JWTトークンデコード結果:', decodedToken);
       if (decodedToken && decodedToken.role) {
         console.log('JWTトークンから取得したロール:', decodedToken.role);
+        
+        // 拠点管理者判定をチェック
+        const isManager = isCurrentSatelliteManager();
+        if (decodedToken.role === 4 && isManager) {
+          console.log('拠点管理者として判定されたため、ロールを5に更新します');
+          // 拠点管理者の場合はロール5として扱う
+          return 5;
+        }
+        
         return decodedToken.role;
       }
     }
@@ -84,9 +92,9 @@ const InstructorHeader = ({ user, onLocationChange }) => {
     return user?.role;
   };
 
-  // 現在の拠点で拠点管理者かどうかを判定
+  // 現在の拠点で拠点管理者かどうかを判定（無限ループ防止版）
   const isCurrentSatelliteManager = () => {
-    if (!currentSatellite || !userSatellites) {
+    if (!currentSatellite) {
       console.log('拠点管理者判定: 拠点情報が不足');
       return false;
     }
@@ -99,12 +107,25 @@ const InstructorHeader = ({ user, onLocationChange }) => {
       userId = decodedToken?.user_id;
     }
     
+    if (!userId) {
+      console.log('拠点管理者判定: ユーザーIDが取得できません');
+      return false;
+    }
+    
+    console.log('管理者判定開始:', {
+      userId: userId,
+      satelliteId: currentSatellite.id,
+      satelliteName: currentSatellite.name,
+      managerIds: currentSatellite.manager_ids,
+      isManager: currentSatellite.is_manager
+    });
+    
     // APIから返されたis_managerの値を確認
     const apiIsManager = currentSatellite.is_manager === true;
     
     // バックアップ判定: ユーザーIDが拠点の管理者リストに含まれているかチェック
     let backupIsManager = false;
-    if (userId && currentSatellite.manager_ids) {
+    if (currentSatellite.manager_ids) {
       try {
         // manager_idsが既に配列の場合はそのまま使用、文字列の場合はパース
         let managerIds = currentSatellite.manager_ids;
@@ -112,12 +133,11 @@ const InstructorHeader = ({ user, onLocationChange }) => {
           managerIds = JSON.parse(managerIds);
         }
         
-        console.log('フロントエンド管理者判定詳細:', {
-          userId: userId,
-          userIdType: typeof userId,
-          managerIds: managerIds,
-          managerIdsType: typeof managerIds,
-          isArray: Array.isArray(managerIds)
+        console.log('管理者ID解析結果:', {
+          originalManagerIds: currentSatellite.manager_ids,
+          parsedManagerIds: managerIds,
+          isArray: Array.isArray(managerIds),
+          length: Array.isArray(managerIds) ? managerIds.length : 0
         });
         
         if (Array.isArray(managerIds)) {
@@ -127,7 +147,7 @@ const InstructorHeader = ({ user, onLocationChange }) => {
             const managerIdNum = parseInt(managerId);
             const isMatch = managerIdNum === userIdNum;
             
-            console.log(`フロントエンド管理者ID比較: ${managerId} (${typeof managerId}) == ${userId} (${typeof userId})`, {
+            console.log(`管理者ID比較: ${managerId} (${typeof managerId}) == ${userId} (${typeof userId}) = ${isMatch}`, {
               managerIdNum,
               userIdNum,
               isMatch
@@ -143,7 +163,7 @@ const InstructorHeader = ({ user, onLocationChange }) => {
     
     const finalIsManager = apiIsManager || backupIsManager;
     
-    console.log('拠点管理者判定詳細:', {
+    console.log('拠点管理者判定最終結果:', {
       userId: userId,
       satelliteName: currentSatellite.name,
       satelliteId: currentSatellite.id,
@@ -151,63 +171,13 @@ const InstructorHeader = ({ user, onLocationChange }) => {
       backupIsManager: backupIsManager,
       finalIsManager: finalIsManager,
       managerIds: currentSatellite.manager_ids,
-      satelliteData: currentSatellite
+      userRole: user?.role
     });
     
     return finalIsManager;
   };
 
-  // 管理者設定を実行する関数
-  const setCurrentUserAsManager = async () => {
-    if (!currentSatellite) {
-      console.log('拠点が選択されていません');
-      return;
-    }
-    
-    const accessToken = localStorage.getItem('accessToken');
-    if (!accessToken) {
-      console.log('アクセストークンがありません');
-      return;
-    }
-    
-    const decodedToken = decodeJWT(accessToken);
-    const userId = decodedToken?.user_id;
-    
-    if (!userId) {
-      console.log('ユーザーIDが取得できません');
-      return;
-    }
-    
-    try {
-      console.log('管理者設定を実行中...', {
-        satelliteId: currentSatellite.id,
-        userId: userId
-      });
-      
-      const response = await fetch('http://localhost:5000/api/set-satellite-manager', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          satelliteId: currentSatellite.id,
-          userId: userId
-        })
-      });
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        console.log('管理者設定が完了しました:', result.message);
-        // ユーザー情報を再取得
-        await loadUserInfo();
-      } else {
-        console.error('管理者設定に失敗しました:', result.message);
-      }
-    } catch (error) {
-      console.error('管理者設定エラー:', error);
-    }
-  };
+
 
   // ユーザー情報を取得
   const loadUserInfo = async () => {
@@ -222,33 +192,61 @@ const InstructorHeader = ({ user, onLocationChange }) => {
         console.log('APIから取得した拠点情報:', satellites);
         console.log('APIから取得した企業情報:', companies);
         
-        // アドミン権限（ロール9以上）の場合の特別処理
-        if (userInfo.role >= 9) {
-          // アドミンは全企業・拠点にアクセス可能
-          setCurrentCompany({
-            id: null,
-            name: 'システム管理者',
-            address: null,
-            phone: null
-          });
-          
-          // ログイン時に選択された拠点を優先して設定
-          const selectedSatelliteId = user?.satellite_id;
-          if (selectedSatelliteId && satellites && satellites.length > 0) {
-            const selectedSatellite = satellites.find(s => s.id === selectedSatelliteId);
-            if (selectedSatellite) {
-              setCurrentSatellite(selectedSatellite);
-            } else {
-              // 選択された拠点が見つからない場合は最初の拠点を設定
-              setCurrentSatellite(satellites[0]);
-            }
-          } else if (satellites && satellites.length > 0) {
-            // 拠点情報がない場合は最初の拠点をデフォルトとして設定
-            console.log('アドミン用デフォルト拠点を設定:', satellites[0]);
-            setCurrentSatellite(satellites[0]);
-          }
-          
-          setUserSatellites(satellites || []);
+                 // アドミン権限（ロール9以上）の場合の特別処理
+         if (userInfo.role >= 9) {
+           // アドミンは全企業・拠点にアクセス可能
+           setCurrentCompany({
+             id: null,
+             name: 'システム管理者',
+             address: null,
+             phone: null
+           });
+           
+           // ログイン時に選択された拠点を優先して設定
+           const selectedSatelliteId = user?.satellite_id;
+           if (selectedSatelliteId && satellites && satellites.length > 0) {
+             const selectedSatellite = satellites.find(s => s.id === selectedSatelliteId);
+             if (selectedSatellite) {
+               setCurrentSatellite(selectedSatellite);
+             } else {
+               // 選択された拠点が見つからない場合は最初の拠点を設定
+               setCurrentSatellite(satellites[0]);
+             }
+           } else if (satellites && satellites.length > 0) {
+             // 拠点情報がない場合は最初の拠点をデフォルトとして設定
+             console.log('アドミン用デフォルト拠点を設定:', satellites[0]);
+             setCurrentSatellite(satellites[0]);
+             
+             // 拠点設定後の再認証処理
+             try {
+               console.log('拠点設定後の再認証API呼び出し開始...');
+               const reauthResult = await reauthenticateForSatellite(satellites[0].id);
+               console.log('拠点設定後の再認証結果:', reauthResult);
+               
+               if (reauthResult.success && reauthResult.data) {
+                 // 新しいトークンを保存
+                 const { access_token, refresh_token } = reauthResult.data;
+                 
+                 // ユーザー情報を更新
+                 const updatedUser = {
+                   ...user,
+                   role: reauthResult.data.user.role,
+                   company_id: reauthResult.data.user.company_id,
+                   company_name: reauthResult.data.user.company_name,
+                   satellite_id: reauthResult.data.user.satellite_id,
+                   satellite_name: reauthResult.data.user.satellite_name
+                 };
+                 
+                 // 認証コンテキストを更新
+                 updateAuthForSatellite(updatedUser, access_token, refresh_token);
+                 console.log('拠点設定後のユーザー情報:', updatedUser);
+               }
+             } catch (reauthError) {
+               console.error('拠点設定後の再認証エラー:', reauthError);
+             }
+           }
+           
+           setUserSatellites(satellites || []);
         } else {
           // 通常のユーザー（ロール9未満）の処理
           setCurrentCompany({
@@ -262,18 +260,58 @@ const InstructorHeader = ({ user, onLocationChange }) => {
           
           // ログイン時に選択された拠点を優先して設定
           const selectedSatelliteId = user?.satellite_id;
+          let targetSatellite = null;
+          
           if (selectedSatelliteId && satellites && satellites.length > 0) {
             const selectedSatellite = satellites.find(s => s.id === selectedSatelliteId);
             if (selectedSatellite) {
-              setCurrentSatellite(selectedSatellite);
+              targetSatellite = selectedSatellite;
             } else {
               // 選択された拠点が見つからない場合は最初の拠点を設定
-              setCurrentSatellite(satellites[0]);
+              targetSatellite = satellites[0];
             }
           } else if (satellites && satellites.length > 0) {
             // 拠点情報がない場合は最初の拠点をデフォルトとして設定
             console.log('通常ユーザー用デフォルト拠点を設定:', satellites[0]);
-            setCurrentSatellite(satellites[0]);
+            targetSatellite = satellites[0];
+          }
+          
+          console.log('targetSatellite設定結果:', {
+            selectedSatelliteId: selectedSatelliteId,
+            satellitesLength: satellites?.length,
+            targetSatellite: targetSatellite
+          });
+          
+          if (targetSatellite) {
+            setCurrentSatellite(targetSatellite);
+            
+            // 拠点設定後の再認証処理
+            try {
+              console.log('拠点設定後の再認証API呼び出し開始...');
+              const reauthResult = await reauthenticateForSatellite(targetSatellite.id);
+              console.log('拠点設定後の再認証結果:', reauthResult);
+              
+                             if (reauthResult.success && reauthResult.data) {
+                 // 新しいトークンを保存
+                 const { access_token, refresh_token } = reauthResult.data;
+                 
+                 // ユーザー情報を更新
+                 const updatedUser = {
+                   ...user,
+                   role: reauthResult.data.user.role,
+                   company_id: reauthResult.data.user.company_id,
+                   company_name: reauthResult.data.user.company_name,
+                   satellite_id: reauthResult.data.user.satellite_id,
+                   satellite_name: reauthResult.data.user.satellite_name
+                 };
+                 
+                 // 認証コンテキストを更新
+                 updateAuthForSatellite(updatedUser, access_token, refresh_token);
+                 console.log('拠点設定後のユーザー情報:', updatedUser);
+               }
+            } catch (reauthError) {
+              console.error('拠点設定後の再認証エラー:', reauthError);
+            }
           }
         }
       }
@@ -288,7 +326,7 @@ const InstructorHeader = ({ user, onLocationChange }) => {
     loadUserInfo();
     // 初期化時にロール情報を更新
     updateRoleInfo();
-  }, []);
+  }, []); // 依存配列を空にして無限ループを防止
 
   // ロール情報を更新する関数
   const updateRoleInfo = async () => {
@@ -302,10 +340,47 @@ const InstructorHeader = ({ user, onLocationChange }) => {
         const accessToken = localStorage.getItem('accessToken');
         if (accessToken) {
           const decodedToken = decodeJWT(accessToken);
-          if (decodedToken && decodedToken.role !== userInfo.role) {
-            console.log('JWTトークンのロールを更新:', decodedToken.role, '→', userInfo.role);
+          
+          // 拠点管理者判定をチェック
+          const isManager = isCurrentSatelliteManager();
+          const shouldUpdateRole = (decodedToken.role === 4 && isManager) || 
+                                  (decodedToken && decodedToken.role !== userInfo.role);
+          
+          if (shouldUpdateRole) {
+            console.log('JWTトークンのロールを更新:', decodedToken.role, '→', isManager ? 5 : userInfo.role);
             
-            // 新しいトークンを生成（バックエンドから取得）
+            // 拠点管理者の場合は再認証を実行
+            if (decodedToken.role === 4 && isManager && currentSatellite) {
+              try {
+                console.log('拠点管理者として再認証を実行します');
+                const reauthResult = await reauthenticateForSatellite(currentSatellite.id);
+                if (reauthResult.success && reauthResult.data) {
+                  // 新しいトークンを保存
+                  const { access_token, refresh_token } = reauthResult.data;
+                  localStorage.setItem('accessToken', access_token);
+                  localStorage.setItem('refreshToken', refresh_token);
+                  
+                  // ユーザー情報を更新
+                  const updatedUser = {
+                    ...user,
+                    role: reauthResult.data.user.role,
+                    company_id: reauthResult.data.user.company_id,
+                    company_name: reauthResult.data.user.company_name,
+                    satellite_id: reauthResult.data.user.satellite_id,
+                    satellite_name: reauthResult.data.user.satellite_name
+                  };
+                  
+                  // 認証コンテキストを更新
+                  updateAuthForSatellite(updatedUser, access_token, refresh_token);
+                  console.log('拠点管理者としてトークンが更新されました');
+                  return;
+                }
+              } catch (reauthError) {
+                console.error('拠点管理者再認証エラー:', reauthError);
+              }
+            }
+            
+            // 通常のトークン更新処理
             try {
               const refreshResponse = await fetch('http://localhost:5000/api/refresh', {
                 method: 'POST',
@@ -332,7 +407,7 @@ const InstructorHeader = ({ user, onLocationChange }) => {
             
             // ローカルストレージのユーザー情報も更新
             const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-            currentUser.role = userInfo.role;
+            currentUser.role = isManager ? 5 : userInfo.role;
             localStorage.setItem('currentUser', JSON.stringify(currentUser));
           }
         }
@@ -361,14 +436,74 @@ const InstructorHeader = ({ user, onLocationChange }) => {
   };
 
   const handleSatelliteSelect = async (satellite) => {
-    console.log('拠点選択:', satellite);
+    console.log('=== 拠点選択処理開始 ===');
+    console.log('選択された拠点:', satellite);
+    console.log('現在のユーザー:', user);
+    
+    try {
+      // 拠点変更時の再認証を実行
+      console.log('拠点変更時再認証API呼び出し開始...');
+      const reauthResult = await reauthenticateForSatellite(satellite.id);
+      console.log('拠点変更時再認証結果:', reauthResult);
+      
+      if (reauthResult.success && reauthResult.data) {
+        // 新しいトークンを保存
+        const { access_token, refresh_token } = reauthResult.data;
+        
+        // ユーザー情報を更新
+        const updatedUser = {
+          ...user,
+          role: reauthResult.data.user.role,
+          company_id: reauthResult.data.user.company_id,
+          company_name: reauthResult.data.user.company_name,
+          satellite_id: reauthResult.data.user.satellite_id,
+          satellite_name: reauthResult.data.user.satellite_name
+        };
+        
+        // 認証コンテキストを更新
+        updateAuthForSatellite(updatedUser, access_token, refresh_token);
+        console.log('拠点変更後のユーザー情報:', updatedUser);
+        
+        // 古いselectedSatellite情報をクリア
+        sessionStorage.removeItem('selectedSatellite');
+        console.log('古いselectedSatellite情報をクリアしました');
+        
+        // 新しい拠点情報をselectedSatelliteに保存
+        sessionStorage.setItem('selectedSatellite', JSON.stringify(satellite));
+        console.log('新しい拠点情報をselectedSatelliteに保存:', satellite);
+        
+        setCurrentSatellite(satellite);
+        if (onLocationChange) {
+          onLocationChange(satellite);
+        }
+        
+        // 拠点変更時の処理完了
+        return;
+      } else {
+        console.error('拠点変更時再認証に失敗:', reauthResult.message);
+        alert('拠点変更に失敗しました: ' + reauthResult.message);
+        return;
+      }
+    } catch (error) {
+      console.error('拠点変更時再認証エラー:', error);
+      alert('拠点変更中にエラーが発生しました: ' + error.message);
+      return;
+    }
+    
+    // 古いselectedSatellite情報をクリア
+    sessionStorage.removeItem('selectedSatellite');
+    console.log('古いselectedSatellite情報をクリアしました');
+    
+    // 新しい拠点情報をselectedSatelliteに保存
+    sessionStorage.setItem('selectedSatellite', JSON.stringify(satellite));
+    console.log('新しい拠点情報をselectedSatelliteに保存:', satellite);
+    
     setCurrentSatellite(satellite);
     if (onLocationChange) {
       onLocationChange(satellite);
     }
     
-    // 拠点変更時にロール情報を更新
-    await updateRoleInfo();
+    // 拠点変更時の処理完了
   };
 
   // ユーザーのロール名を取得
@@ -417,12 +552,15 @@ const InstructorHeader = ({ user, onLocationChange }) => {
             </svg>
             企業・拠点切り替え
           </button>
-                     <button 
-             className="bg-white bg-opacity-10 text-white border-2 border-white border-opacity-30 px-4 py-2 rounded-md cursor-pointer transition-all duration-200 hover:bg-opacity-20 hover:border-opacity-50"
-             onClick={handleLogout}
-           >
-             ログアウト
-           </button>
+          
+
+          
+          <button 
+            className="bg-white bg-opacity-10 text-white border-2 border-white border-opacity-30 px-4 py-2 rounded-md cursor-pointer transition-all duration-200 hover:bg-opacity-20 hover:border-opacity-50"
+            onClick={handleLogout}
+          >
+            ログアウト
+          </button>
         </div>
       </div>
 

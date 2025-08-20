@@ -435,12 +435,36 @@ export const AuthProvider = ({ children }) => {
     console.log('認証状態を設定完了');
   };
 
+  // 拠点変更時の認証更新処理
+  const updateAuthForSatellite = (userData, accessToken, refreshToken) => {
+    console.log('=== 拠点変更時認証更新処理開始 ===');
+    console.log('ユーザーデータ:', userData);
+    console.log('アクセストークン:', accessToken ? '存在' : 'なし');
+    console.log('リフレッシュトークン:', refreshToken ? '存在' : 'なし');
+    
+    // 更新試行回数をリセット
+    refreshAttempts.current = 0;
+    
+    localStorage.setItem('currentUser', JSON.stringify(userData));
+    console.log('ユーザーデータをlocalStorageに更新完了');
+    
+    // トークンを更新
+    if (accessToken && refreshToken) {
+      storeTokens(accessToken, refreshToken);
+      console.log('トークンをlocalStorageに更新完了');
+    }
+    
+    setCurrentUser(userData);
+    console.log('認証状態を更新完了');
+  };
+
   const value = {
     isAuthenticated,
     isLoading,
     currentUser,
     login,
-    logout
+    logout,
+    updateAuthForSatellite
   };
 
   return (

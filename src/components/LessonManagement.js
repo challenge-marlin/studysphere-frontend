@@ -521,15 +521,53 @@ const LessonManagement = () => {
       setFileListLoading(true);
       const response = await apiGet(`/api/lessons/${lessonId}/files`);
       
-      if (response.success) {
-        setSelectedLessonFiles(response.data);
+      console.log('ファイル一覧取得レスポンス:', response);
+      
+      if (response.success && response.data) {
+        // レスポンスデータの構造を確認
+        console.log('レスポンスデータの型:', typeof response.data);
+        console.log('レスポンスデータの内容:', response.data);
+        
+        let fileData;
+        
+        // 配列の場合（直接ファイルリストが返される場合）
+        if (Array.isArray(response.data)) {
+          console.log('配列形式のデータを検出');
+          // 現在のレッスン情報を取得
+          const currentLesson = lessons.find(lesson => lesson.id === lessonId);
+          if (!currentLesson) {
+            setError('レッスン情報が見つかりません');
+            return;
+          }
+          
+          fileData = {
+            lesson: {
+              title: currentLesson.title,
+              courseTitle: currentLesson.course_title || '不明なコース'
+            },
+            files: response.data
+          };
+        } 
+        // オブジェクトの場合（従来の形式）
+        else if (response.data.lesson && response.data.files) {
+          console.log('オブジェクト形式のデータを検出');
+          fileData = response.data;
+        } 
+        // その他の形式
+        else {
+          console.error('ファイル一覧データの構造が不正:', response.data);
+          setError('ファイル一覧データの形式が正しくありません');
+          return;
+        }
+        
+        setSelectedLessonFiles(fileData);
         setShowFileListModal(true);
       } else {
-        setError('ファイル一覧の取得に失敗しました: ' + response.message);
+        setError('ファイル一覧の取得に失敗しました: ' + (response.message || '不明なエラー'));
       }
     } catch (err) {
+      console.error('ファイル一覧取得エラー:', err);
       setError('ファイル一覧の取得に失敗しました: ' + err.message);
-      console.error('Error fetching file list:', err);
     } finally {
       setFileListLoading(false);
     }
@@ -1520,12 +1558,12 @@ const LessonManagement = () => {
       )}
 
       {/* ファイル一覧モーダル */}
-      {showFileListModal && selectedLessonFiles && (
+      {showFileListModal && selectedLessonFiles && selectedLessonFiles.lesson && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-4xl max-h-[80vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-2xl font-bold text-gray-800">
-                ファイル一覧 - {selectedLessonFiles.lesson.title}
+                ファイル一覧 - {selectedLessonFiles.lesson?.title || '不明なレッスン'}
               </h2>
               <button
                 onClick={closeModals}
@@ -1537,10 +1575,10 @@ const LessonManagement = () => {
             
             <div className="mb-4 p-3 bg-blue-50 rounded-lg">
               <p className="text-sm text-blue-800">
-                <strong>コース:</strong> {selectedLessonFiles.lesson.courseTitle}
+                <strong>コース:</strong> {selectedLessonFiles.lesson?.courseTitle || '不明なコース'}
               </p>
               <p className="text-sm text-blue-800">
-                <strong>ファイル数:</strong> {selectedLessonFiles.files.length}個
+                <strong>ファイル数:</strong> {selectedLessonFiles.files?.length || 0}個
               </p>
             </div>
 
@@ -1560,27 +1598,33 @@ const LessonManagement = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedLessonFiles.files.map((file, index) => (
+                    {selectedLessonFiles.files?.map((file, index) => (
                       <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200">
                         <td className="px-4 py-3 font-medium text-gray-800">
-                          {file.name}
+                          {file?.name || '不明なファイル'}
                         </td>
                         <td className="px-4 py-3 text-gray-600">
-                          {file.sizeFormatted}
+                          {file?.sizeFormatted || '不明'}
                         </td>
                         <td className="px-4 py-3 text-gray-600">
-                          {new Date(file.lastModified).toLocaleString('ja-JP')}
+                          {file?.lastModified ? new Date(file.lastModified).toLocaleString('ja-JP') : '不明'}
                         </td>
                         <td className="px-4 py-3">
                           <button
-                            onClick={() => handleDownloadIndividualFile(file.key, file.name)}
+                            onClick={() => handleDownloadIndividualFile(file?.key, file?.name)}
                             className="px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
                           >
                             📥 ダウンロード
                           </button>
                         </td>
                       </tr>
-                    ))}
+                    )) || (
+                      <tr>
+                        <td colSpan="4" className="px-4 py-3 text-center text-gray-500">
+                          ファイルが見つかりません
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>

@@ -192,35 +192,52 @@ const InstructorHeader = ({ user, onLocationChange }) => {
         console.log('APIから取得した拠点情報:', satellites);
         console.log('APIから取得した企業情報:', companies);
         
-                 // アドミン権限（ロール9以上）の場合の特別処理
+        // アドミン権限（ロール9以上）の場合の特別処理
          if (userInfo.role >= 9) {
-           // アドミンは全企業・拠点にアクセス可能
-           setCurrentCompany({
-             id: null,
-             name: 'システム管理者',
-             address: null,
-             phone: null
-           });
-           
            // ログイン時に選択された拠点を優先して設定
            const selectedSatelliteId = user?.satellite_id;
+           let targetSatellite = null;
+           
            if (selectedSatelliteId && satellites && satellites.length > 0) {
              const selectedSatellite = satellites.find(s => s.id === selectedSatelliteId);
              if (selectedSatellite) {
-               setCurrentSatellite(selectedSatellite);
+               targetSatellite = selectedSatellite;
              } else {
                // 選択された拠点が見つからない場合は最初の拠点を設定
-               setCurrentSatellite(satellites[0]);
+               targetSatellite = satellites[0];
              }
            } else if (satellites && satellites.length > 0) {
              // 拠点情報がない場合は最初の拠点をデフォルトとして設定
              console.log('アドミン用デフォルト拠点を設定:', satellites[0]);
-             setCurrentSatellite(satellites[0]);
+             targetSatellite = satellites[0];
+           }
+           
+           // 拠点が設定された場合、その拠点の企業情報を取得
+           if (targetSatellite) {
+             // 拠点情報に含まれている企業情報を使用
+             if (targetSatellite.company_name) {
+               setCurrentCompany({
+                 id: targetSatellite.company_id,
+                 name: targetSatellite.company_name,
+                 address: targetSatellite.company_address || null,
+                 phone: targetSatellite.company_phone || null
+               });
+             } else {
+               // 企業情報が見つからない場合はシステム管理者として設定
+               setCurrentCompany({
+                 id: null,
+                 name: 'システム管理者',
+                 address: null,
+                 phone: null
+               });
+             }
+             
+             setCurrentSatellite(targetSatellite);
              
              // 拠点設定後の再認証処理
              try {
                console.log('拠点設定後の再認証API呼び出し開始...');
-               const reauthResult = await reauthenticateForSatellite(satellites[0].id);
+               const reauthResult = await reauthenticateForSatellite(targetSatellite.id);
                console.log('拠点設定後の再認証結果:', reauthResult);
                
                if (reauthResult.success && reauthResult.data) {
@@ -244,9 +261,17 @@ const InstructorHeader = ({ user, onLocationChange }) => {
              } catch (reauthError) {
                console.error('拠点設定後の再認証エラー:', reauthError);
              }
+           } else {
+             // 拠点情報がない場合はシステム管理者として設定
+             setCurrentCompany({
+               id: null,
+               name: 'システム管理者',
+               address: null,
+               phone: null
+             });
            }
            
-           setUserSatellites(satellites || []);
+           setUserSatellites(Array.isArray(satellites) ? satellites : []);
         } else {
           // 通常のユーザー（ロール9未満）の処理
           setCurrentCompany({
@@ -256,7 +281,7 @@ const InstructorHeader = ({ user, onLocationChange }) => {
             phone: userInfo.company_phone
           });
           
-          setUserSatellites(satellites || []);
+          setUserSatellites(Array.isArray(satellites) ? satellites : []);
           
           // ログイン時に選択された拠点を優先して設定
           const selectedSatelliteId = user?.satellite_id;
@@ -512,7 +537,7 @@ const InstructorHeader = ({ user, onLocationChange }) => {
   
   // 権限チェック
   const canSwitchCompany = actualRoleId >= 9;
-  const canSwitchSatellite = userSatellites.length > 1;
+  const canSwitchSatellite = Array.isArray(userSatellites) && userSatellites.length > 1;
 
   return (
     <header className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white py-4 shadow-lg">
@@ -521,28 +546,30 @@ const InstructorHeader = ({ user, onLocationChange }) => {
           <h1 className="text-2xl font-bold text-white m-0">Study Sphere</h1>
         </div>
         <div className="flex items-center gap-4">
-          <div className="flex flex-col items-end">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="font-medium text-white">{user?.name}</span>
-              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-white bg-opacity-20 text-white">
-                {userRoleName}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="text-lg font-bold">
-                {currentSatellite?.name || '拠点未選択'}
-              </div>
-              <span className="text-sm bg-white/20 px-2 py-0.5 rounded">
-                {currentSatellite?.office_type_name?.includes('学習塾') ? '📚' : 
-                 currentSatellite?.office_type_name?.includes('就労移行') ? '🏢' :
-                 currentSatellite?.office_type_name?.includes('A型') ? '🏭' :
-                 currentSatellite?.office_type_name?.includes('B型') ? '🏗️' : '🏫'}
-              </span>
-            </div>
-            <div className="text-sm text-white/80">
-              {currentCompany?.name || '企業未選択'}
-            </div>
-          </div>
+                     <div className="flex items-center gap-4">
+             <div className="flex items-center gap-2">
+               <span className="font-medium text-white">{user?.name}</span>
+               <span className="px-2 py-1 rounded-full text-xs font-semibold bg-white bg-opacity-20 text-white">
+                 {userRoleName}
+               </span>
+             </div>
+             <div className="flex flex-col items-end">
+               <div className="flex items-center gap-2">
+                 <div className="text-lg font-bold">
+                   {currentSatellite?.name || '拠点未選択'}
+                 </div>
+                 <span className="text-sm bg-white/20 px-2 py-0.5 rounded">
+                   {currentSatellite?.office_type_name?.includes('学習塾') ? '📚' : 
+                    currentSatellite?.office_type_name?.includes('就労移行') ? '🏢' :
+                    currentSatellite?.office_type_name?.includes('A型') ? '🏭' :
+                    currentSatellite?.office_type_name?.includes('B型') ? '🏗️' : '🏫'}
+                 </span>
+               </div>
+               <div className="text-sm text-white/80">
+                 {currentCompany?.name || '企業未選択'}
+               </div>
+             </div>
+           </div>
           <button 
             onClick={() => setIsSwitchModalOpen(true)}
             className="bg-white bg-opacity-10 text-white border-2 border-white border-opacity-30 px-4 py-2 rounded-md cursor-pointer transition-all duration-200 hover:bg-opacity-20 hover:border-opacity-50 flex items-center gap-2"

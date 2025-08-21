@@ -326,6 +326,34 @@ export const updateUser = (userId, data) => {
 }; 
 
 /**
+ * 指導員の専門分野一覧を取得
+ */
+export const getInstructorSpecializations = (userId) => {
+  return apiGet(`/api/users/${userId}/specializations`);
+};
+
+/**
+ * 指導員の専門分野を追加
+ */
+export const addInstructorSpecialization = (userId, specialization) => {
+  return apiPost(`/api/users/${userId}/specializations`, { specialization });
+};
+
+/**
+ * 指導員の専門分野を更新
+ */
+export const updateInstructorSpecialization = (userId, specializationId, specialization) => {
+  return apiPut(`/api/users/${userId}/specializations/${specializationId}`, { specialization });
+};
+
+/**
+ * 指導員の専門分野を削除
+ */
+export const deleteInstructorSpecialization = (userId, specializationId) => {
+  return apiDelete(`/api/users/${userId}/specializations/${specializationId}`);
+}; 
+
+/**
  * 拠点変更時の再認証
  */
 export const reauthenticateForSatellite = (satelliteId) => {
@@ -337,4 +365,125 @@ export const reauthenticateForSatellite = (satelliteId) => {
     userId: userId,
     satelliteId: satelliteId 
   });
+};
+
+/**
+ * 拠点内の利用者と担当指導員の関係を取得
+ */
+export const getSatelliteUserInstructorRelations = (satelliteId) => {
+  return apiGet(`/api/users/satellite/${satelliteId}/instructor-relations`);
+};
+
+/**
+ * 拠点内の利用可能な指導員一覧を取得
+ */
+export const getSatelliteAvailableInstructors = (satelliteId) => {
+  return apiGet(`/api/users/satellite/${satelliteId}/available-instructors`);
+};
+
+/**
+ * 個別利用者の担当指導員を変更
+ */
+export const updateUserInstructor = (userId, instructorId) => {
+  return apiPut(`/api/users/${userId}/instructor`, { instructorId });
+};
+
+/**
+ * 一括で利用者の担当指導員を変更
+ */
+export const bulkUpdateUserInstructors = (satelliteId, assignments) => {
+  return apiPut(`/api/users/satellite/${satelliteId}/bulk-instructor-assignment`, { assignments });
+};
+
+/**
+ * 拠点内の全利用者の担当指導員を一括削除
+ */
+export const bulkRemoveUserInstructors = (satelliteId) => {
+  return apiDelete(`/api/users/satellite/${satelliteId}/instructors`);
 }; 
+
+/**
+ * 拠点内の利用者のコース関連付け一覧を取得
+ */
+export const getSatelliteUserCourses = (satelliteId) => {
+  return apiGet(`/api/user-courses/satellite/${satelliteId}/user-courses`);
+};
+
+/**
+ * 拠点で利用可能なコース一覧を取得
+ */
+export const getSatelliteAvailableCourses = (satelliteId) => {
+  return apiGet(`/api/user-courses/satellite/${satelliteId}/available-courses`);
+};
+
+/**
+ * 拠点で利用可能なカリキュラムパス一覧を取得
+ */
+export const getSatelliteAvailableCurriculumPaths = (satelliteId) => {
+  return apiGet(`/api/user-courses/satellite/${satelliteId}/available-curriculum-paths`);
+};
+
+/**
+ * 利用者にコースを一括追加
+ */
+export const bulkAssignCoursesToUsers = (satelliteId, data) => {
+  return apiPost(`/api/user-courses/satellite/${satelliteId}/bulk-assign-courses`, data);
+};
+
+/**
+ * 利用者からコースを一括削除
+ */
+export const bulkRemoveCoursesFromUsers = (satelliteId, data) => {
+  return apiPost(`/api/user-courses/satellite/${satelliteId}/bulk-remove-courses`, data);
+};
+
+/**
+ * 利用者にカリキュラムパスを一括追加
+ */
+export const bulkAssignCurriculumPathsToUsers = (satelliteId, data) => {
+  return apiPost(`/api/user-courses/satellite/${satelliteId}/bulk-assign-curriculum-paths`, data);
+};
+
+// 個別支援計画関連のAPI関数
+
+/**
+ * 個別支援計画一覧を取得
+ */
+export const getSupportPlans = () => {
+  return apiGet('/api/support-plans');
+};
+
+/**
+ * 特定ユーザーの個別支援計画を取得
+ */
+export const getSupportPlanByUserId = (userId) => {
+  return apiGet(`/api/support-plans/user/${userId}`);
+};
+
+/**
+ * 個別支援計画を作成
+ */
+export const createSupportPlan = (data) => {
+  return apiPost('/api/support-plans', data);
+};
+
+/**
+ * 個別支援計画を更新
+ */
+export const updateSupportPlan = (id, data) => {
+  return apiPut(`/api/support-plans/${id}`, data);
+};
+
+/**
+ * 個別支援計画を削除
+ */
+export const deleteSupportPlan = (id) => {
+  return apiDelete(`/api/support-plans/${id}`);
+};
+
+/**
+ * 個別支援計画を作成または更新（upsert）
+ */
+export const upsertSupportPlan = (data) => {
+  return apiPost('/api/support-plans/upsert', data);
+};

@@ -2,8 +2,23 @@ import React, { useState, useEffect } from 'react';
 import SanitizedInput from './SanitizedInput';
 import SanitizedTextarea from './SanitizedTextarea';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
+import { useAuth } from './contexts/AuthContext';
+import { 
+  getSatelliteUserCourses,
+  getSatelliteAvailableCourses,
+  getSatelliteAvailableCurriculumPaths,
+  bulkAssignCoursesToUsers,
+  bulkRemoveCoursesFromUsers,
+  bulkAssignCurriculumPathsToUsers,
+  getSupportPlanByUserId,
+  upsertSupportPlan,
+  apiPost,
+  apiGet
+} from '../utils/api';
 
 const StudentManagement = ({ teacherId }) => {
+  const { currentUser, isAuthenticated } = useAuth();
+  
   // 管理者画面で作成されたコースデータを取得
   const [availableCourses, setAvailableCourses] = useState([]);
   
@@ -14,9 +29,37 @@ const StudentManagement = ({ teacherId }) => {
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [tagsToAdd, setTagsToAdd] = useState([]);
   const [todayActiveMessage, setTodayActiveMessage] = useState('');
+  
+  // 一時パスワード機能用のstate
+  const [tempPasswordUsers, setTempPasswordUsers] = useState([]);
+  const [instructors, setInstructors] = useState([]);
+  const [selectedInstructor, setSelectedInstructor] = useState('');
+  const [expiryTime, setExpiryTime] = useState('');
+  const [announcementTitle, setAnnouncementTitle] = useState('');
+  const [announcementMessage, setAnnouncementMessage] = useState('');
+  const [tempPasswordLoading, setTempPasswordLoading] = useState(false);
   const [customTags, setCustomTags] = useState([
     '優秀', '要フォロー', '積極的', '消極的', '欠席が多い', '質問が多い', '理解度高い', '理解度低い'
   ]);
+  
+  // 利用者情報編集関連のstate
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    instructor_id: '',
+    tags: []
+  });
+  
+  // 個別支援計画関連のstate
+  const [supportPlanData, setSupportPlanData] = useState({
+    long_term_goal: '',
+    short_term_goal: '',
+    needs: '',
+    support_content: '',
+    goal_date: ''
+  });
+  const [existingSupportPlan, setExistingSupportPlan] = useState(null);
   
   // コースデータを取得する関数
   const fetchCourses = () => {
@@ -147,7 +190,7 @@ const StudentManagement = ({ teacherId }) => {
 
   // 全生徒を選択/選択解除する関数
   const toggleAllStudents = () => {
-    const filteredStudents = getFilteredStudents();
+    const filteredStudents = getFilteredStudents().filter(student => student.status === 1);
     if (selectedStudents.length === filteredStudents.length) {
       setSelectedStudents([]);
     } else {
@@ -298,6 +341,19 @@ const StudentManagement = ({ teacherId }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTags, setSelectedTags] = useState([]);
   const [statusFilter, setStatusFilter] = useState('all'); // all, 1, 0
+
+  // 学習コース管理用の状態変数
+  const [userCourses, setUserCourses] = useState([]);
+  const [satelliteAvailableCourses, setSatelliteAvailableCourses] = useState([]);
+  const [availableCurriculumPaths, setAvailableCurriculumPaths] = useState([]);
+  const [showCourseAssignmentModal, setShowCourseAssignmentModal] = useState(false);
+  const [selectedCourses, setSelectedCourses] = useState([]);
+  const [selectedCurriculumPath, setSelectedCurriculumPath] = useState('');
+  const [courseAssignmentNotes, setCourseAssignmentNotes] = useState('');
+  const [courseModalActiveTab, setCourseModalActiveTab] = useState('courses'); // 'courses' or 'curriculum'
+  const [courseModalFilterText, setCourseModalFilterText] = useState('');
+  const [courseModalFilterInstructor, setCourseModalFilterInstructor] = useState('');
+  const [courseModalFilterStatus, setCourseModalFilterStatus] = useState('all');
   
   // 全てのタグを取得
   const getAllTags = () => {
@@ -413,11 +469,303 @@ const StudentManagement = ({ teacherId }) => {
     }
   };
 
+  // 利用者情報編集モーダルを開く
+  const openEditModal = async (student) => {
+    setEditingStudent(student);
+    setEditFormData({
+      name: student.name || '',
+      instructor_id: student.instructor_id || '',
+      tags: student.tags ? JSON.parse(student.tags) : []
+    });
+    
+    // 個別支援計画を取得
+    try {
+      const response = await getSupportPlanByUserId(student.id);
+      if (response.success && response.data) {
+        setExistingSupportPlan(response.data);
+        setSupportPlanData({
+          long_term_goal: response.data.long_term_goal || '',
+          short_term_goal: response.data.short_term_goal || '',
+          needs: response.data.needs || '',
+          support_content: response.data.support_content || '',
+          goal_date: response.data.goal_date || ''
+        });
+      } else {
+        setExistingSupportPlan(null);
+        setSupportPlanData({
+          long_term_goal: '',
+          short_term_goal: '',
+          needs: '',
+          support_content: '',
+          goal_date: ''
+        });
+      }
+    } catch (error) {
+      console.error('個別支援計画取得エラー:', error);
+      setExistingSupportPlan(null);
+      setSupportPlanData({
+        long_term_goal: '',
+        short_term_goal: '',
+        needs: '',
+        support_content: '',
+        goal_date: ''
+      });
+    }
+    
+    setShowEditModal(true);
+  };
+
+  // 利用者情報更新
+  const handleUpdateStudent = async () => {
+    try {
+      // 基本情報を更新
+      const response = await fetch(`http://localhost:5000/api/users/${editingStudent.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({
+          name: editFormData.name,
+          instructor_id: editFormData.instructor_id,
+          tags: JSON.stringify(editFormData.tags)
+        })
+      });
+
+      if (response.ok) {
+        // 個別支援計画を保存
+        try {
+          await upsertSupportPlan({
+            user_id: editingStudent.id,
+            ...supportPlanData
+          });
+        } catch (error) {
+          console.error('個別支援計画保存エラー:', error);
+        }
+
+        alert('利用者情報が正常に更新されました');
+        setShowEditModal(false);
+        fetchStudents(); // データを再取得
+      } else {
+        const errorData = await response.json();
+        alert(`更新に失敗しました: ${errorData.message || 'エラーが発生しました'}`);
+      }
+    } catch (error) {
+      console.error('利用者情報更新エラー:', error);
+      alert('更新中にエラーが発生しました');
+    }
+  };
+
+  // 学習コース管理機能のAPI関数
+  const fetchUserCourses = async () => {
+    try {
+      const satelliteId = getCurrentSatelliteId();
+      if (!satelliteId) return;
+
+      const response = await getSatelliteUserCourses(satelliteId);
+      if (response.success) {
+        setUserCourses(response.data || []);
+      }
+    } catch (error) {
+      console.error('利用者のコース関連付け取得エラー:', error);
+    }
+  };
+
+  const fetchSatelliteAvailableCourses = async () => {
+    try {
+      const satelliteId = getCurrentSatelliteId();
+      if (!satelliteId) return;
+
+      const response = await getSatelliteAvailableCourses(satelliteId);
+      if (response.success) {
+        setSatelliteAvailableCourses(response.data || []);
+      }
+    } catch (error) {
+      console.error('利用可能なコース取得エラー:', error);
+    }
+  };
+
+  const fetchAvailableCurriculumPaths = async () => {
+    try {
+      const satelliteId = getCurrentSatelliteId();
+      if (!satelliteId) return;
+
+      const response = await getSatelliteAvailableCurriculumPaths(satelliteId);
+      if (response.success) {
+        setAvailableCurriculumPaths(response.data || []);
+      }
+    } catch (error) {
+      console.error('利用可能なカリキュラムパス取得エラー:', error);
+    }
+  };
+
+  const handleBulkAssignCourses = async () => {
+    if (selectedStudents.length === 0) {
+      alert('一括操作する利用者を選択してください');
+      return;
+    }
+    if (selectedCourses.length === 0) {
+      alert('割り当てるコースを選択してください');
+      return;
+    }
+
+    try {
+      const satelliteId = getCurrentSatelliteId();
+      if (!satelliteId) return;
+
+      const response = await bulkAssignCoursesToUsers(satelliteId, {
+        userIds: selectedStudents,
+        courseIds: selectedCourses,
+        notes: courseAssignmentNotes
+      });
+
+      if (response.success) {
+        await fetchUserCourses();
+        setSelectedStudents([]);
+        setSelectedCourses([]);
+        setCourseAssignmentNotes('');
+        setShowCourseAssignmentModal(false);
+        alert(response.message);
+      } else {
+        throw new Error(response.message || 'コースの一括割り当てに失敗しました');
+      }
+    } catch (error) {
+      console.error('コース一括割り当てエラー:', error);
+      alert(`コースの一括割り当てに失敗しました: ${error.message}`);
+    }
+  };
+
+  const handleBulkRemoveCourses = async () => {
+    if (selectedStudents.length === 0) {
+      alert('削除対象の利用者を選択してください');
+      return;
+    }
+    if (selectedCourses.length === 0) {
+      alert('削除するコースを選択してください');
+      return;
+    }
+
+    if (!window.confirm(`選択された${selectedStudents.length}名の利用者から${selectedCourses.length}個のコースを削除しますか？`)) {
+      return;
+    }
+
+    try {
+      const satelliteId = getCurrentSatelliteId();
+      if (!satelliteId) return;
+
+      const response = await bulkRemoveCoursesFromUsers(satelliteId, {
+        userIds: selectedStudents,
+        courseIds: selectedCourses
+      });
+
+      if (response.success) {
+        await fetchUserCourses();
+        setSelectedStudents([]);
+        setSelectedCourses([]);
+        setShowCourseAssignmentModal(false);
+        alert(response.message);
+      } else {
+        throw new Error(response.message || 'コースの一括削除に失敗しました');
+      }
+    } catch (error) {
+      console.error('コース一括削除エラー:', error);
+      alert(`コースの一括削除に失敗しました: ${error.message}`);
+    }
+  };
+
+  const handleBulkAssignCurriculumPath = async () => {
+    if (selectedStudents.length === 0) {
+      alert('一括操作する利用者を選択してください');
+      return;
+    }
+    if (!selectedCurriculumPath) {
+      alert('割り当てるカリキュラムパスを選択してください');
+      return;
+    }
+
+    try {
+      const satelliteId = getCurrentSatelliteId();
+      if (!satelliteId) return;
+
+      const response = await bulkAssignCurriculumPathsToUsers(satelliteId, {
+        userIds: selectedStudents,
+        curriculumPathId: selectedCurriculumPath,
+        notes: courseAssignmentNotes
+      });
+
+      if (response.success) {
+        await fetchUserCourses();
+        setSelectedStudents([]);
+        setSelectedCurriculumPath('');
+        setCourseAssignmentNotes('');
+        setShowCourseAssignmentModal(false);
+        alert(response.message);
+      } else {
+        throw new Error(response.message || 'カリキュラムパスの一括割り当てに失敗しました');
+      }
+    } catch (error) {
+      console.error('カリキュラムパス一括割り当てエラー:', error);
+      alert(`カリキュラムパスの一括割り当てに失敗しました: ${error.message}`);
+    }
+  };
+
+  // カリキュラムパス選択時のコース自動チェック
+  const handleCurriculumPathSelect = (pathId) => {
+    setSelectedCurriculumPath(pathId);
+    
+    if (pathId) {
+      const selectedPath = availableCurriculumPaths.find(path => path.id === parseInt(pathId));
+      if (selectedPath && selectedPath.courses) {
+        const courseIds = selectedPath.courses.map(course => course.course_id);
+        setSelectedCourses(courseIds);
+      }
+    } else {
+      setSelectedCourses([]);
+    }
+  };
+
+  // モーダル内の利用者フィルタリング
+  const getFilteredStudentsForModal = () => {
+    let filteredStudents = students;
+    
+    if (courseModalFilterText) {
+      filteredStudents = filteredStudents.filter(student =>
+        student.name.toLowerCase().includes(courseModalFilterText.toLowerCase()) ||
+        student.email?.toLowerCase().includes(courseModalFilterText.toLowerCase()) ||
+        student.instructor_name?.toLowerCase().includes(courseModalFilterText.toLowerCase())
+      );
+    }
+    
+    if (courseModalFilterInstructor) {
+      filteredStudents = filteredStudents.filter(student =>
+        student.instructor_id === parseInt(courseModalFilterInstructor)
+      );
+    }
+    
+    if (courseModalFilterStatus !== 'all') {
+      filteredStudents = filteredStudents.filter(student =>
+        student.status === parseInt(courseModalFilterStatus)
+      );
+    }
+    
+    return filteredStudents;
+  };
+
   // 初期データ取得
   useEffect(() => {
     fetchAvailableInstructors();
     fetchStudents();
+    fetchUserCourses();
+    fetchSatelliteAvailableCourses();
+    fetchAvailableCurriculumPaths();
   }, []);
+
+  // selectedInstructorが変更された時に一時パスワード対象利用者を再取得
+  useEffect(() => {
+    if (showTodayActiveModal) {
+      fetchTempPasswordUsers();
+    }
+  }, [selectedInstructor, showTodayActiveModal]);
 
   // 現在選択されている拠点IDを取得
   const getCurrentSatelliteId = () => {
@@ -632,56 +980,106 @@ const StudentManagement = ({ teacherId }) => {
     alert(`${studentId}の在宅記録画面を開きます（実装予定）`);
   };
 
-    // 本日有効ボタン：選択した利用者にメール送信
-  const openTodayActiveModal = () => {
-    const activeStudents = getFilteredStudents().filter(student => student.status === 1);
-    
-    if (activeStudents.length === 0) {
-      alert('送信対象の利用者がいません。');
+    // 本日有効ボタン：選択した利用者に一時パスワード発行
+  const openTodayActiveModal = async () => {
+    // 認証状態を確認
+    if (!isAuthenticated || !currentUser) {
+      alert('ログインが必要です。');
       return;
     }
     
-    setShowTodayActiveModal(true);
+    try {
+      setTempPasswordLoading(true);
+      
+      // 指導員一覧を取得
+      const instructorResponse = await apiGet('/api/temp-passwords/instructors');
+      if (instructorResponse.success) {
+        setInstructors(instructorResponse.data);
+      }
+      
+      // 一時パスワード対象利用者を取得
+      await fetchTempPasswordUsers();
+      
+      setShowTodayActiveModal(true);
+    } catch (error) {
+      console.error('一時パスワード機能初期化エラー:', error);
+      alert('一時パスワード機能の初期化に失敗しました。');
+    } finally {
+      setTempPasswordLoading(false);
+    }
   };
 
-  // 本日有効メール送信実行
-  const sendTodayActiveEmails = () => {
-    const selectedActiveStudents = getFilteredStudents().filter(student => 
-      student.status === 1 && selectedStudents.includes(student.id)
-    );
-    
-    if (selectedActiveStudents.length === 0) {
-      alert('送信対象の利用者を選択してください。');
+  // 一時パスワード対象利用者を取得
+  const fetchTempPasswordUsers = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (selectedInstructor) {
+        params.append('selected_instructor_id', selectedInstructor);
+      }
+      
+      const response = await apiGet(`/api/temp-passwords/users?${params}`);
+      if (response.success) {
+        setTempPasswordUsers(response.data);
+        // 全選択状態でスタート
+        const allSelected = response.data.map(user => user.id);
+        setSelectedStudents(allSelected);
+      }
+    } catch (error) {
+      console.error('一時パスワード対象利用者取得エラー:', error);
+    }
+  };
+
+  // ユーザータイプに応じた表示名を取得
+  const getUserTypeLabel = (userType) => {
+    switch (userType) {
+      case 'my_user':
+        return '自分の担当利用者';
+      case 'no_instructor_no_temp':
+        return '担当なし・パスワード未発行';
+      case 'selected_instructor':
+        return '選択指導員の担当利用者';
+      default:
+        return 'その他';
+    }
+  };
+
+  // 一時パスワード発行実行
+  const sendTodayActiveEmails = async () => {
+    if (selectedStudents.length === 0) {
+      alert('一時パスワード発行対象の利用者を選択してください。');
       return;
     }
     
-    // VoiceCareSystemのアナウンスメッセージに追加
-    if (todayActiveMessage.trim()) {
-      const announcement = {
-        id: Date.now(),
-        message: todayActiveMessage,
-        sentDate: new Date().toLocaleString('ja-JP'),
-        recipients: selectedActiveStudents.map(s => s.name),
-        replies: []
+    try {
+      setTempPasswordLoading(true);
+      const requestData = {
+        user_ids: selectedStudents,
+        expiry_time: expiryTime || null,
+        announcement_title: announcementTitle || null,
+        announcement_message: announcementMessage || null
       };
+
+      const response = await apiPost('/api/temp-passwords/issue', requestData);
       
-      // ローカルストレージから既存のアナウンスを取得
-      const existingAnnouncements = JSON.parse(localStorage.getItem('voiceCareAnnouncements') || '[]');
-      const updatedAnnouncements = [announcement, ...existingAnnouncements];
-      localStorage.setItem('voiceCareAnnouncements', JSON.stringify(updatedAnnouncements));
+      if (response.success) {
+        alert(`${selectedStudents.length}名の利用者に一時パスワードを発行しました。\n\n${response.message}`);
+        
+        // モーダルを閉じて状態をリセット
+        setShowTodayActiveModal(false);
+        setSelectedStudents([]);
+        setExpiryTime('');
+        setAnnouncementTitle('');
+        setAnnouncementMessage('');
+        setSelectedInstructor('');
+      } else {
+        alert('一時パスワードの発行に失敗しました。');
+      }
+    } catch (error) {
+      console.error('一時パスワード発行エラー:', error);
+      alert('一時パスワードの発行に失敗しました。');
+    } finally {
+      setTempPasswordLoading(false);
     }
-    
-    // メール送信処理（実際の実装では、ここでバックエンドAPIを呼び出してメール送信）
-    const message = todayActiveMessage.trim() 
-      ? `本日のログインURLをお送りします。\n\n${todayActiveMessage}\n\nログインURL: http://localhost:3000/student/login/`
-      : '本日のログインURLをお送りします。\n\nログインURL: http://localhost:3000/student/login/';
-    
-    alert(`${selectedActiveStudents.length}名の利用者にメールを送信しました。\n\n送信済み:\n${selectedActiveStudents.map(s => `${s.name} (${s.email})`).join('\n')}\n\nメッセージ: ${todayActiveMessage.trim() || 'なし'}`);
-    
-    // モーダルを閉じて状態をリセット
-    setShowTodayActiveModal(false);
-    setSelectedStudents([]);
-    setTodayActiveMessage('');
   };
 
   // メール再送信機能は削除（不要なため）
@@ -732,8 +1130,15 @@ const StudentManagement = ({ teacherId }) => {
               className="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2"
               onClick={openTodayActiveModal}
             >
-              📧 本日有効
+              🔑 本日有効
             </button>
+            <button 
+              className="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2"
+              onClick={() => setShowCourseAssignmentModal(true)}
+            >
+              📚 学習コース追加
+            </button>
+
             <button 
               className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2"
               onClick={() => setShowAddForm(true)}
@@ -984,11 +1389,11 @@ const StudentManagement = ({ teacherId }) => {
 
       {/* 生徒テーブル */}
       <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div className="overflow-x-auto" style={{ minWidth: '1200px' }}>
+          <table className="w-full table-fixed">
             <thead className="bg-gradient-to-r from-indigo-50 to-purple-50">
               <tr>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">
+                <th className="px-4 py-3 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200" style={{ width: '50px' }}>
                   <input
                     type="checkbox"
                     checked={selectedStudents.length === getFilteredStudents().length && getFilteredStudents().length > 0}
@@ -996,23 +1401,18 @@ const StudentManagement = ({ teacherId }) => {
                     className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                   />
                 </th>
-                                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">利用者名</th>
-                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">担当指導員</th>
-                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">タグ</th>
-                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">一時パスワード</th>
-                 <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">パスワード発行</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">状態</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">進行度</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">合格確認</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">成果物確認</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">一時停止/再開</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200">削除</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200" style={{ width: '150px' }}>利用者名</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200" style={{ width: '120px' }}>担当指導員</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200" style={{ width: '250px' }}>コース・タグ</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200" style={{ width: '180px' }}>進捗状況</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200" style={{ width: '120px' }}>パスワード</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200" style={{ width: '120px' }}>操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {getFilteredStudents().map(student => (
                 <tr key={student.id} className="hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200">
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-3">
                     <input
                       type="checkbox"
                       checked={selectedStudents.includes(student.id)}
@@ -1020,81 +1420,64 @@ const StudentManagement = ({ teacherId }) => {
                       className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                     />
                   </td>
-                                     <td className="px-6 py-4">
-                     <div className="flex flex-col">
-                       <button 
-                         className="text-left font-semibold text-indigo-600 hover:text-indigo-800 transition-colors duration-200"
-                         onClick={() => handleViewStudentDetail(student.id)}
-                         title="利用者詳細を表示"
-                       >
-                         {student.name}
-                       </button>
-                       <div className="text-xs text-gray-500 mt-1 font-mono">
-                         {student.login_code}
-                       </div>
-                     </div>
-                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col">
+                      <button 
+                        className="text-left font-semibold text-indigo-600 hover:text-indigo-800 transition-colors duration-200"
+                        onClick={() => handleViewStudentDetail(student.id)}
+                        title="利用者詳細を表示"
+                      >
+                        {student.name}
+                      </button>
+                      <div className="text-xs text-gray-500 mt-1 font-mono">
+                        {student.login_code}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
                     <span className="text-sm text-gray-600">
                       {student.instructor_name || '未設定'}
                     </span>
                   </td>
-                                     <td className="px-6 py-4">
-                     <div className="flex flex-wrap gap-1">
-                       {student.tags?.map(tag => (
-                         <span key={tag} className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded-full font-medium">
-                           {tag}
-                         </span>
-                       ))}
-                     </div>
-                   </td>
-                   <td className="px-6 py-4">
-                     <div className="text-xs text-gray-600 font-mono">
-                       {student.temp_password ? (
-                         <div>
-                           <div className="font-semibold text-blue-600">{student.temp_password}</div>
-                           <div className="text-gray-500">
-                             {student.expires_at && new Date(student.expires_at) > new Date() ? '有効' : '期限切れ'}
-                           </div>
-                         </div>
-                       ) : (
-                         <span className="text-gray-400">未発行</span>
-                       )}
-                     </div>
-                   </td>
-                   <td className="px-6 py-4">
-                     <button 
-                       className="px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs rounded-lg font-medium hover:from-blue-600 hover:to-blue-700 transition-all duration-200"
-                       onClick={() => issueTemporaryPassword(student.id)}
-                       title="一時パスワードを発行"
-                     >
-                       パスワード発行
-                     </button>
-                   </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      student.status === 1 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {student.status === 1 ? '稼働中' : '停止中'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-3">
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium">{student.progress}%</span>
-                        <span className="text-gray-500">
-                          {(() => {
-                            const course = availableCourses.find(c => c.title === student.class);
-                            if (course) {
-                              const currentLesson = Math.ceil((student.progress / 100) * course.totalLessons);
-                              return `第${currentLesson}回 / ${course.totalLessons}回`;
-                            }
-                            return '';
-                          })()}
-                        </span>
+                      {/* コース情報 */}
+                      <div className="flex flex-wrap gap-1">
+                        {userCourses
+                          .filter(uc => uc.user_id === student.id)
+                          .slice(0, 4) // 最大4つまで表示に増加
+                          .map(uc => (
+                            <span key={uc.id} className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full font-medium">
+                              {uc.course_title.length > 12 ? uc.course_title.substring(0, 12) + '...' : uc.course_title}
+                            </span>
+                          ))}
+                        {userCourses.filter(uc => uc.user_id === student.id).length > 4 && (
+                          <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                            +{userCourses.filter(uc => uc.user_id === student.id).length - 4}
+                          </span>
+                        )}
+                        {userCourses.filter(uc => uc.user_id === student.id).length === 0 && (
+                          <span className="text-gray-400 text-xs">未割り当て</span>
+                        )}
                       </div>
+                      {/* タグ情報 */}
+                      <div className="flex flex-wrap gap-1">
+                        {student.tags?.slice(0, 5).map(tag => ( // 最大5つまで表示に増加
+                          <span key={tag} className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded-full font-medium">
+                            {tag.length > 10 ? tag.substring(0, 10) + '...' : tag} {/* 文字数制限を10文字に増加 */}
+                          </span>
+                        ))}
+                        {student.tags?.length > 5 && (
+                          <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                            +{student.tags.length - 5}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="space-y-2">
+                      {/* 進捗バー */}
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div 
                           className={`h-2 rounded-full transition-all duration-300 ${
@@ -1107,50 +1490,92 @@ const StudentManagement = ({ teacherId }) => {
                           style={{ width: `${student.progress}%` }}
                         />
                       </div>
+                      {/* 進捗情報 */}
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium">{student.progress}%</span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                          student.progress >= 75 
+                            ? 'bg-green-100 text-green-800' 
+                            : student.progress > 0 
+                              ? 'bg-yellow-100 text-yellow-800' 
+                              : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {student.progress >= 75 ? '合格' : student.progress > 0 ? '受講中' : '未開始'}
+                        </span>
+                      </div>
+                      {/* 状態 */}
+                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                        student.status === 1 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {student.status === 1 ? '稼働中' : '停止中'}
+                      </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      student.progress >= 75 
-                        ? 'bg-green-100 text-green-800' 
-                        : student.progress > 0 
-                          ? 'bg-yellow-100 text-yellow-800' 
-                          : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {student.progress >= 75 ? '合格' : student.progress > 0 ? '受講中' : '未開始'}
-                    </span>
+                  <td className="px-4 py-3">
+                    <div className="space-y-1">
+                      {student.temp_password ? (
+                        <div className="text-xs">
+                          <div className="font-semibold text-blue-600 font-mono">
+                            {student.temp_password.substring(0, 8)}...
+                          </div>
+                          <div className="text-gray-500">
+                            {student.expires_at && new Date(student.expires_at) > new Date() ? '有効' : '期限切れ'}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 text-xs">未発行</span>
+                      )}
+                      <button 
+                        className="px-2 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs rounded font-medium hover:from-blue-600 hover:to-blue-700 transition-all duration-200"
+                        onClick={() => issueTemporaryPassword(student.id)}
+                        title="一時パスワードを発行"
+                      >
+                        発行
+                      </button>
+                    </div>
                   </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      student.progress >= 50 
-                        ? 'bg-blue-100 text-blue-800' 
-                        : student.progress > 0 
-                          ? 'bg-yellow-100 text-yellow-800' 
-                          : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {student.progress >= 50 ? '確認済' : student.progress > 0 ? '確認待ち' : '未開始'}
-                    </span>
-                  </td>
-
-                  <td className="px-6 py-4">
-                    <button 
-                      className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200 ${
-                        student.status === 1 
-                          ? 'bg-red-100 text-red-700 hover:bg-red-200' 
-                          : 'bg-green-100 text-green-700 hover:bg-green-200'
-                      }`}
-                      onClick={() => toggleStudentStatus(student.id)}
-                    >
-                      {student.status === 1 ? '停止' : '再開'}
-                    </button>
-                  </td>
-                  <td className="px-6 py-4">
-                    <button 
-                      className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 transition-all duration-200"
-                      onClick={() => deleteStudent(student.id)}
-                    >
-                      削除
-                    </button>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col gap-1">
+                      <button 
+                        className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200 transition-all duration-200"
+                        onClick={() => openEditModal(student)}
+                        title="利用者情報と個別支援計画を編集"
+                      >
+                        ✏️ 編集
+                      </button>
+                      <button 
+                        className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium hover:bg-green-200 transition-all duration-200"
+                        onClick={() => {/* TODO: テスト合否確認機能を実装 */}}
+                        title="テストの合否確認"
+                      >
+                        📝 合否確認
+                      </button>
+                      <button 
+                        className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium hover:bg-purple-200 transition-all duration-200"
+                        onClick={() => {/* TODO: 提出物確認機能を実装 */}}
+                        title="提出物の確認"
+                      >
+                        📄 提出物確認
+                      </button>
+                      <button 
+                        className={`px-2 py-1 rounded text-xs font-medium transition-all duration-200 ${
+                          student.status === 1 
+                            ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                            : 'bg-green-100 text-green-700 hover:bg-green-200'
+                        }`}
+                        onClick={() => toggleStudentStatus(student.id)}
+                      >
+                        {student.status === 1 ? '停止' : '再開'}
+                      </button>
+                      <button 
+                        className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-medium hover:bg-red-200 transition-all duration-200"
+                        onClick={() => deleteStudent(student.id)}
+                      >
+                        削除
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1286,7 +1711,7 @@ const StudentManagement = ({ teacherId }) => {
           <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
-                <h3 className="text-2xl font-bold text-gray-800">📧 本日有効メール送信</h3>
+                <h3 className="text-2xl font-bold text-gray-800">🔑 本日有効 - 一時パスワード発行</h3>
                 <button 
                   className="text-gray-400 hover:text-gray-600 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-all duration-200"
                   onClick={() => {
@@ -1301,63 +1726,118 @@ const StudentManagement = ({ teacherId }) => {
             </div>
             
             <div className="p-6 space-y-8">
-              {/* 利用者選択セクション */}
-              <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl p-6">
-                <h4 className="text-lg font-semibold text-gray-800 mb-4">📋 送信対象利用者選択</h4>
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-gray-700">選択中の利用者: <strong className="text-green-600">{selectedStudents.length}名</strong></p>
-                  <button 
-                    className="px-4 py-2 bg-green-100 text-green-700 rounded-lg font-medium hover:bg-green-200 transition-all duration-200"
-                    onClick={toggleAllStudents}
-                  >
-                    {selectedStudents.length === getFilteredStudents().filter(s => s.status === 'active').length ? '全選択解除' : '全選択'}
-                  </button>
-                </div>
-                
-                <div className="max-h-40 overflow-y-auto space-y-2">
-                  {getFilteredStudents().filter(student => student.status === 'active').map(student => (
-                    <div key={student.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200">
-                      <input
-                        type="checkbox"
-                        checked={selectedStudents.includes(student.id)}
-                        onChange={() => toggleStudentSelection(student.id)}
-                        className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                      />
-                      <div className="flex-1">
-                        <span className="font-medium text-gray-800">{student.name}</span>
-                        <span className="text-sm text-gray-500 ml-2">担当: {student.instructorName}</span>
-                        <span className="text-sm text-gray-500 ml-2">メール: {student.email}</span>
-                      </div>
-                    </div>
+              {/* 別担当者選択 */}
+              <div className="bg-white p-6 rounded-lg shadow mb-6">
+                <h4 className="text-lg font-semibold mb-4">別担当者選択（オプション）</h4>
+                <select
+                  value={selectedInstructor}
+                  onChange={(e) => {
+                    setSelectedInstructor(e.target.value);
+                  }}
+                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">選択してください</option>
+                  {instructors.map(instructor => (
+                    <option key={instructor.id} value={instructor.id}>
+                      {instructor.name}
+                    </option>
                   ))}
-                </div>
+                </select>
+                <p className="text-sm text-gray-600 mt-2">
+                  選択すると、その指導員のパスワード未発行担当利用者もリストに追加されます
+                </p>
               </div>
 
-              {/* メッセージ入力セクション */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6">
-                <h4 className="text-lg font-semibold text-gray-800 mb-4">💬 アナウンスメッセージ（オプション）</h4>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">メッセージ内容:</label>
-                    <textarea
-                      value={todayActiveMessage}
-                      onChange={(e) => setTodayActiveMessage(e.target.value)}
-                      placeholder="本日の学習に関する連絡事項や励ましのメッセージを入力してください（空欄でも送信可能）..."
-                      rows={4}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none"
-                    />
-                  </div>
-                  <div className="bg-blue-100 rounded-lg p-3">
-                    <p className="text-sm text-blue-800">
-                      <strong>💡 ヒント:</strong> このメッセージは以下の場所に追加されます：
-                    </p>
-                    <ul className="text-sm text-blue-700 mt-2 space-y-1">
-                      <li>• メール本文に含まれます</li>
-                      <li>• VoiceCareSystemのアナウンスメッセージとして保存されます</li>
-                      <li>• 選択した利用者全員に送信されます</li>
-                    </ul>
-                  </div>
+              {/* 利用者選択 */}
+              <div className="bg-white p-6 rounded-lg shadow mb-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-lg font-semibold">利用者選択</h4>
+                  <button
+                    onClick={() => {
+                      if (selectedStudents.length === tempPasswordUsers.length) {
+                        setSelectedStudents([]);
+                      } else {
+                        setSelectedStudents(tempPasswordUsers.map(user => user.id));
+                      }
+                    }}
+                    className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                  >
+                    {selectedStudents.length === tempPasswordUsers.length ? '全解除' : '全選択'}
+                  </button>
                 </div>
+
+                {tempPasswordLoading ? (
+                  <div className="text-center py-4">読み込み中...</div>
+                ) : (
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {tempPasswordUsers.map(user => (
+                      <div key={user.id} className="flex items-center p-3 border rounded hover:bg-gray-50">
+                        <input
+                          type="checkbox"
+                          checked={selectedStudents.includes(user.id)}
+                          onChange={() => {
+                            setSelectedStudents(prev => 
+                              prev.includes(user.id) 
+                                ? prev.filter(id => id !== user.id)
+                                : [...prev, user.id]
+                            );
+                          }}
+                          className="mr-3"
+                        />
+                        <div className="flex-1">
+                          <div className="font-medium">{user.name}</div>
+                          <div className="text-sm text-gray-600">
+                            {user.company_name} / {user.satellite_name}
+                          </div>
+                          <div className="text-xs text-blue-600">
+                            {getUserTypeLabel(user.user_type)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 有効期限設定 */}
+              <div className="bg-white p-6 rounded-lg shadow mb-6">
+                <h4 className="text-lg font-semibold mb-4">有効期限設定（オプション）</h4>
+                <div className="flex items-center space-x-4">
+                  <input
+                    type="text"
+                    value={expiryTime}
+                    onChange={(e) => setExpiryTime(e.target.value)}
+                    placeholder="HH:DD（例：23:59）"
+                    pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$"
+                    className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <span className="text-gray-600">まで有効</span>
+                </div>
+                <p className="text-sm text-gray-600 mt-2">
+                  指定なしの場合は日本時間23:59まで有効です（HH:DD形式で入力してください）
+                </p>
+              </div>
+
+              {/* アナウンスメッセージ */}
+              <div className="bg-white p-6 rounded-lg shadow mb-6">
+                <h4 className="text-lg font-semibold mb-4">アナウンスメッセージ（オプション）</h4>
+                <input
+                  type="text"
+                  value={announcementTitle}
+                  onChange={(e) => setAnnouncementTitle(e.target.value)}
+                  placeholder="アナウンスタイトル"
+                  className="w-full p-2 border border-gray-300 rounded mb-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <textarea
+                  value={announcementMessage}
+                  onChange={(e) => setAnnouncementMessage(e.target.value)}
+                  placeholder="アナウンスメッセージ"
+                  rows="4"
+                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <p className="text-sm text-gray-600 mt-2">
+                  選択された利用者のダッシュボードで閲覧できるアナウンスメッセージを一括送信します
+                </p>
               </div>
 
               {/* アクションボタン */}
@@ -1367,7 +1847,10 @@ const StudentManagement = ({ teacherId }) => {
                   onClick={() => {
                     setShowTodayActiveModal(false);
                     setSelectedStudents([]);
-                    setTodayActiveMessage('');
+                    setExpiryTime('');
+                    setAnnouncementTitle('');
+                    setAnnouncementMessage('');
+                    setSelectedInstructor('');
                   }}
                 >
                   キャンセル
@@ -1375,15 +1858,589 @@ const StudentManagement = ({ teacherId }) => {
                 <button 
                   className="flex-1 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
                   onClick={sendTodayActiveEmails}
-                  disabled={selectedStudents.length === 0}
+                  disabled={tempPasswordLoading || selectedStudents.length === 0}
                 >
-                  📧 メール送信
+                  {tempPasswordLoading ? '発行中...' : `${selectedStudents.length}名に一時パスワードを発行`}
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* 学習コース追加モーダル */}
+      {showCourseAssignmentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-2xl font-bold text-gray-800">📚 学習コース・カリキュラムパス管理</h3>
+                <button 
+                  className="text-gray-400 hover:text-gray-600 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-all duration-200"
+                  onClick={() => {
+                    setShowCourseAssignmentModal(false);
+                    setSelectedStudents([]);
+                    setSelectedCourses([]);
+                    setSelectedCurriculumPath('');
+                    setCourseAssignmentNotes('');
+                    setCourseModalActiveTab('courses');
+                    setCourseModalFilterText('');
+                    setCourseModalFilterInstructor('');
+                    setCourseModalFilterStatus('all');
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-8">
+              {/* 利用者選択セクション */}
+              <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-xl p-6">
+                <h4 className="text-lg font-semibold text-gray-800 mb-4">👥 対象利用者選択</h4>
+                
+                {/* 利用者フィルター */}
+                <div className="mb-4 space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <input
+                        type="text"
+                        placeholder="利用者名、メール、指導員名で検索..."
+                        value={courseModalFilterText}
+                        onChange={(e) => setCourseModalFilterText(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                      />
+                    </div>
+                    <div>
+                      <select 
+                        value={courseModalFilterInstructor} 
+                        onChange={(e) => setCourseModalFilterInstructor(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                      >
+                        <option value="">全ての指導員</option>
+                        {availableInstructors.map(instructor => (
+                          <option key={instructor.id} value={instructor.id}>
+                            {instructor.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <select 
+                        value={courseModalFilterStatus} 
+                        onChange={(e) => setCourseModalFilterStatus(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                      >
+                        <option value="all">全てのステータス</option>
+                        <option value="1">稼働中</option>
+                        <option value="0">停止中</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <p className="text-gray-700">
+                      表示中: <strong className="text-orange-600">{getFilteredStudentsForModal().length}名</strong> / 
+                      選択中: <strong className="text-orange-600">{selectedStudents.length}名</strong>
+                    </p>
+                    <button 
+                      className="px-4 py-2 bg-orange-100 text-orange-700 rounded-lg font-medium hover:bg-orange-200 transition-all duration-200"
+                      onClick={() => {
+                        const filteredStudents = getFilteredStudentsForModal();
+                        if (selectedStudents.length === filteredStudents.length) {
+                          setSelectedStudents([]);
+                        } else {
+                          setSelectedStudents(filteredStudents.map(s => s.id));
+                        }
+                      }}
+                    >
+                      {selectedStudents.length === getFilteredStudentsForModal().length ? '全選択解除' : '全選択'}
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="max-h-40 overflow-y-auto space-y-2">
+                  {getFilteredStudentsForModal().map(student => (
+                    <div key={student.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200">
+                      <input
+                        type="checkbox"
+                        checked={selectedStudents.includes(student.id)}
+                        onChange={() => toggleStudentSelection(student.id)}
+                        className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+                      />
+                      <div className="flex-1">
+                        <span className="font-medium text-gray-800">{student.name}</span>
+                        <span className="text-sm text-gray-500 ml-2">担当: {student.instructor_name || '未設定'}</span>
+                        <span className="text-sm text-gray-500 ml-2">メール: {student.email || '未設定'}</span>
+                        <span className={`text-xs px-2 py-1 rounded-full ml-2 ${
+                          student.status === 1 
+                            ? 'bg-green-100 text-green-700' 
+                            : 'bg-red-100 text-red-700'
+                        }`}>
+                          {student.status === 1 ? '稼働中' : '停止中'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* タブ切り替え */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6">
+                <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-xl">
+                  <button 
+                    className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all duration-200 ${
+                      courseModalActiveTab === 'courses' 
+                        ? 'bg-white text-blue-600 shadow-md' 
+                        : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                    onClick={() => setCourseModalActiveTab('courses')}
+                  >
+                    📖 個別コース選択
+                  </button>
+                  <button 
+                    className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all duration-200 ${
+                      courseModalActiveTab === 'curriculum' 
+                        ? 'bg-white text-blue-600 shadow-md' 
+                        : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                    onClick={() => setCourseModalActiveTab('curriculum')}
+                  >
+                    🛤️ カリキュラムパス選択
+                  </button>
+                </div>
+
+                {courseModalActiveTab === 'courses' ? (
+                  /* コース選択セクション */
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-gray-700">選択中のコース: <strong className="text-blue-600">{selectedCourses.length}個</strong></p>
+                      <button 
+                        className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg font-medium hover:bg-blue-200 transition-all duration-200"
+                        onClick={() => setSelectedCourses([])}
+                      >
+                        全選択解除
+                      </button>
+                    </div>
+                    
+                    <div className="max-h-40 overflow-y-auto space-y-2">
+                      {satelliteAvailableCourses.map(course => (
+                        <div key={course.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200">
+                          <input
+                            type="checkbox"
+                            checked={selectedCourses.includes(course.id)}
+                            onChange={() => {
+                              setSelectedCourses(prev => 
+                                prev.includes(course.id) 
+                                  ? prev.filter(id => id !== course.id)
+                                  : [...prev, course.id]
+                              );
+                            }}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <div className="flex-1">
+                            <span className="font-medium text-gray-800">{course.title}</span>
+                            <span className="text-sm text-gray-500 ml-2">カテゴリ: {course.category}</span>
+                            <span className="text-sm text-gray-500 ml-2">レッスン数: {course.lesson_count}回</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  /* カリキュラムパス選択セクション */
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-gray-700">
+                        選択中のパス: <strong className="text-purple-600">
+                          {selectedCurriculumPath ? availableCurriculumPaths.find(p => p.id === parseInt(selectedCurriculumPath))?.name : 'なし'}
+                        </strong>
+                      </p>
+                      <button 
+                        className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg font-medium hover:bg-purple-200 transition-all duration-200"
+                        onClick={() => {
+                          setSelectedCurriculumPath('');
+                          setSelectedCourses([]);
+                        }}
+                      >
+                        選択解除
+                      </button>
+                    </div>
+                    
+                    <div className="max-h-60 overflow-y-auto space-y-3">
+                      {availableCurriculumPaths.map(path => (
+                        <div key={path.id} className="p-4 bg-white rounded-lg border border-gray-200">
+                          <div className="flex items-start gap-3">
+                            <input
+                              type="radio"
+                              name="curriculumPath"
+                              value={path.id}
+                              checked={selectedCurriculumPath === path.id.toString()}
+                              onChange={(e) => handleCurriculumPathSelect(e.target.value)}
+                              className="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500 mt-1"
+                            />
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="font-semibold text-gray-800">{path.name}</span>
+                                <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">
+                                  {path.total_courses}コース
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-600 mb-3">{path.description}</p>
+                              
+                              {/* 含まれるコース一覧 */}
+                              <div className="bg-gray-50 rounded-lg p-3">
+                                <p className="text-xs font-medium text-gray-700 mb-2">含まれるコース:</p>
+                                <div className="space-y-1">
+                                  {path.courses?.map((course, index) => (
+                                    <div key={course.course_id} className="flex items-center gap-2 text-xs">
+                                      <span className="w-6 h-6 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center font-medium">
+                                        {index + 1}
+                                      </span>
+                                      <span className="text-gray-700">{course.course_title}</span>
+                                      <span className="text-gray-500">({course.course_category})</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 備考入力セクション */}
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6">
+                <h4 className="text-lg font-semibold text-gray-800 mb-4">📝 備考（オプション）</h4>
+                <textarea
+                  value={courseAssignmentNotes}
+                  onChange={(e) => setCourseAssignmentNotes(e.target.value)}
+                  placeholder="コース割り当てに関する備考を入力してください..."
+                  rows={3}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 resize-none"
+                />
+              </div>
+
+              {/* アクションボタン */}
+              <div className="flex gap-4 pt-6 border-t border-gray-200">
+                <button 
+                  className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-all duration-200"
+                  onClick={() => {
+                    setShowCourseAssignmentModal(false);
+                    setSelectedStudents([]);
+                    setSelectedCourses([]);
+                    setSelectedCurriculumPath('');
+                    setCourseAssignmentNotes('');
+                    setCourseModalActiveTab('courses');
+                    setCourseModalFilterText('');
+                    setCourseModalFilterInstructor('');
+                    setCourseModalFilterStatus('all');
+                  }}
+                >
+                  キャンセル
+                </button>
+                {courseModalActiveTab === 'courses' ? (
+                  <>
+                    <button 
+                      className="flex-1 px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+                      onClick={handleBulkRemoveCourses}
+                      disabled={selectedStudents.length === 0 || selectedCourses.length === 0}
+                    >
+                      🗑️ 一括削除
+                    </button>
+                    <button 
+                      className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+                      onClick={handleBulkAssignCourses}
+                      disabled={selectedStudents.length === 0 || selectedCourses.length === 0}
+                    >
+                      ➕ 一括追加
+                    </button>
+                  </>
+                ) : (
+                  <button 
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+                    onClick={handleBulkAssignCurriculumPath}
+                    disabled={selectedStudents.length === 0 || !selectedCurriculumPath}
+                  >
+                    ➕ カリキュラムパス追加
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 利用者情報編集モーダル */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-2xl font-bold text-gray-800">
+                  ✏️ 利用者情報編集: {editingStudent?.name}
+                </h3>
+                <button 
+                  className="text-gray-400 hover:text-gray-600 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-all duration-200"
+                  onClick={() => setShowEditModal(false)}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6">
+              <div className="space-y-8">
+                {/* 基本情報編集セクション */}
+                <div className="space-y-6">
+                  <h4 className="text-xl font-semibold text-gray-800 border-b border-gray-200 pb-2">
+                    📋 基本情報
+                  </h4>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">氏名 *</label>
+                      <SanitizedInput
+                        type="text"
+                        value={editFormData.name}
+                        onChange={(value) => setEditFormData({...editFormData, name: value})}
+                        placeholder="利用者名を入力"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                        sanitizeOptions={SANITIZE_OPTIONS}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">担当指導員</label>
+                      <select
+                        value={editFormData.instructor_id}
+                        onChange={(e) => setEditFormData({...editFormData, instructor_id: e.target.value})}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                      >
+                        <option value="">指導員を選択してください</option>
+                        {availableInstructors.map(instructor => (
+                          <option key={instructor.id} value={instructor.id}>
+                            {instructor.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">学習コース</label>
+                      <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex flex-wrap gap-1">
+                          {userCourses
+                            .filter(uc => uc.user_id === editingStudent.id)
+                            .map(uc => (
+                              <span key={uc.id} className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full font-medium">
+                                {uc.course_title}
+                                {uc.curriculum_path_name && (
+                                  <span className="ml-1 text-orange-500">({uc.curriculum_path_name})</span>
+                                )}
+                              </span>
+                            ))}
+                          {userCourses.filter(uc => uc.user_id === editingStudent.id).length === 0 && (
+                            <span className="text-gray-400 text-xs">未割り当て</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                          ※ 学習コースの変更は「コース割り当て」機能をご利用ください
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">タグ</label>
+                      <div className="space-y-3">
+                        {/* 新規タグ作成 */}
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="新しいタグ名を入力"
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const newTag = e.target.value.trim();
+                                if (newTag && !editFormData.tags.includes(newTag)) {
+                                  setEditFormData({
+                                    ...editFormData,
+                                    tags: [...editFormData.tags, newTag]
+                                  });
+                                  e.target.value = '';
+                                }
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="px-3 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-all duration-200"
+                            onClick={(e) => {
+                              const input = e.target.previousElementSibling;
+                              const newTag = input.value.trim();
+                              if (newTag && !editFormData.tags.includes(newTag)) {
+                                setEditFormData({
+                                  ...editFormData,
+                                  tags: [...editFormData.tags, newTag]
+                                });
+                                input.value = '';
+                              }
+                            }}
+                          >
+                            追加
+                          </button>
+                        </div>
+                        
+                        {/* 既存タグ選択 */}
+                        <div className="flex flex-wrap gap-2">
+                          {customTags.map(tag => (
+                            <button
+                              key={tag}
+                              type="button"
+                              className={`px-3 py-1 rounded-full text-sm font-medium transition-all duration-200 ${
+                                editFormData.tags.includes(tag)
+                                  ? 'bg-blue-500 text-white'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              }`}
+                              onClick={() => {
+                                const newTags = editFormData.tags.includes(tag)
+                                  ? editFormData.tags.filter(t => t !== tag)
+                                  : [...editFormData.tags, tag];
+                                setEditFormData({...editFormData, tags: newTags});
+                              }}
+                            >
+                              {tag}
+                            </button>
+                          ))}
+                        </div>
+                        
+                        {/* 選択されたタグ表示 */}
+                        {editFormData.tags.length > 0 && (
+                          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                            <p className="text-sm font-medium text-blue-800 mb-2">選択されたタグ:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {editFormData.tags.map(tag => (
+                                <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                                  {tag}
+                                  <button
+                                    type="button"
+                                    className="ml-1 text-blue-500 hover:text-blue-700"
+                                    onClick={() => {
+                                      setEditFormData({
+                                        ...editFormData,
+                                        tags: editFormData.tags.filter(t => t !== tag)
+                                      });
+                                    }}
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* 個別支援計画セクション */}
+                <div className="space-y-6">
+                  <h4 className="text-xl font-semibold text-gray-800 border-b border-gray-200 pb-2">
+                    📝 個別支援計画
+                    {existingSupportPlan && (
+                      <span className="ml-2 text-sm text-green-600 bg-green-100 px-2 py-1 rounded-full">
+                        既存データあり
+                      </span>
+                    )}
+                  </h4>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">長期目標</label>
+                      <SanitizedTextarea
+                        value={supportPlanData.long_term_goal}
+                        onChange={(value) => setSupportPlanData({...supportPlanData, long_term_goal: value})}
+                        placeholder="長期目標を入力してください"
+                        rows={3}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+                        sanitizeOptions={SANITIZE_OPTIONS}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">短期目標</label>
+                      <SanitizedTextarea
+                        value={supportPlanData.short_term_goal}
+                        onChange={(value) => setSupportPlanData({...supportPlanData, short_term_goal: value})}
+                        placeholder="短期目標を入力してください"
+                        rows={3}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+                        sanitizeOptions={SANITIZE_OPTIONS}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">ニーズ</label>
+                      <SanitizedTextarea
+                        value={supportPlanData.needs}
+                        onChange={(value) => setSupportPlanData({...supportPlanData, needs: value})}
+                        placeholder="利用者のニーズを入力してください"
+                        rows={3}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+                        sanitizeOptions={SANITIZE_OPTIONS}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">支援内容</label>
+                      <SanitizedTextarea
+                        value={supportPlanData.support_content}
+                        onChange={(value) => setSupportPlanData({...supportPlanData, support_content: value})}
+                        placeholder="具体的な支援内容を入力してください"
+                        rows={3}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+                        sanitizeOptions={SANITIZE_OPTIONS}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">目標達成予定日</label>
+                      <input
+                        type="date"
+                        value={supportPlanData.goal_date}
+                        onChange={(e) => setSupportPlanData({...supportPlanData, goal_date: e.target.value})}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* アクションボタン */}
+              <div className="flex gap-4 pt-6 border-t border-gray-200 mt-8">
+                <button 
+                  className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-all duration-200"
+                  onClick={() => setShowEditModal(false)}
+                >
+                  キャンセル
+                </button>
+                <button 
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-green-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+                  onClick={handleUpdateStudent}
+                >
+                  💾 保存
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+
     </div>
   );
 };

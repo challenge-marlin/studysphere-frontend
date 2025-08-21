@@ -8,6 +8,7 @@ import CourseManagement from '../components/CourseManagement';
 import LessonManagement from '../components/LessonManagement';
 import CurriculumPathManagement from '../components/CurriculumPathManagement';
 import AdminManagement from '../components/AdminManagement';
+import TempPasswordManagement from '../components/TempPasswordManagement';
 import AdminPasswordChangeModal from '../components/AdminPasswordChangeModal';
 
 const AdminDashboard = () => {
@@ -74,6 +75,7 @@ const AdminDashboard = () => {
     { id: 'courses', label: '📚 コース管理', component: <CourseManagement /> },
     { id: 'lessons', label: '📖 レッスン管理', component: <LessonManagement /> },
     { id: 'paths', label: '🎯 カリキュラムパス管理', component: <CurriculumPathManagement /> },
+    { id: 'temp-passwords', label: '🔑 一時パスワード管理', component: <TempPasswordManagement /> },
     { id: 'admins', label: '👥 管理者管理', component: <AdminManagement /> },
   ];
 

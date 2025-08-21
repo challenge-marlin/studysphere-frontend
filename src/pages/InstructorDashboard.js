@@ -8,8 +8,17 @@ import LocationManagementForInstructor from '../components/LocationManagementFor
 import SatelliteManagement from '../components/SatelliteManagement';
 import HomeSupportEvaluationsPage from './HomeSupportEvaluationsPage';
 import SanitizedInput from '../components/SanitizedInput';
+import SanitizedTextarea from '../components/SanitizedTextarea';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 import InstructorPasswordChangeModal from '../components/InstructorPasswordChangeModal';
+
+import { 
+  getInstructorSpecializations, 
+  addInstructorSpecialization, 
+  updateInstructorSpecialization, 
+  deleteInstructorSpecialization,
+  updateUser
+} from '../utils/api';
 
 const InstructorDashboard = () => {
   console.log('=== InstructorDashboard Component Mounted ===');
@@ -21,6 +30,29 @@ const InstructorDashboard = () => {
   const [showPasswordChangeForm, setShowPasswordChangeForm] = useState(false);
   const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
   const [authError, setAuthError] = useState(null);
+
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [passwordErrors, setPasswordErrors] = useState({});
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  
+  // 専門分野関連の状態
+  const [specializations, setSpecializations] = useState([]);
+  const [editingSpecialization, setEditingSpecialization] = useState(null);
+  const [newSpecialization, setNewSpecialization] = useState('');
+  
+  // アカウント情報編集関連の状態
+  const [isEditingAccount, setIsEditingAccount] = useState(false);
+  const [isUpdatingAccount, setIsUpdatingAccount] = useState(false);
+  const [accountForm, setAccountForm] = useState({
+    name: '',
+    email: '',
+    specializations: []
+  });
+  
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser, logout } = useInstructorGuard();
@@ -64,9 +96,136 @@ const InstructorDashboard = () => {
     // fetchPasswordRequests(); // この関数は削除されたため、ここでは呼び出さない
   }, [currentUser, location]);
 
+  // 専門分野を取得
+  useEffect(() => {
+    if (currentUser && activeTab === 'settings') {
+      loadSpecializations();
+    }
+  }, [currentUser, activeTab]);
+
+  // 専門分野一覧を取得
+  const loadSpecializations = async () => {
+    try {
+      const response = await getInstructorSpecializations(currentUser.id);
+      if (response.success) {
+        setSpecializations(response.data || []);
+      }
+    } catch (error) {
+      console.error('専門分野の取得に失敗:', error);
+    }
+  };
 
 
 
+  // アカウント情報編集開始
+  const handleStartAccountEdit = () => {
+    setAccountForm({
+      name: localUser.name || '',
+      email: localUser.email || '',
+      specializations: [...specializations]
+    });
+    setIsEditingAccount(true);
+  };
+
+  // アカウント情報更新
+  const handleAccountUpdate = async (e) => {
+    e.preventDefault();
+    
+    if (!accountForm.name.trim()) {
+      alert('名前は必須です。');
+      return;
+    }
+    
+    setIsUpdatingAccount(true);
+    try {
+      // アカウント情報を更新
+      const response = await updateUser(currentUser.id, {
+        name: accountForm.name.trim(),
+        email: accountForm.email.trim() || null
+      });
+      
+      if (response.success) {
+        // 専門分野を更新
+        await updateSpecializations(accountForm.specializations);
+        
+        // ローカルユーザー情報を更新
+        setLocalUser(prev => ({
+          ...prev,
+          name: accountForm.name.trim(),
+          email: accountForm.email.trim() || null
+        }));
+        
+        // LocalStorageも更新
+        const updatedUser = { ...currentUser, name: accountForm.name.trim(), email: accountForm.email.trim() || null };
+        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        
+        // 専門分野一覧を再取得
+        await loadSpecializations();
+        
+        setIsEditingAccount(false);
+        alert('アカウント情報が更新されました。');
+      } else {
+        alert('アカウント情報の更新に失敗しました: ' + response.message);
+      }
+    } catch (error) {
+      console.error('アカウント情報の更新に失敗:', error);
+      alert('アカウント情報の更新に失敗しました。');
+    } finally {
+      setIsUpdatingAccount(false);
+    }
+  };
+
+  // 専門分野一括更新
+  const updateSpecializations = async (newSpecializations) => {
+    try {
+      // 現在の専門分野を取得
+      const currentResponse = await getInstructorSpecializations(currentUser.id);
+      const currentSpecs = currentResponse.success ? currentResponse.data : [];
+      
+      // 削除する専門分野を特定
+      const specsToDelete = currentSpecs.filter(current => 
+        !newSpecializations.some(newSpec => newSpec.id === current.id)
+      );
+      
+      // 削除処理
+      for (const spec of specsToDelete) {
+        await deleteInstructorSpecialization(currentUser.id, spec.id);
+      }
+      
+      // 追加・更新する専門分野を処理
+      for (const spec of newSpecializations) {
+        if (spec.id) {
+          // 既存の専門分野を更新
+          await updateInstructorSpecialization(currentUser.id, spec.id, spec.specialization);
+        } else {
+          // 新しい専門分野を追加
+          await addInstructorSpecialization(currentUser.id, spec.specialization);
+        }
+      }
+    } catch (error) {
+      console.error('専門分野の更新に失敗:', error);
+      throw error;
+    }
+  };
+
+  // 専門分野の追加（編集モード用）
+  const handleAddSpecializationInEdit = () => {
+    if (!accountForm.newSpecialization || !accountForm.newSpecialization.trim()) return;
+    
+    setAccountForm(prev => ({
+      ...prev,
+      specializations: [...prev.specializations, { specialization: prev.newSpecialization.trim() }],
+      newSpecialization: ''
+    }));
+  };
+
+  // 専門分野の削除（編集モード用）
+  const handleRemoveSpecializationInEdit = (index) => {
+    setAccountForm(prev => ({
+      ...prev,
+      specializations: prev.specializations.filter((_, i) => i !== index)
+    }));
+  };
 
   // パスワード変更
   const handlePasswordChange = async (currentPassword, newPassword) => {
@@ -106,6 +265,81 @@ const InstructorDashboard = () => {
       console.error('パスワード変更に失敗:', error);
       alert(`パスワード変更に失敗しました: ${error.message}`);
       throw error;
+    }
+  };
+
+  // 新しいパスワード変更フォームの処理
+  const handlePasswordFormChange = (e) => {
+    const { name, value } = e.target;
+    setPasswordForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    // エラーをクリア
+    if (passwordErrors[name]) {
+      setPasswordErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
+
+  const validatePassword = (password) => {
+    const errors = [];
+    if (password.length < 8) errors.push('8文字以上で入力してください');
+    if (!/[A-Z]/.test(password)) errors.push('大文字を含めてください');
+    if (!/[a-z]/.test(password)) errors.push('小文字を含めてください');
+    if (!/[0-9]/.test(password)) errors.push('数字を含めてください');
+    return errors;
+  };
+
+  const handlePasswordFormSubmit = async (e) => {
+    e.preventDefault();
+    setPasswordErrors({});
+    setIsChangingPassword(true);
+
+    // バリデーション
+    const errors = {};
+    
+    if (!passwordForm.currentPassword) {
+      errors.currentPassword = '現在のパスワードを入力してください';
+    }
+    
+    if (!passwordForm.newPassword) {
+      errors.newPassword = '新しいパスワードを入力してください';
+    } else {
+      const passwordValidation = validatePassword(passwordForm.newPassword);
+      if (passwordValidation.length > 0) {
+        errors.newPassword = passwordValidation.join(', ');
+      }
+    }
+    
+    if (!passwordForm.confirmPassword) {
+      errors.confirmPassword = 'パスワードの確認を入力してください';
+    } else if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      errors.confirmPassword = 'パスワードが一致しません';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setPasswordErrors(errors);
+      setIsChangingPassword(false);
+      return;
+    }
+
+    try {
+      await handlePasswordChange(passwordForm.currentPassword, passwordForm.newPassword);
+      // 成功時はフォームをリセット
+      setPasswordForm({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
+      setPasswordErrors({});
+      setShowPasswordChangeForm(false);
+    } catch (error) {
+      console.error('パスワード変更に失敗:', error);
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -165,20 +399,14 @@ const InstructorDashboard = () => {
             >
               👥 利用者一覧
             </button>
-            <button 
-              className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'location' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
-              onClick={() => setActiveTab('location')}
-            >
-              🏢 拠点情報
-            </button>
-            {localUser.role >= 5 && (
-              <button 
-                className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'satellite-management' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
-                onClick={() => setActiveTab('satellite-management')}
+
+                          <button 
+                className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'location' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
+                onClick={() => setActiveTab('location')}
               >
                 🏢 拠点管理
               </button>
-            )}
+
             <button 
               className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'home-support' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
               onClick={() => setActiveTab('home-support')}
@@ -232,8 +460,8 @@ const InstructorDashboard = () => {
           
           {activeTab === 'overview' && <VoiceCareSystem instructorId={localUser.id} />}
           {activeTab === 'students' && <StudentManagement instructorId={localUser.id} />}
+
           {activeTab === 'location' && <LocationManagementForInstructor currentUser={localUser} onLocationChange={handleLocationChange} />}
-          {activeTab === 'satellite-management' && <SatelliteManagement currentUser={localUser} />}
           {activeTab === 'home-support' && <HomeSupportEvaluationsPage />}
           {activeTab === 'learning-preview' && (
             <div className="p-8 bg-white rounded-lg shadow-lg text-center text-gray-600">
@@ -259,28 +487,148 @@ const InstructorDashboard = () => {
                 <p className="text-lg text-gray-600">アカウント情報とセキュリティ設定を管理できます。</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                 {/* アカウント情報 */}
                 <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-                  <h3 className="text-xl font-semibold text-gray-800 mb-4">🏷️ アカウント情報</h3>
-                  <div className="grid grid-cols-2 gap-3 text-gray-700">
-                    <div>
-                      <span className="font-medium">個人トークン:</span>
-                      <span>{localUser.login_code || localUser.id || '未設定'}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">名前:</span>
-                      <span>{localUser.name}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">メールアドレス:</span>
-                      <span>{localUser.email}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">最終ログイン:</span>
-                      <span>{new Date().toLocaleDateString()}</span>
-                    </div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-semibold text-gray-800">🏷️ アカウント情報</h3>
+                    <button
+                      onClick={isEditingAccount ? () => setIsEditingAccount(false) : handleStartAccountEdit}
+                      className="px-3 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm"
+                    >
+                      {isEditingAccount ? 'キャンセル' : '編集'}
+                    </button>
                   </div>
+                  
+                                     {!isEditingAccount ? (
+                     <div className="grid grid-cols-2 gap-3 text-gray-700">
+                       <div>
+                         <span className="font-medium">個人トークン:</span>
+                         <span>{localUser.login_code || localUser.id || '未設定'}</span>
+                       </div>
+                       <div>
+                         <span className="font-medium">名前:</span>
+                         <span>{localUser.name}</span>
+                       </div>
+                       <div>
+                         <span className="font-medium">メールアドレス:</span>
+                         <span>{localUser.email}</span>
+                       </div>
+                       <div>
+                         <span className="font-medium">最終ログイン:</span>
+                         <span>{new Date().toLocaleDateString()}</span>
+                       </div>
+                       <div className="col-span-2">
+                         <span className="font-medium">専門分野:</span>
+                         <div className="mt-2">
+                           {specializations.length > 0 ? (
+                             <div className="space-y-1">
+                               {specializations.map((spec) => (
+                                 <div key={spec.id} className="p-2 bg-white rounded border border-gray-200">
+                                   <span className="text-gray-700">{spec.specialization}</span>
+                                 </div>
+                               ))}
+                             </div>
+                           ) : (
+                             <p className="text-gray-500 text-sm">専門分野が設定されていません</p>
+                           )}
+                         </div>
+                       </div>
+                     </div>
+                                     ) : (
+                     <form onSubmit={handleAccountUpdate} className="space-y-4">
+                       <div>
+                         <label className="block text-sm font-medium text-gray-700 mb-1">
+                           名前 <span className="text-red-500">*</span>
+                         </label>
+                         <SanitizedInput
+                           type="text"
+                           value={accountForm.name}
+                           onChange={(e) => setAccountForm(prev => ({ ...prev, name: e.target.value }))}
+                           sanitizeMode={SANITIZE_OPTIONS.TEXT}
+                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                         />
+                       </div>
+                       
+                       <div>
+                         <label className="block text-sm font-medium text-gray-700 mb-1">
+                           メールアドレス
+                         </label>
+                         <SanitizedInput
+                           type="email"
+                           value={accountForm.email}
+                           onChange={(e) => setAccountForm(prev => ({ ...prev, email: e.target.value }))}
+                           sanitizeMode={SANITIZE_OPTIONS.TEXT}
+                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                         />
+                       </div>
+                       
+                       <div>
+                         <label className="block text-sm font-medium text-gray-700 mb-1">
+                           専門分野
+                         </label>
+                         <div className="space-y-2">
+                           {accountForm.specializations.map((spec, index) => (
+                             <div key={index} className="flex items-center gap-2">
+                               <SanitizedInput
+                                 type="text"
+                                 value={spec.specialization}
+                                 onChange={(e) => {
+                                   const newSpecs = [...accountForm.specializations];
+                                   newSpecs[index].specialization = e.target.value;
+                                   setAccountForm(prev => ({ ...prev, specializations: newSpecs }));
+                                 }}
+                                 sanitizeMode={SANITIZE_OPTIONS.TEXT}
+                                 className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                               />
+                               <button
+                                 type="button"
+                                 onClick={() => handleRemoveSpecializationInEdit(index)}
+                                 className="px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                               >
+                                 削除
+                               </button>
+                             </div>
+                           ))}
+                           <div className="flex gap-2">
+                             <SanitizedInput
+                               type="text"
+                               value={accountForm.newSpecialization || ''}
+                               onChange={(e) => setAccountForm(prev => ({ ...prev, newSpecialization: e.target.value }))}
+                               placeholder="新しい専門分野を入力"
+                               sanitizeMode={SANITIZE_OPTIONS.TEXT}
+                               className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                             />
+                             <button
+                               type="button"
+                               onClick={handleAddSpecializationInEdit}
+                               disabled={!accountForm.newSpecialization || !accountForm.newSpecialization.trim()}
+                               className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                             >
+                               追加
+                             </button>
+                           </div>
+                         </div>
+                       </div>
+                       
+                       <div className="flex gap-3 pt-4">
+                         <button
+                           type="submit"
+                           disabled={isUpdatingAccount}
+                           className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                         >
+                           {isUpdatingAccount ? '更新中...' : '更新'}
+                         </button>
+                         <button
+                           type="button"
+                           onClick={() => setIsEditingAccount(false)}
+                           className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400"
+                         >
+                           キャンセル
+                         </button>
+                       </div>
+                     </form>
+                   )}
                 </div>
 
                 {/* パスワード変更セクション */}
@@ -308,19 +656,84 @@ const InstructorDashboard = () => {
                   ) : (
                     <div className="bg-white p-4 rounded-lg border border-gray-200">
                       <h4 className="text-lg font-medium text-gray-800 mb-4">パスワード変更</h4>
-                      <p className="text-gray-600 mb-4">新しいパスワードを設定してください。</p>
-                      <button 
-                        className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors duration-300"
-                        onClick={() => setShowPasswordChangeModal(true)}
-                      >
-                        パスワード変更モーダルを開く
-                      </button>
-                      <button 
-                        className="ml-2 px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-300"
-                        onClick={() => setShowPasswordChangeForm(false)}
-                      >
-                        キャンセル
-                      </button>
+                      <form onSubmit={handlePasswordFormSubmit} className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            現在のパスワード <span className="text-red-500">*</span>
+                          </label>
+                          <SanitizedInput
+                            type="password"
+                            name="currentPassword"
+                            value={passwordForm.currentPassword}
+                            onChange={handlePasswordFormChange}
+                            sanitizeMode={SANITIZE_OPTIONS.NONE}
+                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                              passwordErrors.currentPassword ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'
+                            }`}
+                          />
+                          {passwordErrors.currentPassword && (
+                            <p className="text-red-500 text-sm mt-1">{passwordErrors.currentPassword}</p>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            新しいパスワード <span className="text-red-500">*</span>
+                          </label>
+                          <SanitizedInput
+                            type="password"
+                            name="newPassword"
+                            value={passwordForm.newPassword}
+                            onChange={handlePasswordFormChange}
+                            sanitizeMode={SANITIZE_OPTIONS.NONE}
+                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                              passwordErrors.newPassword ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'
+                            }`}
+                          />
+                          {passwordErrors.newPassword && (
+                            <p className="text-red-500 text-sm mt-1">{passwordErrors.newPassword}</p>
+                          )}
+                          <p className="text-gray-500 text-sm mt-1">
+                            パスワード要件: 8文字以上、大文字・小文字・数字を含む
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            新しいパスワード（確認） <span className="text-red-500">*</span>
+                          </label>
+                          <SanitizedInput
+                            type="password"
+                            name="confirmPassword"
+                            value={passwordForm.confirmPassword}
+                            onChange={handlePasswordFormChange}
+                            sanitizeMode={SANITIZE_OPTIONS.NONE}
+                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                              passwordErrors.confirmPassword ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'
+                            }`}
+                          />
+                          {passwordErrors.confirmPassword && (
+                            <p className="text-red-500 text-sm mt-1">{passwordErrors.confirmPassword}</p>
+                          )}
+                        </div>
+
+                        <div className="flex gap-3 pt-4">
+                          <button
+                            type="submit"
+                            disabled={isChangingPassword}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 transition-colors duration-300"
+                          >
+                            {isChangingPassword ? '変更中...' : 'パスワードを変更'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowPasswordChangeForm(false)}
+                            className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-300"
+                          >
+                            キャンセル
+                          </button>
+                        </div>
+                      </form>
                     </div>
                   )}
                 </div>

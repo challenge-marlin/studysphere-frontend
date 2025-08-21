@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStudentGuard } from '../utils/hooks/useAuthGuard';
 import Dashboard from './Dashboard';
 import LessonList from './LessonList';
+import AnnouncementList from '../components/AnnouncementList';
 
 const StudentDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -81,6 +82,16 @@ const StudentDashboard = () => {
               📚 レッスン一覧
             </button>
             <button 
+              className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                activeTab === 'announcements'
+                  ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-lg'
+                  : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700'
+              }`}
+              onClick={() => setActiveTab('announcements')}
+            >
+              📢 お知らせ
+            </button>
+            <button 
               className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
               onClick={() => navigate('/student/learning')}
             >
@@ -113,6 +124,11 @@ const StudentDashboard = () => {
           {activeTab === 'lessons' && (
             <div className="student-content">
               <LessonList />
+            </div>
+          )}
+          {activeTab === 'announcements' && (
+            <div className="student-content">
+              <AnnouncementList />
             </div>
           )}
         </div>

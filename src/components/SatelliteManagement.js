@@ -9,7 +9,12 @@ import {
   updateSatellite,
   getSatelliteInstructors,
   getSatelliteUsers,
-  updateUser
+  updateUser,
+  getSatelliteUserInstructorRelations,
+  getSatelliteAvailableInstructors,
+  updateUserInstructor,
+  bulkUpdateUserInstructors,
+  bulkRemoveUserInstructors
 } from '../utils/api';
 import SanitizedInput from './SanitizedInput';
 import SanitizedTextarea from './SanitizedTextarea';
@@ -47,6 +52,14 @@ const SatelliteManagement = ({ currentUser }) => {
   const [showUserAssignmentForm, setShowUserAssignmentForm] = useState(false);
   const [selectedInstructor, setSelectedInstructor] = useState(null);
   const [unassignedUsers, setUnassignedUsers] = useState([]);
+
+  // 担当指導員管理
+  const [userInstructorRelations, setUserInstructorRelations] = useState([]);
+  const [availableInstructors, setAvailableInstructors] = useState([]);
+  const [showInstructorManagement, setShowInstructorManagement] = useState(false);
+  const [bulkAssignmentMode, setBulkAssignmentMode] = useState(false);
+  const [selectedUsersForBulk, setSelectedUsersForBulk] = useState([]);
+  const [bulkInstructorId, setBulkInstructorId] = useState('');
 
   // JWTトークンをデコードする関数
   const decodeJWT = (token) => {
@@ -139,9 +152,130 @@ const SatelliteManagement = ({ currentUser }) => {
       await fetchInstructors(satelliteId);
       // 利用者一覧を取得
       await fetchUsers(satelliteId);
+      // 担当指導員関係を取得
+      await fetchUserInstructorRelations(satelliteId);
+      // 利用可能な指導員一覧を取得
+      await fetchAvailableInstructors(satelliteId);
     } catch (error) {
       console.error('拠点詳細取得エラー:', error);
       setError('拠点詳細の取得に失敗しました');
+    }
+  };
+
+  // 担当指導員関係を取得
+  const fetchUserInstructorRelations = async (satelliteId) => {
+    try {
+      const response = await getSatelliteUserInstructorRelations(satelliteId);
+      if (response.success) {
+        setUserInstructorRelations(response.data);
+      } else {
+        console.error('担当指導員関係取得エラー:', response.message);
+        setUserInstructorRelations([]);
+      }
+    } catch (error) {
+      console.error('担当指導員関係取得エラー:', error);
+      setUserInstructorRelations([]);
+    }
+  };
+
+  // 利用可能な指導員一覧を取得
+  const fetchAvailableInstructors = async (satelliteId) => {
+    try {
+      const response = await getSatelliteAvailableInstructors(satelliteId);
+      if (response.success) {
+        setAvailableInstructors(response.data);
+      } else {
+        console.error('利用可能指導員取得エラー:', response.message);
+        setAvailableInstructors([]);
+      }
+    } catch (error) {
+      console.error('利用可能指導員取得エラー:', error);
+      setAvailableInstructors([]);
+    }
+  };
+
+  // 個別利用者の担当指導員を変更
+  const handleUpdateUserInstructor = async (userId, instructorId) => {
+    try {
+      const response = await updateUserInstructor(userId, instructorId);
+      if (response.success) {
+        alert('担当指導員を更新しました');
+        await fetchUserInstructorRelations(selectedSatellite.id);
+      } else {
+        alert(response.message || '担当指導員の更新に失敗しました');
+      }
+    } catch (error) {
+      console.error('担当指導員更新エラー:', error);
+      alert('担当指導員の更新に失敗しました');
+    }
+  };
+
+  // 一括担当指導員変更
+  const handleBulkUpdateInstructors = async () => {
+    if (!bulkInstructorId || selectedUsersForBulk.length === 0) {
+      alert('指導員と利用者を選択してください');
+      return;
+    }
+
+    try {
+      const assignments = selectedUsersForBulk.map(userId => ({
+        userId: userId,
+        instructorId: bulkInstructorId === 'remove' ? null : parseInt(bulkInstructorId)
+      }));
+
+      const response = await bulkUpdateUserInstructors(selectedSatellite.id, assignments);
+      if (response.success) {
+        alert(response.message);
+        setBulkAssignmentMode(false);
+        setSelectedUsersForBulk([]);
+        setBulkInstructorId('');
+        await fetchUserInstructorRelations(selectedSatellite.id);
+      } else {
+        alert(response.message || '一括更新に失敗しました');
+      }
+    } catch (error) {
+      console.error('一括担当指導員更新エラー:', error);
+      alert('一括更新に失敗しました');
+    }
+  };
+
+  // 全利用者の担当指導員を一括削除
+  const handleBulkRemoveInstructors = async () => {
+    if (!window.confirm('拠点内の全利用者の担当指導員を削除しますか？この操作は取り消せません。')) {
+      return;
+    }
+
+    try {
+      const response = await bulkRemoveUserInstructors(selectedSatellite.id);
+      if (response.success) {
+        alert(response.message);
+        await fetchUserInstructorRelations(selectedSatellite.id);
+      } else {
+        alert(response.message || '一括削除に失敗しました');
+      }
+    } catch (error) {
+      console.error('一括担当指導員削除エラー:', error);
+      alert('一括削除に失敗しました');
+    }
+  };
+
+  // 一括選択の切り替え
+  const handleBulkSelectToggle = (userId) => {
+    setSelectedUsersForBulk(prev => {
+      if (prev.includes(userId)) {
+        return prev.filter(id => id !== userId);
+      } else {
+        return [...prev, userId];
+      }
+    });
+  };
+
+  // 全選択/全解除
+  const handleSelectAll = (selectAll) => {
+    if (selectAll) {
+      setSelectedUsersForBulk(userInstructorRelations.map(relation => relation.user_id));
+    } else {
+      setSelectedUsersForBulk([]);
     }
   };
 
@@ -445,18 +579,33 @@ const SatelliteManagement = ({ currentUser }) => {
             )}
           </div>
 
-          {/* 指導員管理 */}
+          {/* 担当指導員管理 */}
           <div className="bg-gray-50 p-6 rounded-lg">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold text-gray-800">指導員管理</h3>
-              <button
-                onClick={() => setShowAddInstructorForm(!showAddInstructorForm)}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-              >
-                指導員を追加
-              </button>
+              <h3 className="text-xl font-semibold text-gray-800">担当指導員管理</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowAddInstructorForm(!showAddInstructorForm)}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                >
+                  指導員を追加
+                </button>
+                <button
+                  onClick={() => setBulkAssignmentMode(!bulkAssignmentMode)}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors"
+                >
+                  一括操作
+                </button>
+                <button
+                  onClick={handleBulkRemoveInstructors}
+                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+                >
+                  全削除
+                </button>
+              </div>
             </div>
 
+            {/* 指導員追加フォーム */}
             {showAddInstructorForm && (
               <form onSubmit={handleAddInstructor} className="mb-6 p-4 bg-white rounded-lg border">
                 <h4 className="text-lg font-medium text-gray-800 mb-4">新しい指導員を追加</h4>
@@ -529,40 +678,155 @@ const SatelliteManagement = ({ currentUser }) => {
               </form>
             )}
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full bg-white border border-gray-200">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">名前</th>
-                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">ログインID</th>
-                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">メールアドレス</th>
-                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">ステータス</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {instructors.map(instructor => (
-                    <tr key={instructor.id} className="border-b border-gray-200">
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-2">
-                          <span>{instructor.name}</span>
-                          {instructor.role === 5 && <span className="text-yellow-500 text-lg">👑</span>}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2">{instructor.username}</td>
-                      <td className="px-4 py-2">{instructor.email || '-'}</td>
-                      <td className="px-4 py-2">
-                        <span className={`px-2 py-1 rounded-full text-xs ${
-                          instructor.status === 1 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {instructor.status === 1 ? '稼働中' : '停止中'}
-                        </span>
-                      </td>
+            {/* 一括操作モード */}
+            {bulkAssignmentMode && (
+              <div className="mb-6 p-4 bg-white rounded-lg border">
+                <h4 className="text-lg font-medium text-gray-800 mb-4">一括担当指導員変更</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      担当指導員を選択
+                    </label>
+                    <select
+                      value={bulkInstructorId}
+                      onChange={(e) => setBulkInstructorId(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded-md"
+                    >
+                      <option value="">指導員を選択してください</option>
+                      <option value="remove">担当指導員を削除</option>
+                      {availableInstructors.map(instructor => (
+                        <option key={instructor.id} value={instructor.id}>
+                          {instructor.role === 5 ? '👑 ' : ''}{instructor.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      選択済み利用者数
+                    </label>
+                    <div className="p-2 bg-gray-100 rounded-md">
+                      {selectedUsersForBulk.length}名
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleBulkUpdateInstructors}
+                    disabled={!bulkInstructorId || selectedUsersForBulk.length === 0}
+                    className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  >
+                    一括更新実行
+                  </button>
+                  <button
+                    onClick={() => setBulkAssignmentMode(false)}
+                    className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 指導員一覧 */}
+            <div className="mb-6">
+              <h4 className="text-lg font-medium text-gray-800 mb-4">指導員一覧</h4>
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border border-gray-200">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">名前</th>
+                      <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">ログインID</th>
+                      <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">メールアドレス</th>
+                      <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">ステータス</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {instructors.map(instructor => (
+                      <tr key={instructor.id} className="border-b border-gray-200">
+                        <td className="px-4 py-2">
+                          <div className="flex items-center gap-2">
+                            <span>{instructor.name}</span>
+                            {instructor.role === 5 && <span className="text-yellow-500 text-lg">👑</span>}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2">{instructor.username}</td>
+                        <td className="px-4 py-2">{instructor.email || '-'}</td>
+                        <td className="px-4 py-2">
+                          <span className={`px-2 py-1 rounded-full text-xs ${
+                            instructor.status === 1 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {instructor.status === 1 ? '稼働中' : '停止中'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 担当指導員関係一覧 */}
+            <div>
+              <h4 className="text-lg font-medium text-gray-800 mb-4">利用者と担当指導員の関係</h4>
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border border-gray-200">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">
+                        {bulkAssignmentMode && (
+                          <input
+                            type="checkbox"
+                            onChange={(e) => handleSelectAll(e.target.checked)}
+                            className="mr-2"
+                          />
+                        )}
+                        利用者名
+                      </th>
+                      <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">現在の担当指導員</th>
+                      <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {userInstructorRelations.map(relation => (
+                      <tr key={relation.user_id} className="border-b border-gray-200">
+                        <td className="px-4 py-2">
+                          <div className="flex items-center">
+                            {bulkAssignmentMode && (
+                              <input
+                                type="checkbox"
+                                checked={selectedUsersForBulk.includes(relation.user_id)}
+                                onChange={() => handleBulkSelectToggle(relation.user_id)}
+                                className="mr-2"
+                              />
+                            )}
+                            <span>{relation.user_name}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2">
+                          {relation.instructor_name || '未割り当て'}
+                        </td>
+                        <td className="px-4 py-2">
+                          <select
+                            value={relation.instructor_id || ''}
+                            onChange={(e) => handleUpdateUserInstructor(relation.user_id, e.target.value || null)}
+                            className="p-1 border border-gray-300 rounded text-sm"
+                          >
+                            <option value="">未割り当て</option>
+                            {availableInstructors.map(instructor => (
+                              <option key={instructor.id} value={instructor.id}>
+                                {instructor.role === 5 ? '👑 ' : ''}{instructor.name}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 

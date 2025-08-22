@@ -7,6 +7,7 @@ import StudentManagement from '../components/StudentManagement';
 import LocationManagementForInstructor from '../components/LocationManagementForInstructor';
 import SatelliteManagement from '../components/SatelliteManagement';
 import HomeSupportEvaluationsPage from './HomeSupportEvaluationsPage';
+import HomeSupportUserAdditionModal from '../components/HomeSupportUserAdditionModal';
 import SanitizedInput from '../components/SanitizedInput';
 import SanitizedTextarea from '../components/SanitizedTextarea';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
@@ -26,9 +27,17 @@ const InstructorDashboard = () => {
   console.log('Current pathname:', window.location.pathname);
   console.log('Current hash:', window.location.hash);
   
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(() => {
+    // sessionStorageからタブの状態を復元
+    const savedTab = sessionStorage.getItem('instructorDashboardActiveTab');
+    return savedTab && ['overview', 'students', 'location', 'home-support', 'learning-preview', 'settings'].includes(savedTab) 
+      ? savedTab 
+      : 'overview';
+  });
+
   const [showPasswordChangeForm, setShowPasswordChangeForm] = useState(false);
   const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
+  const [showHomeSupportModal, setShowHomeSupportModal] = useState(false);
   const [authError, setAuthError] = useState(null);
 
   const [passwordForm, setPasswordForm] = useState({
@@ -81,10 +90,13 @@ const InstructorDashboard = () => {
       location: currentUser.location || initialLocation
     });
     
-    // URLパラメータからタブを設定
-    const initialTab = location.search.split('tab=')[1];
-    if (initialTab && ['overview', 'students', 'location', 'home-support', 'learning-preview', 'settings'].includes(initialTab)) {
-      setActiveTab(initialTab);
+    // URLパラメータからタブを設定（初回のみ）
+    if (!localUser) {
+      const initialTab = location.search.split('tab=')[1];
+      if (initialTab && ['overview', 'students', 'location', 'home-support', 'learning-preview', 'settings'].includes(initialTab)) {
+        setActiveTab(initialTab);
+        sessionStorage.setItem('instructorDashboardActiveTab', initialTab);
+      }
     }
 
     // パスワード変更要求があるかチェック
@@ -94,7 +106,7 @@ const InstructorDashboard = () => {
 
     // パスワード変更申請一覧を取得
     // fetchPasswordRequests(); // この関数は削除されたため、ここでは呼び出さない
-  }, [currentUser, location]);
+  }, [currentUser]); // locationを依存配列から削除
 
   // 専門分野を取得
   useEffect(() => {
@@ -371,6 +383,23 @@ const InstructorDashboard = () => {
     }
   };
 
+  const handleHomeSupportSuccess = (result) => {
+    console.log('在宅支援利用者が追加されました:', result);
+    // 在宅利用者リストを更新するためのイベントを発火
+    window.dispatchEvent(new CustomEvent('homeSupportUserAdded'));
+  };
+
+  // 在宅利用者追加モーダルを開く関数をグローバルに公開
+  useEffect(() => {
+    window.openHomeSupportModal = () => {
+      setShowHomeSupportModal(true);
+    };
+    
+    return () => {
+      delete window.openHomeSupportModal;
+    };
+  }, []);
+
   if (!currentUser || !localUser) {
     return <div>Loading...</div>;
   }
@@ -389,33 +418,48 @@ const InstructorDashboard = () => {
           <nav className={`p-4 flex flex-row gap-2 overflow-x-auto ${showPasswordChangeModal ? 'pointer-events-none opacity-50' : ''}`}>
             <button 
               className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'overview' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
-              onClick={() => setActiveTab('overview')}
+              onClick={() => {
+                setActiveTab('overview');
+                sessionStorage.setItem('instructorDashboardActiveTab', 'overview');
+              }}
             >
               💬 声かけ
             </button>
             <button 
               className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'students' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
-              onClick={() => setActiveTab('students')}
+              onClick={() => {
+                setActiveTab('students');
+                sessionStorage.setItem('instructorDashboardActiveTab', 'students');
+              }}
             >
               👥 利用者一覧
             </button>
 
                           <button 
                 className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'location' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
-                onClick={() => setActiveTab('location')}
+                onClick={() => {
+                  setActiveTab('location');
+                  sessionStorage.setItem('instructorDashboardActiveTab', 'location');
+                }}
               >
                 🏢 拠点管理
               </button>
 
             <button 
               className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'home-support' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
-              onClick={() => setActiveTab('home-support')}
+              onClick={() => {
+                setActiveTab('home-support');
+                sessionStorage.setItem('instructorDashboardActiveTab', 'home-support');
+              }}
             >
               🏠 在宅支援
             </button>
             <button 
               className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'learning-preview' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
-              onClick={() => setActiveTab('learning-preview')}
+              onClick={() => {
+                setActiveTab('learning-preview');
+                sessionStorage.setItem('instructorDashboardActiveTab', 'learning-preview');
+              }}
             >
               🎓 学習画面プレビュー
             </button>
@@ -427,7 +471,10 @@ const InstructorDashboard = () => {
                     ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white'
                     : ''
                 }`}
-              onClick={() => setActiveTab('settings')}
+              onClick={() => {
+                setActiveTab('settings');
+                sessionStorage.setItem('instructorDashboardActiveTab', 'settings');
+              }}
             >
               ⚙️ 設定
               {localUser.passwordResetRequired && (
@@ -462,7 +509,20 @@ const InstructorDashboard = () => {
           {activeTab === 'students' && <StudentManagement instructorId={localUser.id} />}
 
           {activeTab === 'location' && <LocationManagementForInstructor currentUser={localUser} onLocationChange={handleLocationChange} />}
-          {activeTab === 'home-support' && <HomeSupportEvaluationsPage />}
+          {activeTab === 'home-support' && (
+            <div className="p-8 bg-white rounded-lg shadow-lg">
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-gray-800 mb-2">🏠 在宅支援</h2>
+                <p className="text-lg text-gray-600">在宅支援を管理し、評価と在宅利用者を確認できます。</p>
+              </div>
+              
+              {/* 評価管理 */}
+              <div className="mb-8">
+                <HomeSupportEvaluationsPage />
+              </div>
+            </div>
+          )}
+          
           {activeTab === 'learning-preview' && (
             <div className="p-8 bg-white rounded-lg shadow-lg text-center text-gray-600">
               <h2 className="text-2xl font-bold text-gray-800 mb-4">🎓 学習画面プレビュー</h2>
@@ -763,6 +823,13 @@ const InstructorDashboard = () => {
         onClose={() => setShowPasswordChangeModal(false)}
         onPasswordChange={handlePasswordChange}
         user={currentUser}
+      />
+
+      {/* 在宅支援利用者追加モーダル */}
+      <HomeSupportUserAdditionModal
+        isOpen={showHomeSupportModal}
+        onClose={() => setShowHomeSupportModal(false)}
+        onSuccess={handleHomeSupportSuccess}
       />
     </div>
   );

@@ -97,33 +97,47 @@ const LocationManagementForInstructor = ({ currentUser, onLocationChange }) => {
           sessionStorage.setItem('selectedSatellite', JSON.stringify(satelliteData));
           console.log('selectedSatelliteを更新:', satelliteData);
           
-          // 拠点変更時の再認証を実行（管理者の場合のみ）
-          if (currentUser && currentUser.role >= 9) {
+          // 拠点変更時の再認証は、実際に拠点が変更された場合のみ実行
+          // 拠点管理タブをクリックしただけでは実行しない
+          const currentSelectedSatellite = sessionStorage.getItem('selectedSatellite');
+          if (currentSelectedSatellite) {
             try {
-              console.log('管理者用: 拠点変更時再認証API呼び出し開始...');
-              const reauthResult = await reauthenticateForSatellite(satelliteId);
-              console.log('拠点変更時再認証結果:', reauthResult);
-              
-              if (reauthResult.success && reauthResult.data) {
-                // 新しいトークンを保存
-                const { access_token, refresh_token } = reauthResult.data;
-                
-                // ユーザー情報を更新
-                const updatedUser = {
-                  ...currentUser,
-                  role: reauthResult.data.user.role,
-                  company_id: reauthResult.data.user.company_id,
-                  company_name: reauthResult.data.user.company_name,
-                  satellite_id: reauthResult.data.user.satellite_id,
-                  satellite_name: reauthResult.data.user.satellite_name
-                };
-                
-                // 認証コンテキストを更新
-                updateAuthForSatellite(updatedUser, access_token, refresh_token);
-                console.log('拠点変更後のユーザー情報:', updatedUser);
+              const parsedCurrent = JSON.parse(currentSelectedSatellite);
+              if (parsedCurrent.id !== satelliteId) {
+                // 拠点が実際に変更された場合のみ再認証を実行
+                if (currentUser && currentUser.role >= 9) {
+                  try {
+                    console.log('拠点が変更されました。管理者用: 拠点変更時再認証API呼び出し開始...');
+                    const reauthResult = await reauthenticateForSatellite(satelliteId);
+                    console.log('拠点変更時再認証結果:', reauthResult);
+                    
+                    if (reauthResult.success && reauthResult.data) {
+                      // 新しいトークンを保存
+                      const { access_token, refresh_token } = reauthResult.data;
+                      
+                      // ユーザー情報を更新
+                      const updatedUser = {
+                        ...currentUser,
+                        role: reauthResult.data.user.role,
+                        company_id: reauthResult.data.user.company_id,
+                        company_name: reauthResult.data.user.company_name,
+                        satellite_id: reauthResult.data.user.satellite_id,
+                        satellite_name: reauthResult.data.user.satellite_name
+                      };
+                      
+                      // 認証コンテキストを更新
+                      updateAuthForSatellite(updatedUser, access_token, refresh_token);
+                      console.log('拠点変更後のユーザー情報:', updatedUser);
+                    }
+                  } catch (reauthError) {
+                    console.error('拠点変更時再認証エラー:', reauthError);
+                  }
+                }
+              } else {
+                console.log('拠点に変更がないため、再認証をスキップします。');
               }
-            } catch (reauthError) {
-              console.error('拠点変更時再認証エラー:', reauthError);
+            } catch (parseError) {
+              console.error('selectedSatelliteのパースエラー:', parseError);
             }
           }
         }

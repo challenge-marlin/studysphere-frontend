@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getCurrentUser } from '../utils/userContext';
+import { getSatelliteHomeSupportUsers, removeHomeSupportFlag } from '../utils/api';
 import WeeklyEvaluationModal from './WeeklyEvaluationModal';
 import MonthlyEvaluationModal from './MonthlyEvaluationModal';
-import AddHomeSupportUserModal from './AddHomeSupportUserModal';
+import HomeSupportUserAdditionModal from './HomeSupportUserAdditionModal';
 
 const HomeSupportManagement = () => {
   const navigate = useNavigate();
@@ -14,11 +16,72 @@ const HomeSupportManagement = () => {
   const [selectedStudentForEvaluation, setSelectedStudentForEvaluation] = useState(null);
   const [showWeeklyModal, setShowWeeklyModal] = useState(false);
   const [showMonthlyModal, setShowMonthlyModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [currentSatellite, setCurrentSatellite] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
-    // 生徒データの取得（現在は空配列）
-    setStudents([]);
+    // 現在のユーザー情報と拠点情報を取得
+    const user = getCurrentUser();
+    setCurrentUser(user);
+    
+    const selectedSatellite = sessionStorage.getItem('selectedSatellite');
+    if (selectedSatellite) {
+      setCurrentSatellite(JSON.parse(selectedSatellite));
+    } else if (user?.satellite_ids && user.satellite_ids.length > 0) {
+      setCurrentSatellite({
+        id: user.satellite_ids[0],
+        name: '現在の拠点'
+      });
+    }
   }, []);
+
+  useEffect(() => {
+    if (currentSatellite?.id) {
+      fetchHomeSupportUsers();
+    }
+  }, [currentSatellite]);
+
+  // 在宅支援利用者追加イベントをリッスン
+  useEffect(() => {
+    const handleUserAdded = () => {
+      fetchHomeSupportUsers();
+    };
+
+    window.addEventListener('homeSupportUserAdded', handleUserAdded);
+    
+    return () => {
+      window.removeEventListener('homeSupportUserAdded', handleUserAdded);
+    };
+  }, []);
+
+  const fetchHomeSupportUsers = async () => {
+    try {
+      setLoading(true);
+      const instructorIds = [currentUser?.id].filter(Boolean);
+      const response = await getSatelliteHomeSupportUsers(currentSatellite.id, instructorIds);
+      
+      if (response.success) {
+        // テーブル表示用のデータ形式に変換
+        const formattedUsers = response.data.map(user => ({
+          id: user.id,
+          name: user.name,
+          instructorName: user.instructor_name || '未設定',
+          email: user.login_code || '未設定',
+          status: 'active', // 在宅支援対象は稼働中として扱う
+          progress: Math.floor(Math.random() * 100), // 仮の進捗率（後で実際のデータに置き換え）
+          tags: ['在宅支援'], // デフォルトタグ
+          canStudyAtHome: true
+        }));
+        
+        setStudents(formattedUsers);
+      }
+    } catch (error) {
+      console.error('在宅支援利用者取得エラー:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getFilteredStudents = () => {
     let filteredStudents = students.filter(s => s.canStudyAtHome);
@@ -93,12 +156,37 @@ const HomeSupportManagement = () => {
     await new Promise(resolve => setTimeout(resolve, 500));
     return suggestions[type]?.[field] || '';
   };
-  const handleAddUsers = (users) => {
-    const updatedUsers = users.map(user => ({
-      ...user,
-      canStudyAtHome: true
-    }));
-    setStudents(prev => [...prev, ...updatedUsers]);
+  const handleAddUsersSuccess = (result) => {
+    // 在宅支援利用者が追加された後の処理
+    console.log('在宅支援利用者が追加されました:', result);
+    // 即座にリストを更新
+    fetchHomeSupportUsers();
+    // 他のコンポーネントにも通知
+    window.dispatchEvent(new CustomEvent('homeSupportUserAdded'));
+  };
+
+  // 在宅支援解除機能
+  const handleRemoveHomeSupport = async (student) => {
+    if (!window.confirm(`${student.name}さんの在宅支援を解除しますか？`)) {
+      return;
+    }
+
+    try {
+      const response = await removeHomeSupportFlag(student.id);
+      
+      if (response.success) {
+        // 成功時はリストを再取得
+        fetchHomeSupportUsers();
+        // 他のコンポーネントにも通知
+        window.dispatchEvent(new CustomEvent('homeSupportUserRemoved'));
+        alert('在宅支援を解除しました');
+      } else {
+        alert(`在宅支援解除に失敗しました: ${response.message}`);
+      }
+    } catch (error) {
+      console.error('在宅支援解除エラー:', error);
+      alert('在宅支援解除に失敗しました');
+    }
   };
 
   return (
@@ -125,7 +213,7 @@ const HomeSupportManagement = () => {
             >
               📝 日次記録一括
             </button>
-            <button 
+            <button
               className="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2"
               onClick={() => setShowAddModal(true)}
             >
@@ -192,19 +280,34 @@ const HomeSupportManagement = () => {
 
       {/* 利用者リスト部分 */}
       <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-green-50 to-emerald-50">
-              <tr>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-green-800 border-b border-green-200">利用者名</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-green-800 border-b border-green-200">タグ</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-green-800 border-b border-green-200">状態</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-green-800 border-b border-green-200">進行度</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-green-800 border-b border-green-200">アクション</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {getFilteredStudents().map(student => (
+        {loading ? (
+          <div className="flex justify-center items-center p-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <span className="ml-2 text-gray-600">在宅支援利用者を読み込み中...</span>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gradient-to-r from-green-50 to-emerald-50">
+                <tr>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-green-800 border-b border-green-200">利用者名</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-green-800 border-b border-green-200">タグ</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-green-800 border-b border-green-200">状態</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-green-800 border-b border-green-200">進行度</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-green-800 border-b border-green-200">アクション</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {getFilteredStudents().length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
+                      <div className="text-gray-400 text-6xl mb-4">🏠</div>
+                      <p className="text-lg font-medium text-gray-600 mb-2">在宅支援利用者がいません</p>
+                      <p className="text-gray-500">在宅支援を利用している利用者が登録されていません。</p>
+                    </td>
+                  </tr>
+                ) : (
+                  getFilteredStudents().map(student => (
                 <tr key={student.id} className="hover:bg-gradient-to-r hover:from-green-50 hover:to-emerald-50 transition-all duration-200">
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
@@ -277,19 +380,19 @@ const HomeSupportManagement = () => {
                       </button>
                       <button
                         className="px-3 py-2 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 transition-all duration-200"
-                        onClick={() => {
-                          setStudents(prev => prev.map(u => u.id === student.id ? { ...u, canStudyAtHome: false } : u));
-                        }}
+                        onClick={() => handleRemoveHomeSupport(student)}
                       >
                         解除
                       </button>
                     </div>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* 評価モーダル */}
@@ -330,10 +433,10 @@ const HomeSupportManagement = () => {
       )}
 
       {/* 在宅支援利用者追加モーダル */}
-      <AddHomeSupportUserModal
+      <HomeSupportUserAdditionModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
-        onAdd={handleAddUsers}
+        onSuccess={handleAddUsersSuccess}
       />
     </div>
   );

@@ -487,3 +487,45 @@ export const deleteSupportPlan = (id) => {
 export const upsertSupportPlan = (data) => {
   return apiPost('/api/support-plans/upsert', data);
 };
+
+// 在宅支援関連のAPI関数
+
+/**
+ * 拠点内の通所利用者一覧を取得（在宅支援追加用）
+ */
+export const getSatelliteUsersForHomeSupport = (satelliteId, instructorIds = null) => {
+  const params = instructorIds ? `?instructorIds=${instructorIds.join(',')}` : '';
+  return apiGet(`/api/users/satellite/${satelliteId}/home-support-users${params}`);
+};
+
+/**
+ * 拠点内の在宅支援利用者一覧を取得
+ */
+export const getSatelliteHomeSupportUsers = (satelliteId, instructorIds = null) => {
+  const params = instructorIds ? `?instructorIds=${instructorIds.join(',')}` : '';
+  return apiGet(`/api/users/satellite/${satelliteId}/home-support-users-list${params}`);
+};
+
+/**
+ * 拠点内の指導員一覧を取得（在宅支援用）
+ */
+export const getSatelliteInstructorsForHomeSupport = (satelliteId) => {
+  return apiGet(`/api/users/satellite/${satelliteId}/home-support-instructors`);
+};
+
+/**
+ * 在宅支援フラグを一括更新
+ */
+export const bulkUpdateHomeSupportFlag = (userIds, isRemoteUser) => {
+  return apiPost('/api/users/bulk-update-home-support', {
+    userIds,
+    isRemoteUser
+  });
+};
+
+/**
+ * 在宅支援解除（単一利用者）
+ */
+export const removeHomeSupportFlag = (userId) => {
+  return apiPut(`/api/users/${userId}/remove-home-support`);
+};

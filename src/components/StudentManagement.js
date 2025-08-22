@@ -171,6 +171,31 @@ const StudentManagement = ({ teacherId }) => {
     fetchCourses();
   }, []);
 
+  // 在宅支援利用者追加・解除イベントをリッスン
+  useEffect(() => {
+    const handleUserAdded = () => {
+      fetchStudents();
+    };
+
+    const handleUserRemoved = () => {
+      fetchStudents();
+    };
+
+    window.addEventListener('homeSupportUserAdded', handleUserAdded);
+    window.addEventListener('homeSupportUserRemoved', handleUserRemoved);
+    
+    return () => {
+      window.removeEventListener('homeSupportUserAdded', handleUserAdded);
+      window.removeEventListener('homeSupportUserRemoved', handleUserRemoved);
+    };
+  }, []);
+
+  // コンポーネントマウント時に利用者データを取得
+  useEffect(() => {
+    fetchStudents();
+    fetchAvailableInstructors();
+  }, []);
+
   // 新規タグを作成する関数
   const createNewTag = () => {
     if (newTagName.trim() && !customTags.includes(newTagName.trim())) {
@@ -462,7 +487,38 @@ const StudentManagement = ({ teacherId }) => {
         const data = result.data?.users || result;
         // ロール1（利用者）のユーザーのみをフィルタリング
         const studentsData = data.filter(user => user.role === 1);
-        setStudents(studentsData);
+        
+        // 在宅支援利用者に「在宅支援」タグを自動的に付与
+        const processedStudentsData = studentsData.map(user => {
+          // タグの安全な解析
+          let existingTags = [];
+          if (user.tags) {
+            if (typeof user.tags === 'string') {
+              try {
+                existingTags = JSON.parse(user.tags);
+              } catch (error) {
+                console.error('タグのJSON解析エラー:', error);
+                existingTags = [];
+              }
+            } else if (Array.isArray(user.tags)) {
+              existingTags = user.tags;
+            }
+          }
+          
+          let updatedTags = [...existingTags];
+          
+          // is_remote_userがtrueの場合、「在宅支援」タグを追加（重複を避ける）
+          if (user.is_remote_user && !updatedTags.includes('在宅支援')) {
+            updatedTags.push('在宅支援');
+          }
+          
+          return {
+            ...user,
+            tags: updatedTags
+          };
+        });
+        
+        setStudents(processedStudentsData);
       }
     } catch (error) {
       console.error('利用者データ取得エラー:', error);
@@ -472,10 +528,26 @@ const StudentManagement = ({ teacherId }) => {
   // 利用者情報編集モーダルを開く
   const openEditModal = async (student) => {
     setEditingStudent(student);
+    
+    // タグの安全な解析
+    let tags = [];
+    if (student.tags) {
+      if (typeof student.tags === 'string') {
+        try {
+          tags = JSON.parse(student.tags);
+        } catch (error) {
+          console.error('タグのJSON解析エラー:', error);
+          tags = [];
+        }
+      } else if (Array.isArray(student.tags)) {
+        tags = student.tags;
+      }
+    }
+    
     setEditFormData({
       name: student.name || '',
       instructor_id: student.instructor_id || '',
-      tags: student.tags ? JSON.parse(student.tags) : []
+      tags: tags
     });
     
     // 個別支援計画を取得

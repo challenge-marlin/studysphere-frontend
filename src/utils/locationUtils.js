@@ -97,21 +97,21 @@ export const getCurrentUserSatelliteId = (currentUser) => {
   return null;
 };
 
-// 指定された指導者が管理者かどうかをチェック
+// 指定された指導員が管理者かどうかをチェック
 export const isTeacherManager = (teacherId, instructors, locationInfo) => {
-  console.log(`=== 指導者 ${teacherId} の管理者判定開始 ===`);
+  console.log(`=== 指導員 ${teacherId} の管理者判定開始 ===`);
   console.log('判定対象指導者ID:', teacherId, '型:', typeof teacherId);
   console.log('現在のinstructors:', instructors);
   console.log('現在のlocationInfo:', locationInfo);
   
-  // まず、instructors配列から該当する指導者を検索
+      // まず、instructors配列から該当する指導員を検索
   const teacher = instructors.find(t => t.id === teacherId);
-  console.log('instructorsから見つかった指導者:', teacher);
+      console.log('instructorsから見つかった指導員:', teacher);
   
   if (teacher && teacher.is_manager !== undefined) {
     // APIから返されたis_managerフラグを優先使用
     console.log('APIから返されたis_managerフラグを使用:', teacher.is_manager);
-    console.log(`=== 指導者 ${teacherId} の管理者判定完了（APIフラグ） ===`);
+          console.log(`=== 指導員 ${teacherId} の管理者判定完了（APIフラグ） ===`);
     return teacher.is_manager;
   }
   
@@ -119,7 +119,7 @@ export const isTeacherManager = (teacherId, instructors, locationInfo) => {
   console.log('APIフラグが未定義、locationInfo.manager_idsを使用');
   if (!locationInfo.manager_ids) {
     console.log('locationInfo.manager_idsが未定義');
-    console.log(`=== 指導者 ${teacherId} の管理者判定完了（manager_ids未定義） ===`);
+          console.log(`=== 指導員 ${teacherId} の管理者判定完了（manager_ids未定義） ===`);
     return false;
   }
   
@@ -160,11 +160,11 @@ export const isTeacherManager = (teacherId, instructors, locationInfo) => {
     }
     
     console.log(`最終的な管理者判定結果: ${isManager}`);
-    console.log(`=== 指導者 ${teacherId} の管理者判定完了（locationInfo使用） ===`);
+          console.log(`=== 指導員 ${teacherId} の管理者判定完了（locationInfo使用） ===`);
     return isManager;
   } catch (e) {
     console.error('管理者IDチェックエラー:', e);
-    console.log(`=== 指導者 ${teacherId} の管理者判定完了（エラー） ===`);
+          console.log(`=== 指導員 ${teacherId} の管理者判定完了（エラー） ===`);
     return false;
   }
 };

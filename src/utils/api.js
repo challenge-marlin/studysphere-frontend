@@ -1,6 +1,6 @@
 // API呼び出し用のユーティリティ関数
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
 // 認証エラー検出フラグ
 let isAuthErrorHandling = false;
@@ -528,4 +528,17 @@ export const bulkUpdateHomeSupportFlag = (userIds, isRemoteUser) => {
  */
 export const removeHomeSupportFlag = (userId) => {
   return apiPut(`/api/users/${userId}/remove-home-support`);
+};
+
+/**
+ * 一時パスワード検証
+ * @param {string} loginCode - ログインコード
+ * @param {string} tempPassword - 一時パスワード
+ * @returns {Promise} - 検証結果
+ */
+export const verifyTemporaryPasswordAPI = async (loginCode, tempPassword) => {
+  return apiCall('/api/users/verify-temp-password', {
+    method: 'POST',
+    body: JSON.stringify({ loginCode, tempPassword })
+  });
 };

@@ -16,20 +16,20 @@ const InstructorList = ({
   return (
     <div className="bg-white rounded-lg shadow-md p-6 mb-6">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-gray-800">指導者一覧</h3>
+        <h3 className="text-lg font-semibold text-gray-800">指導員一覧</h3>
         {hasPermission && (
           <button
             onClick={onAddInstructor}
             className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
-            指導者を追加
+            指導員を追加
           </button>
         )}
       </div>
       
       {instructors.length === 0 ? (
         <div className="text-center py-8">
-          <p className="text-gray-500">指導者が登録されていません</p>
+          <p className="text-gray-500">指導員が登録されていません</p>
         </div>
       ) : (
         <div className="overflow-x-auto">

@@ -66,7 +66,7 @@ const LocationManagement = () => {
   // 全ユーザー情報（責任者検索用）
   const [allUsers, setAllUsers] = useState([]);
 
-  // 拠点に所属する指導者情報（DBから取得）
+  // 拠点に所属する指導員情報（DBから取得）
   const [satelliteInstructors, setSatelliteInstructors] = useState({});
   const [instructorsLoading, setInstructorsLoading] = useState(false);
 
@@ -104,7 +104,7 @@ const LocationManagement = () => {
     }
   };
 
-    // 拠点に所属する指導者情報取得
+    // 拠点に所属する指導員情報取得
   const fetchSatelliteInstructors = async (satelliteId) => {
     if (!satelliteId) {
       console.error('拠点IDが未定義です');
@@ -113,7 +113,7 @@ const LocationManagement = () => {
     
     try {
       setInstructorsLoading(true);
-      console.log(`拠点ID ${satelliteId} の指導者情報取得開始`);
+      console.log(`拠点ID ${satelliteId} の指導員情報取得開始`);
       
       // 常に代替方法を使用（全ユーザーから拠点の指導員をフィルタリング）
       console.log('全ユーザーから拠点の指導員を抽出します');
@@ -182,7 +182,7 @@ const LocationManagement = () => {
         setSatelliteInstructors(prev => ({ ...prev, [satelliteId]: [] }));
       }
     } catch (err) {
-      console.error('指導者情報取得エラー:', err);
+              console.error('指導員情報取得エラー:', err);
       console.error('エラースタック:', err.stack);
       setSatelliteInstructors(prev => ({ ...prev, [satelliteId]: [] }));
     } finally {
@@ -204,18 +204,18 @@ const LocationManagement = () => {
     console.log('現在のmanagers:', managers);
     console.log('現在のsatelliteInstructors:', satelliteInstructors);
     
-    // まず拠点に所属する指導者から検索
+          // まず拠点に所属する指導員から検索
     const allInstructors = Object.values(satelliteInstructors || {}).flat().filter(instructor => instructor && typeof instructor === 'object');
-    console.log('全指導者:', allInstructors);
+          console.log('全指導員:', allInstructors);
     
     const instructorNames = ids.map(id => {
       if (!id) return null;
       const instructor = allInstructors.find(i => i && i.id === parseInt(id));
-      console.log(`ID ${id} の指導者検索結果:`, instructor);
+              console.log(`ID ${id} の指導員検索結果:`, instructor);
       return instructor && instructor.name ? instructor.name : null;
     }).filter(name => name !== null);
     
-    // 指導者に見つからない場合は管理者から検索
+          // 指導員に見つからない場合は管理者から検索
     const remainingIds = ids.filter(id => id && !allInstructors.find(i => i && i.id === parseInt(id)));
     console.log('残りのID（管理者から検索）:', remainingIds);
     
@@ -245,19 +245,19 @@ const LocationManagement = () => {
     return result;
   };
 
-  // 拠点に所属する指導者を取得する関数
+  // 拠点に所属する指導員を取得する関数
   const getSatelliteInstructors = (satelliteId) => {
     if (!satelliteId) {
       console.log('拠点IDが未定義です');
       return [];
     }
-    console.log(`拠点 ${satelliteId} の指導者取得開始`);
+          console.log(`拠点 ${satelliteId} の指導員取得開始`);
     console.log('現在のsatelliteInstructors:', satelliteInstructors);
     console.log('satelliteInstructorsの型:', typeof satelliteInstructors);
     console.log('satelliteInstructors[satelliteId]:', satelliteInstructors && satelliteInstructors[satelliteId]);
     
     const instructors = (satelliteInstructors && satelliteInstructors[satelliteId]) || [];
-    console.log(`拠点 ${satelliteId} の指導者取得結果:`, instructors);
+          console.log(`拠点 ${satelliteId} の指導員取得結果:`, instructors);
     console.log('instructorsの型:', typeof instructors);
     console.log('instructorsが配列か:', Array.isArray(instructors));
     
@@ -602,7 +602,7 @@ const LocationManagement = () => {
   const [selectedOfficeForEdit, setSelectedOfficeForEdit] = useState(null);
   const [editFormData, setEditFormData] = useState({});
 
-  // 拠点に所属する指導者リスト（責任者選択用）
+  // 拠点に所属する指導員リスト（責任者選択用）
   const getAvailableInstructors = () => {
     console.log('getAvailableInstructors が呼び出されました');
     console.log('selectedOfficeForManager:', selectedOfficeForManager);
@@ -612,13 +612,13 @@ const LocationManagement = () => {
       return [];
     }
     
-    console.log(`拠点 ${selectedOfficeForManager.id} の指導者を取得します`);
+          console.log(`拠点 ${selectedOfficeForManager.id} の指導員を取得します`);
     const instructors = getSatelliteInstructors(selectedOfficeForManager.id);
-    console.log(`拠点 ${selectedOfficeForManager.id} の利用可能な指導者:`, instructors);
+          console.log(`拠点 ${selectedOfficeForManager.id} の利用可能な指導員:`, instructors);
     console.log('instructorsの長さ:', instructors.length);
     
     const result = Array.isArray(instructors) ? instructors : [];
-    console.log('最終的な利用可能な指導者:', result);
+          console.log('最終的な利用可能な指導員:', result);
     return result;
   };
 
@@ -659,7 +659,7 @@ const LocationManagement = () => {
     
     setShowManagerSelect(true);
     
-    // 拠点に所属する指導者情報を取得（最新データを取得するためキャッシュをクリア）
+    // 拠点に所属する指導員情報を取得（最新データを取得するためキャッシュをクリア）
     setSatelliteInstructors(prev => ({ ...prev, [office.id]: undefined }));
     await fetchSatelliteInstructors(office.id);
   };
@@ -2470,19 +2470,19 @@ const LocationManagement = () => {
             <div className="mb-4">
               <p className="text-gray-600 mb-2">拠点: <span className="font-semibold text-gray-800">{selectedOfficeForManager.name}</span></p>
               <p className="text-sm text-gray-500 mb-2">
-                この拠点に所属する指導者から責任者を選択してください。
+                この拠点に所属する指導員から責任者を選択してください。
                 <br />
-                <span className="text-blue-600 font-medium">✓ チェックが入っている指導者は現在の責任者です</span>
+                                  <span className="text-blue-600 font-medium">✓ チェックが入っている指導員は現在の責任者です</span>
               </p>
               <div className="flex gap-2">
                 <button
                   onClick={async () => {
-                    console.log('手動で指導者情報を更新します');
+                    console.log('手動で指導員情報を更新します');
                     await fetchSatelliteInstructors(selectedOfficeForManager.id);
                   }}
                   className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors duration-300"
                 >
-                  🔄 指導者情報を更新
+                  🔄 指導員情報を更新
                 </button>
                 <button
                   onClick={() => setSelectedManagers([])}
@@ -2497,19 +2497,19 @@ const LocationManagement = () => {
               {instructorsLoading ? (
                 <div className="text-center py-4">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600 mx-auto mb-2"></div>
-                  <p className="text-gray-600">指導者情報を読み込み中...</p>
+                  <p className="text-gray-600">指導員情報を読み込み中...</p>
                 </div>
               ) : getAvailableInstructors().length === 0 ? (
                 <div className="text-center py-4">
-                  <p className="text-gray-500">この拠点に所属する指導者がいません</p>
-                  <p className="text-sm text-gray-400 mt-2">指導者を拠点に追加してから責任者を設定してください</p>
+                                  <p className="text-gray-500">この拠点に所属する指導員がいません</p>
+                <p className="text-sm text-gray-400 mt-2">指導員を拠点に追加してから責任者を設定してください</p>
                   <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                     <p className="text-sm text-yellow-700">
                       デバッグ情報: 拠点ID {selectedOfficeForManager?.id}, 
-                      指導者数 {getAvailableInstructors().length}
+                      指導員数 {getAvailableInstructors().length}
                     </p>
                     <p className="text-xs text-yellow-600 mt-1">
-                      キャッシュされた指導者データ: {JSON.stringify(satelliteInstructors[selectedOfficeForManager?.id] || [])}
+                      キャッシュされた指導員データ: {JSON.stringify(satelliteInstructors[selectedOfficeForManager?.id] || [])}
                     </p>
                     <p className="text-xs text-yellow-600 mt-1">
                       全拠点のキャッシュ: {JSON.stringify(Object.keys(satelliteInstructors || {}))}

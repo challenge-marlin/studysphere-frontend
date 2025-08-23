@@ -36,7 +36,7 @@ const LoginPage = () => {
     setRestoreMessage('');
     
     try {
-      const response = await fetch('http://localhost:5000/api/restore-master-user', {
+      const response = await fetch('/api/restore-master-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -83,7 +83,7 @@ const LoginPage = () => {
     try {
       console.log('LoginPage: 管理者ログインAPI呼び出し開始');
       
-      const response = await fetch('http://localhost:5000/api/login', {
+      const response = await fetch('/api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -113,9 +113,9 @@ const LoginPage = () => {
     try {
       console.log('=== getUserCompaniesAPI Debug ===');
       console.log('Username:', username);
-      console.log('API URL:', `http://localhost:5000/api/user-companies/${username}`);
+      console.log('API URL:', `/api/user-companies/${username}`);
       
-      const response = await fetch(`http://localhost:5000/api/user-companies/${username}`, {
+      const response = await fetch(`/api/user-companies/${username}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -142,7 +142,7 @@ const LoginPage = () => {
   // 指導員ログインAPI
   const instructorLoginAPI = async (username, password, companyId, satelliteId) => {
     try {
-      const response = await fetch('http://localhost:5000/api/instructor-login', {
+      const response = await fetch('/api/instructor-login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -201,7 +201,7 @@ const LoginPage = () => {
           return;
         }
         
-        // ロール4-5（指導者）の場合は拠点選択を表示
+        // ロール4-5（指導員）の場合は拠点選択を表示
         if (user.role >= 4 && user.role <= 5) {
           console.log('Showing satellite selection for instructor (role 4-5)');
           setUserData(user);
@@ -213,7 +213,7 @@ const LoginPage = () => {
           
           if (companiesData.success && companiesData.data.companies.length > 0) {
             console.log('Companies found:', companiesData.data.companies.length);
-            // 指導者は所属企業をまたがないので、最初の企業の拠点のみを表示
+            // 指導員は所属企業をまたがないので、最初の企業の拠点のみを表示
             const firstCompany = companiesData.data.companies[0];
             const satellites = firstCompany.satellites || [];
             
@@ -435,7 +435,7 @@ const LoginPage = () => {
       if (companiesData.success && companiesData.data.companies.length > 0) {
         console.log('Companies found for instructor selection:', companiesData.data.companies.length);
         
-        // 指導者は所属企業をまたがないので、最初の企業の拠点のみを表示
+        // 指導員は所属企業をまたがないので、最初の企業の拠点のみを表示
         const firstCompany = companiesData.data.companies[0];
         const satellites = firstCompany.satellites || [];
         
@@ -621,7 +621,7 @@ const LoginPage = () => {
       sessionStorage.removeItem('selectedSatellite');
       console.log('ログイン時: 古いselectedSatellite情報をクリアしました');
       
-      // 指導者の場合は所属企業のIDを使用
+      // 指導員の場合は所属企業のIDを使用
       const companyId = selectedCompany || (userData && userData.company_id);
       console.log('=== Satellite Selection Debug ===');
       console.log('selectedSatellite:', selectedSatellite);
@@ -767,7 +767,7 @@ const LoginPage = () => {
     );
   }
 
-  // 拠点選択画面（指導者用）
+      // 拠点選択画面（指導員用）
   if (showSatelliteSelection) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-purple-600 flex items-center justify-center p-5">

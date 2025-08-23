@@ -160,10 +160,10 @@ const InstructorManagement = () => {
     }
   };
 
-  // 指導者一覧を取得
+  // 指導員一覧を取得
   const fetchInstructors = async () => {
     try {
-      console.log('=== 指導者一覧取得開始 ===');
+      console.log('=== 指導員一覧取得開始 ===');
       console.log('apiGet を呼び出します: /api/users');
       
       const data = await apiGet('/api/users');
@@ -193,9 +193,9 @@ const InstructorManagement = () => {
         return isInstructor;
       });
       
-      console.log('フィルタリング後の指導者ユーザー:', instructorUsers);
-      console.log('指導者ユーザー数:', instructorUsers.length);
-      console.log('指導者ユーザーの詳細:', instructorUsers.map(u => ({ 
+              console.log('フィルタリング後の指導員ユーザー:', instructorUsers);
+        console.log('指導員ユーザー数:', instructorUsers.length);
+        console.log('指導員ユーザーの詳細:', instructorUsers.map(u => ({ 
         id: u.id, 
         name: u.name, 
         username: u.username, 
@@ -203,14 +203,14 @@ const InstructorManagement = () => {
         email: u.email 
       })));
       
-      // 指導者ユーザーが空の場合は空配列を設定
+              // 指導員ユーザーが空の場合は空配列を設定
       if (instructorUsers.length === 0) {
-        console.log('指導者ユーザーが見つかりません。新規登録で追加してください。');
+                  console.log('指導員ユーザーが見つかりません。新規登録で追加してください。');
         setInstructors([]);
         return;
       }
       
-      // 各指導者の専門分野を取得
+              // 各指導員の専門分野を取得
       const instructorsWithSpecializations = await Promise.all(
         instructorUsers.map(async (user) => {
           try {
@@ -253,7 +253,7 @@ const InstructorManagement = () => {
               specializations: specData.success ? specData.data : []
             };
           } catch (error) {
-            console.error(`指導者${user.id}の専門分野取得エラー:`, error);
+            console.error(`指導員${user.id}の専門分野取得エラー:`, error);
             
             // バックエンドから返された拠点情報を使用
             let facilityLocationNames = [];
@@ -299,7 +299,7 @@ const InstructorManagement = () => {
       console.log('最終的なinstructorsデータ:', instructorsWithSpecializations.map(i => ({ id: i.id, name: i.name, username: i.username })));
       setInstructors(instructorsWithSpecializations);
     } catch (error) {
-      console.error('指導者一覧取得エラー:', error);
+      console.error('指導員一覧取得エラー:', error);
       // エラー時は空配列を設定（エラーを投げない）
       setInstructors([]);
     }
@@ -386,7 +386,7 @@ const InstructorManagement = () => {
         }
       }
 
-      // 指導者一覧を再取得
+      // 指導員一覧を再取得
       await fetchInstructors();
     } catch (error) {
       console.error('パスワードリセットエラー:', error);
@@ -496,7 +496,7 @@ const InstructorManagement = () => {
         });
       }
 
-      // 指導者一覧を再取得
+      // 指導員一覧を再取得
       await fetchInstructors();
       
       // 拠点一覧を再取得して管理者情報を更新
@@ -558,7 +558,7 @@ const InstructorManagement = () => {
         status: newStatus
       });
 
-      // 指導者一覧を再取得
+      // 指導員一覧を再取得
       await fetchInstructors();
       
       // バックエンドで操作ログが記録されるため、フロントエンドでは記録しない

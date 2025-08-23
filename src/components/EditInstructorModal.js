@@ -50,7 +50,7 @@ const EditInstructorModal = ({ instructor, onSave, onCancel, loading }) => {
     try {
       await onSave(formData);
     } catch (error) {
-      console.error('指導者更新エラー:', error);
+      console.error('指導員更新エラー:', error);
     }
   };
 
@@ -80,7 +80,7 @@ const EditInstructorModal = ({ instructor, onSave, onCancel, loading }) => {
       <div className="bg-white rounded-lg p-6 w-96 max-w-full mx-4">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-800">
-            指導者情報を編集
+            指導員情報を編集
           </h3>
           <button
             onClick={onCancel}

@@ -65,7 +65,7 @@ const AddInstructorForm = ({ onSubmit, onCancel, loading }) => {
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
       <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <div className="mt-3">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">指導者を追加</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">指導員を追加</h3>
           
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -79,7 +79,7 @@ const AddInstructorForm = ({ onSubmit, onCancel, loading }) => {
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   errors.name ? 'border-red-500' : 'border-gray-300'
                 }`}
-                placeholder="指導者の名前"
+                placeholder="指導員の名前"
               />
               {errors.name && (
                 <p className="text-red-500 text-sm mt-1">{errors.name}</p>

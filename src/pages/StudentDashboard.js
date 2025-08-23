@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStudentGuard } from '../utils/hooks/useAuthGuard';
+import { useAuth } from '../components/contexts/AuthContext';
+import { verifyTemporaryPasswordAPI } from '../utils/api';
 import Dashboard from './Dashboard';
 import LessonList from './LessonList';
 import AnnouncementList from '../components/AnnouncementList';
@@ -9,6 +11,31 @@ const StudentDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const navigate = useNavigate();
   const { currentUser, logout } = useStudentGuard();
+  const { login } = useAuth();
+  const [isAutoLoggingIn, setIsAutoLoggingIn] = useState(false);
+
+  // 自動ログイン処理
+  useEffect(() => {
+    const autoLoginCode = localStorage.getItem('autoLoginCode');
+    const autoLoginUser = localStorage.getItem('autoLoginUser');
+    const autoLoginTarget = localStorage.getItem('autoLoginTarget');
+
+    if (autoLoginCode && autoLoginUser && autoLoginTarget && !currentUser) {
+      console.log('自動ログイン情報を検出:', { autoLoginCode, autoLoginUser, autoLoginTarget });
+      setIsAutoLoggingIn(true);
+      
+      // 自動ログイン情報をクリア
+      localStorage.removeItem('autoLoginCode');
+      localStorage.removeItem('autoLoginUser');
+      localStorage.removeItem('autoLoginTarget');
+      
+      // 一時パスワードが設定されている場合は自動ログインを試行
+      // 注意: セキュリティ上の理由から、一時パスワードは自動入力せず、
+      // ユーザーに手動で入力してもらう必要があります
+      console.log('自動ログインコードが検出されました。一時パスワードを入力してください。');
+      setIsAutoLoggingIn(false);
+    }
+  }, [currentUser, login, navigate]);
 
   const handleLogout = () => {
     logout();
@@ -17,7 +44,16 @@ const StudentDashboard = () => {
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex items-center justify-center">
-        <div className="text-blue-600 text-xl font-semibold">認証中...</div>
+        <div className="text-center">
+          <div className="text-blue-600 text-xl font-semibold mb-4">
+            {isAutoLoggingIn ? '自動ログイン中...' : '認証中...'}
+          </div>
+          {isAutoLoggingIn && (
+            <div className="text-gray-600 text-sm">
+              一時パスワードを入力してログインを完了してください
+            </div>
+          )}
+        </div>
       </div>
     );
   }

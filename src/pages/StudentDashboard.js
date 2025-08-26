@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStudentGuard } from '../utils/hooks/useAuthGuard';
 import { useAuth } from '../components/contexts/AuthContext';
 import { verifyTemporaryPasswordAPI } from '../utils/api';
@@ -10,35 +10,109 @@ import AnnouncementList from '../components/AnnouncementList';
 const StudentDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const navigate = useNavigate();
-  const { currentUser, logout } = useStudentGuard();
-  const { login } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { currentUser } = useStudentGuard();
+  const { login, logout } = useAuth();
   const [isAutoLoggingIn, setIsAutoLoggingIn] = useState(false);
+  const [authError, setAuthError] = useState('');
 
-  // 自動ログイン処理
+  // クエリパラメータからの自動認証処理
   useEffect(() => {
-    const autoLoginCode = localStorage.getItem('autoLoginCode');
-    const autoLoginUser = localStorage.getItem('autoLoginUser');
-    const autoLoginTarget = localStorage.getItem('autoLoginTarget');
+    const handleAutoLogin = async () => {
+      // 既に認証済みの場合はスキップ
+      if (currentUser) {
+        return;
+      }
 
-    if (autoLoginCode && autoLoginUser && autoLoginTarget && !currentUser) {
-      console.log('自動ログイン情報を検出:', { autoLoginCode, autoLoginUser, autoLoginTarget });
-      setIsAutoLoggingIn(true);
-      
-      // 自動ログイン情報をクリア
-      localStorage.removeItem('autoLoginCode');
-      localStorage.removeItem('autoLoginUser');
-      localStorage.removeItem('autoLoginTarget');
-      
-      // 一時パスワードが設定されている場合は自動ログインを試行
-      // 注意: セキュリティ上の理由から、一時パスワードは自動入力せず、
-      // ユーザーに手動で入力してもらう必要があります
-      console.log('自動ログインコードが検出されました。一時パスワードを入力してください。');
-      setIsAutoLoggingIn(false);
-    }
-  }, [currentUser, login, navigate]);
+      // クエリパラメータからトークンと一時パスワードを取得
+      const token = searchParams.get('token');
+      const tempPassword = searchParams.get('tempPassword');
+      const loginCode = searchParams.get('code');
+
+      console.log('クエリパラメータ確認:', { token, tempPassword: tempPassword ? '***' : 'なし', loginCode });
+
+      // 一時パスワードとログインコードが必要（トークンはオプション）
+      if (tempPassword && loginCode) {
+        console.log('クエリパラメータから認証情報を検出');
+        setIsAutoLoggingIn(true);
+        setAuthError('');
+
+        try {
+          console.log('一時パスワード認証を開始:', { loginCode, tempPassword: '***' });
+          // 一時パスワード認証を実行
+          const result = await verifyTemporaryPasswordAPI(loginCode, tempPassword);
+          
+          if (result.success) {
+            console.log('認証成功:', result.data);
+            // ログイン成功
+            const userData = {
+              id: result.data.userId,
+              name: result.data.userName,
+              role: 'student',
+              login_code: loginCode,
+              instructorName: result.data.instructorName
+            };
+            
+            // 認証処理を実行（トークンなしでログイン）
+            login(userData);
+            
+            console.log('自動ログイン成功:', userData);
+            
+            // クエリパラメータをクリア
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.delete('token');
+            newUrl.searchParams.delete('tempPassword');
+            newUrl.searchParams.delete('code');
+            window.history.replaceState({}, '', newUrl);
+            
+          } else {
+            setAuthError(result.message || '認証に失敗しました');
+            console.error('認証失敗:', result.message);
+          }
+        } catch (error) {
+          console.error('自動ログインエラー:', error);
+          const errorMessage = error.message || '認証処理中にエラーが発生しました';
+          setAuthError(errorMessage);
+        } finally {
+          setIsAutoLoggingIn(false);
+        }
+      } else {
+        // 従来のlocalStorageからの自動ログイン処理
+        const autoLoginCode = localStorage.getItem('autoLoginCode');
+        const autoLoginUser = localStorage.getItem('autoLoginUser');
+        const autoLoginTarget = localStorage.getItem('autoLoginTarget');
+
+        if (autoLoginCode && autoLoginUser && autoLoginTarget && !currentUser) {
+          console.log('自動ログイン情報を検出:', { autoLoginCode, autoLoginUser, autoLoginTarget });
+          setIsAutoLoggingIn(true);
+          
+          // 自動ログイン情報をクリア
+          localStorage.removeItem('autoLoginCode');
+          localStorage.removeItem('autoLoginUser');
+          localStorage.removeItem('autoLoginTarget');
+          
+          // 一時パスワードが設定されている場合は自動ログインを試行
+          // 注意: セキュリティ上の理由から、一時パスワードは自動入力せず、
+          // ユーザーに手動で入力してもらう必要があります
+          console.log('自動ログインコードが検出されました。一時パスワードを入力してください。');
+          setIsAutoLoggingIn(false);
+        }
+      }
+    };
+
+    handleAutoLogin();
+  }, [currentUser, login, navigate, searchParams]);
 
   const handleLogout = () => {
-    logout();
+    // ログアウト確認ダイアログ
+    if (window.confirm('ログアウトしますか？')) {
+      console.log('ログアウト処理を開始');
+      
+      // ログアウト処理を実行
+      logout();
+      
+      console.log('ログアウト完了');
+    }
   };
 
   if (!currentUser) {
@@ -51,6 +125,18 @@ const StudentDashboard = () => {
           {isAutoLoggingIn && (
             <div className="text-gray-600 text-sm">
               一時パスワードを入力してログインを完了してください
+            </div>
+          )}
+          {authError && (
+            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="text-red-700 font-medium mb-2">認証エラー</div>
+              <div className="text-red-600 text-sm">{authError}</div>
+              <button 
+                className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                onClick={() => navigate('/student/login')}
+              >
+                ログインページに戻る
+              </button>
             </div>
           )}
         </div>
@@ -74,18 +160,26 @@ const StudentDashboard = () => {
             </div>
             
             <div className="flex flex-col md:flex-row items-center gap-4">
-              <div className="text-center md:text-right">
-                <span className="text-blue-100 font-medium">
-                  担当: {currentUser.instructorName || currentUser.teacherName}
-                </span>
-              </div>
               <div className="flex items-center gap-3">
-                <span className="font-medium text-white">{currentUser.name}さん</span>
+                <span className="font-medium text-white">
+                  {currentUser.name}さん
+                  {currentUser.instructorName && (
+                    <span className="text-blue-100 text-sm ml-2">
+                      （担当：{currentUser.instructorName}指導員）
+                    </span>
+                  )}
+                  {!currentUser.instructorName && (
+                    <span className="text-blue-100 text-sm ml-2">
+                      （担当：未設定）
+                    </span>
+                  )}
+                </span>
                 <button 
-                  className="px-4 py-2 bg-white bg-opacity-10 border border-white border-opacity-30 rounded-lg hover:bg-opacity-20 transition-all duration-200 font-medium"
+                  className="px-4 py-2 bg-red-500 hover:bg-red-600 border border-red-400 rounded-lg transition-all duration-200 font-medium text-white shadow-sm hover:shadow-md"
                   onClick={handleLogout}
+                  title="ログアウト"
                 >
-                  ログアウト
+                  🚪 ログアウト
                 </button>
               </div>
             </div>

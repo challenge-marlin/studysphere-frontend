@@ -110,8 +110,10 @@ const TempPasswordManagement = () => {
             const response = await apiPost('/api/temp-passwords/issue', requestData);
             if (response.success) {
                 setMessage(`${response.message}`);
-                // 成功後、利用者一覧を再取得
-                fetchUsers();
+                // 成功後、利用者一覧を再取得して状態を更新
+                await fetchUsers();
+                // 選択状態をリセット
+                setSelectedUsers([]);
                 // フォームをリセット
                 setExpiryTime('');
                 setAnnouncementTitle('');

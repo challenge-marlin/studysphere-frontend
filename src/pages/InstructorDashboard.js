@@ -70,12 +70,6 @@ const InstructorDashboard = () => {
   useEffect(() => {
     if (!currentUser) return;
 
-    // 生徒のデータが混入している場合は警告
-    const storedUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    if (storedUser.name === '末吉　元気' || storedUser.email === 'FSLE-P1WP-D2C5') {
-      console.warn('⚠️ 生徒のデータが混入しています。ログアウトして正しい指導員アカウントでログインし直してください。');
-    }
-
     // 初期の拠点情報を設定
     const initialLocation = {
       id: 'office001',

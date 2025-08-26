@@ -1,0 +1,154 @@
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../components/contexts/AuthContext';
+import { verifyTemporaryPasswordAPI } from '../utils/api';
+
+const AutoLoginPage = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { login, isAuthenticated, currentUser } = useAuth();
+  const [isProcessing, setIsProcessing] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const handleAutoLogin = async () => {
+      console.log('AutoLoginPage: コンポーネントがマウントされました');
+      console.log('AutoLoginPage: 現在のURL:', window.location.href);
+      console.log('AutoLoginPage: searchParams:', searchParams.toString());
+      
+      try {
+        // クエリパラメータからログインコードと一時パスワードを取得
+        const loginCode = searchParams.get('loginCode') || searchParams.get('code');
+        const tempPassword = searchParams.get('tempPassword') || searchParams.get('password');
+
+        console.log('AutoLoginPage: クエリパラメータ確認:', { 
+          loginCode, 
+          tempPassword: tempPassword ? '***' : 'なし' 
+        });
+
+        // 必要なパラメータが不足している場合
+        if (!loginCode || !tempPassword) {
+          console.error('AutoLoginPage: 必要なパラメータが不足しています');
+          setError('ログインコードまたは一時パスワードが指定されていません');
+          setTimeout(() => {
+            navigate('/student-login/');
+          }, 3000);
+          return;
+        }
+
+        // 既に認証済みの場合はダッシュボードにリダイレクト
+        if (isAuthenticated && currentUser) {
+          console.log('AutoLoginPage: 既に認証済みです');
+          navigate('/student/dashboard');
+          return;
+        }
+
+        console.log('AutoLoginPage: 一時パスワード認証を開始');
+        
+        // 一時パスワード認証を実行
+        const result = await verifyTemporaryPasswordAPI(loginCode, tempPassword);
+        
+        if (result.success) {
+          console.log('AutoLoginPage: 認証成功:', result.data);
+          
+                     // ログイン成功
+           const userData = {
+             id: result.data.userId,
+             name: result.data.userName,
+             role: 'student',
+             login_code: loginCode,
+             instructorName: result.data.instructorName
+           };
+          
+          // 認証処理を実行（トークンなしでログイン）
+          login(userData);
+          
+          console.log('AutoLoginPage: 自動ログイン成功');
+          
+          // 利用者ダッシュボードにリダイレクト
+          navigate('/student/dashboard');
+          
+        } else {
+          console.error('AutoLoginPage: 認証失敗:', result.message);
+          setError(result.message || '認証に失敗しました');
+          
+          // 3秒後にログインページにリダイレクト
+          setTimeout(() => {
+            navigate('/student-login/');
+          }, 3000);
+        }
+        
+      } catch (error) {
+        console.error('AutoLoginPage: 認証処理エラー:', error);
+        setError('認証処理中にエラーが発生しました');
+        
+        // 3秒後にログインページにリダイレクト
+        setTimeout(() => {
+          navigate('/student-login/');
+        }, 3000);
+        
+      } finally {
+        setIsProcessing(false);
+      }
+    };
+
+    handleAutoLogin();
+  }, [searchParams, login, isAuthenticated, currentUser, navigate]);
+
+  // ローディング表示
+  if (isProcessing) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="text-blue-600 text-xl font-semibold mb-2">
+            自動ログイン中...
+          </div>
+          <div className="text-gray-600 text-sm">
+            認証情報を確認しています
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // エラー表示
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto p-6">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-4">
+            <div className="text-red-600 text-xl font-semibold mb-2">
+              認証エラー
+            </div>
+            <div className="text-red-700 mb-4">
+              {error}
+            </div>
+            <div className="text-gray-600 text-sm">
+              ログインページに移動します...
+            </div>
+          </div>
+          <button 
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            onClick={() => navigate('/student-login/')}
+          >
+            今すぐログインページへ
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 通常はここに到達しないが、念のため
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-gray-600 text-lg">
+          処理中...
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AutoLoginPage;

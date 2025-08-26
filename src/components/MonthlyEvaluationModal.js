@@ -62,7 +62,7 @@ const MonthlyEvaluationModal = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[95vh] flex flex-col">
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold text-gray-800">月次評価（在宅における就労達成度評価シート）</h2>
@@ -75,7 +75,7 @@ const MonthlyEvaluationModal = ({
           </div>
         </div>
         
-        <div className="p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">評価実施日</label>
             <input 
@@ -87,7 +87,17 @@ const MonthlyEvaluationModal = ({
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">実施方法</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">前回評価日</label>
+            <input 
+              type="date" 
+              value={prevEvalDate || ''} 
+              disabled 
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">評価方法</label>
             <div className="flex gap-4">
               <label className="flex items-center">
                 <input 
@@ -135,13 +145,13 @@ const MonthlyEvaluationModal = ({
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">訓練目標</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">今月の目標</label>
             <div className="flex gap-2">
               <textarea 
                 value={goal} 
                 onChange={e => setGoal(e.target.value)} 
                 rows={3} 
-                placeholder="訓練目標を入力" 
+                placeholder="今月の目標を入力してください" 
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
               />
               <button 
@@ -155,13 +165,13 @@ const MonthlyEvaluationModal = ({
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">取組内容</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">作業内容</label>
             <div className="flex gap-2">
               <textarea 
                 value={work} 
                 onChange={e => setWork(e.target.value)} 
                 rows={3} 
-                placeholder="取組内容を入力" 
+                placeholder="作業内容を入力してください" 
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
               />
               <button 
@@ -175,13 +185,13 @@ const MonthlyEvaluationModal = ({
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">訓練目標に対する達成度</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">達成度</label>
             <div className="flex gap-2">
               <textarea 
                 value={achievement} 
                 onChange={e => setAchievement(e.target.value)} 
                 rows={3} 
-                placeholder="達成度を入力" 
+                placeholder="達成度を入力してください" 
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
               />
               <button 
@@ -195,13 +205,13 @@ const MonthlyEvaluationModal = ({
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">課題</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">課題・問題点</label>
             <div className="flex gap-2">
               <textarea 
                 value={issue} 
                 onChange={e => setIssue(e.target.value)} 
                 rows={3} 
-                placeholder="課題を入力" 
+                placeholder="課題・問題点を入力してください" 
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
               />
               <button 
@@ -215,13 +225,13 @@ const MonthlyEvaluationModal = ({
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">今後の課題改善方針</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">改善点</label>
             <div className="flex gap-2">
               <textarea 
                 value={improve} 
                 onChange={e => setImprove(e.target.value)} 
                 rows={3} 
-                placeholder="改善方針を入力" 
+                placeholder="改善点を入力してください" 
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
               />
               <button 
@@ -235,13 +245,13 @@ const MonthlyEvaluationModal = ({
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">健康・体調面での留意事項</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">健康状態</label>
             <div className="flex gap-2">
               <textarea 
                 value={health} 
                 onChange={e => setHealth(e.target.value)} 
                 rows={3} 
-                placeholder="健康・体調面での留意事項を入力" 
+                placeholder="健康状態を入力してください" 
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
               />
               <button 
@@ -255,13 +265,13 @@ const MonthlyEvaluationModal = ({
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">その他特記事項</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">特記事項</label>
             <div className="flex gap-2">
               <textarea 
                 value={note} 
                 onChange={e => setNote(e.target.value)} 
                 rows={3} 
-                placeholder="特記事項を入力" 
+                placeholder="特記事項を入力してください" 
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
               />
               <button 
@@ -275,13 +285,13 @@ const MonthlyEvaluationModal = ({
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">在宅就労継続の妥当性</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">有効性</label>
             <div className="flex gap-2">
               <textarea 
                 value={validity} 
                 onChange={e => setValidity(e.target.value)} 
                 rows={3} 
-                placeholder="妥当性を入力" 
+                placeholder="有効性を入力してください" 
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
               />
               <button 
@@ -295,7 +305,7 @@ const MonthlyEvaluationModal = ({
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">評価実施者</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">記録者</label>
             <select 
               value={instructor} 
               onChange={e => setInstructor(e.target.value)}
@@ -305,16 +315,6 @@ const MonthlyEvaluationModal = ({
                 <option key={name} value={name}>{name}</option>
               ))}
             </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">前回の達成度評価日</label>
-            <input 
-              type="date" 
-              value={prevEvalDate || ''} 
-              disabled 
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500"
-            />
           </div>
         </div>
         

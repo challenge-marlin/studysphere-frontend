@@ -417,6 +417,10 @@ export const AuthProvider = ({ children }) => {
       });
     }
     
+    // 既存のデータをクリアしてから新しいデータを保存
+    localStorage.removeItem('currentUser');
+    clearStoredTokens();
+    
     localStorage.setItem('currentUser', JSON.stringify(userData));
     console.log('ユーザーデータをlocalStorageに保存完了');
     
@@ -430,9 +434,19 @@ export const AuthProvider = ({ children }) => {
       console.log('トークンなし - モックログインとして処理');
     }
     
-    setCurrentUser(userData);
-    setIsAuthenticated(true);
-    console.log('認証状態を設定完了');
+    // 状態を強制的に更新
+    setCurrentUser(null);
+    setIsAuthenticated(false);
+    
+    // 次のティックで新しい状態を設定（強制更新のため）
+    setTimeout(() => {
+      setCurrentUser(userData);
+      setIsAuthenticated(true);
+      console.log('認証状態を設定完了（強制更新）');
+      
+      // ページの強制リロードを避けるため、コンポーネントの再レンダリングを促す
+      window.dispatchEvent(new Event('storage'));
+    }, 0);
   };
 
   // 拠点変更時の認証更新処理

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../components/contexts/AuthContext';
-import { verifyTemporaryPasswordAPI } from '../utils/api';
+import { verifyTemporaryPasswordAPI, checkTempPasswordStatusAPI } from '../utils/api';
+import { formatJapanTime } from '../utils/dateUtils';
 
 const StudentLogin = () => {
   const { token } = useParams();
@@ -13,6 +14,8 @@ const StudentLogin = () => {
   const [loginCode, setLoginCode] = useState('');
   const [tempPassword, setTempPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [tempPasswordStatus, setTempPasswordStatus] = useState(null);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
 
   // URLパラメータからログインコードを取得
   useEffect(() => {
@@ -21,6 +24,37 @@ const StudentLogin = () => {
       setLoginCode(codeFromUrl);
     }
   }, [searchParams]);
+
+  // 一時パスワード状態を確認
+  useEffect(() => {
+    const checkTempPasswordStatus = async () => {
+      if (!loginCode) return;
+      
+      try {
+        setIsCheckingStatus(true);
+        const result = await checkTempPasswordStatusAPI(loginCode);
+        
+        if (result.success) {
+          setTempPasswordStatus(result.data);
+          
+          // 有効な一時パスワードがある場合は自動入力
+          if (result.data.hasValidPassword && result.data.tempPassword) {
+            setTempPassword(result.data.tempPassword);
+          }
+        }
+      } catch (error) {
+        console.error('一時パスワード状態確認エラー:', error);
+        setTempPasswordStatus({
+          hasValidPassword: false,
+          message: '状態確認に失敗しました'
+        });
+      } finally {
+        setIsCheckingStatus(false);
+      }
+    };
+
+    checkTempPasswordStatus();
+  }, [loginCode]);
 
   // 認証済みユーザーが生徒ログインページにアクセスした場合のリダイレクト
   useEffect(() => {
@@ -84,6 +118,31 @@ const StudentLogin = () => {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">利用者ログイン</h1>
           <p className="text-gray-600">ログインコードと一時パスワードを入力してください</p>
+          
+          {/* 一時パスワード状態表示 */}
+          {isCheckingStatus && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-center">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                <span className="text-blue-700">一時パスワード状態を確認中...</span>
+              </div>
+            </div>
+          )}
+          
+          {tempPasswordStatus && !isCheckingStatus && (
+            <div className={`mt-4 p-3 rounded-lg border ${
+              tempPasswordStatus.hasValidPassword 
+                ? 'bg-green-50 border-green-200 text-green-700' 
+                : 'bg-yellow-50 border-yellow-200 text-yellow-700'
+            }`}>
+              <p className="text-sm">{tempPasswordStatus.message}</p>
+                             {tempPasswordStatus.hasValidPassword && tempPasswordStatus.expiresAt && (
+                 <p className="text-xs mt-1">
+                   有効期限: {formatJapanTime(tempPasswordStatus.expiresAt)}
+                 </p>
+               )}
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -105,13 +164,18 @@ const StudentLogin = () => {
           <div>
             <label htmlFor="tempPassword" className="block text-sm font-medium text-gray-700 mb-2">
               一時パスワード
+              {tempPasswordStatus?.hasValidPassword && (
+                <span className="ml-2 text-xs text-green-600">(自動入力済み)</span>
+              )}
             </label>
             <input
               type="password"
               id="tempPassword"
               value={tempPassword}
               onChange={(e) => setTempPassword(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                tempPasswordStatus?.hasValidPassword ? 'border-green-300 bg-green-50' : 'border-gray-300'
+              }`}
               placeholder="一時パスワードを入力"
               required
             />

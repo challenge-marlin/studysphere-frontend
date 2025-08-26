@@ -1,6 +1,6 @@
 // API呼び出し用のユーティリティ関数
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || '';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 // 認証エラー検出フラグ
 let isAuthErrorHandling = false;
@@ -540,5 +540,16 @@ export const verifyTemporaryPasswordAPI = async (loginCode, tempPassword) => {
   return apiCall('/api/users/verify-temp-password', {
     method: 'POST',
     body: JSON.stringify({ loginCode, tempPassword })
+  });
+};
+
+/**
+ * 一時パスワード状態確認
+ * @param {string} loginCode - ログインコード
+ * @returns {Promise} - 状態確認結果
+ */
+export const checkTempPasswordStatusAPI = async (loginCode) => {
+  return apiCall(`/api/temp-passwords/status/${loginCode}`, {
+    method: 'GET'
   });
 };

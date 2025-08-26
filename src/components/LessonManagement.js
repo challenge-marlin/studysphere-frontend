@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete, apiCall, apiDownloadBinary } from '../utils/api';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
 const LessonManagement = () => {
   const [lessons, setLessons] = useState([]);
   const [courses, setCourses] = useState([]);
@@ -74,7 +76,7 @@ const LessonManagement = () => {
       if (!accessToken) {
         console.log('LessonManagement: アクセストークンが存在しないため、テストエンドポイントを使用');
         // 認証なしのテストエンドポイントを使用
-        response = await fetch('http://localhost:5000/api/test/courses');
+        response = await fetch(`${API_BASE_URL}/api/test/courses`);
         const data = await response.json();
         response = data;
       } else {
@@ -97,7 +99,7 @@ const LessonManagement = () => {
       if (err.message === 'Authentication failed' || err.message.includes('401') || err.message.includes('403')) {
         console.log('LessonManagement: 認証エラーのため、テストエンドポイントを試行');
         try {
-          const testResponse = await fetch('http://localhost:5000/api/test/courses');
+          const testResponse = await fetch(`${API_BASE_URL}/api/test/courses`);
           const testData = await testResponse.json();
           
           if (testData.success) {
@@ -1774,80 +1776,92 @@ const LessonManagement = () => {
 
       {/* 動画作成・編集モーダル */}
       {showVideoFormModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">
-              {editingVideo ? '動画編集' : '新規動画作成'}
-            </h2>
-            <form onSubmit={editingVideo ? handleUpdateVideo : handleCreateVideo}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  タイトル *
-                </label>
-                <input
-                  type="text"
-                  name="title"
-                  value={videoFormData.title}
-                  onChange={handleVideoInputChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  説明
-                </label>
-                <textarea
-                  name="description"
-                  value={videoFormData.description}
-                  onChange={handleVideoInputChange}
-                  rows="3"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  YouTube動画URL *
-                </label>
-                <input
-                  type="url"
-                  name="youtube_url"
-                  value={videoFormData.youtube_url}
-                  onChange={handleVideoInputChange}
-                  required
-                  placeholder="https://www.youtube.com/watch?v=..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  表示順序
-                </label>
-                <input
-                  type="number"
-                  name="order_index"
-                  value={videoFormData.order_index}
-                  onChange={handleVideoInputChange}
-                  min="0"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  動画の長さ
-                </label>
-                <input
-                  type="text"
-                  name="duration"
-                  value={videoFormData.duration}
-                  onChange={handleVideoInputChange}
-                  placeholder="例：15分30秒"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[95vh] flex flex-col">
+            {/* ヘッダー - 固定 */}
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-800">
+                {editingVideo ? '動画編集' : '新規動画作成'}
+              </h2>
+            </div>
+            
+            {/* コンテンツ - スクロール可能 */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <form onSubmit={editingVideo ? handleUpdateVideo : handleCreateVideo}>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    タイトル *
+                  </label>
+                  <input
+                    type="text"
+                    name="title"
+                    value={videoFormData.title}
+                    onChange={handleVideoInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    説明
+                  </label>
+                  <textarea
+                    name="description"
+                    value={videoFormData.description}
+                    onChange={handleVideoInputChange}
+                    rows="3"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    YouTube動画URL *
+                  </label>
+                  <input
+                    type="url"
+                    name="youtube_url"
+                    value={videoFormData.youtube_url}
+                    onChange={handleVideoInputChange}
+                    required
+                    placeholder="https://www.youtube.com/watch?v=..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    表示順序
+                  </label>
+                  <input
+                    type="number"
+                    name="order_index"
+                    value={videoFormData.order_index}
+                    onChange={handleVideoInputChange}
+                    min="0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    動画の長さ
+                  </label>
+                  <input
+                    type="text"
+                    name="duration"
+                    value={videoFormData.duration}
+                    onChange={handleVideoInputChange}
+                    placeholder="例：15分30秒"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </form>
+            </div>
+            
+            {/* フッター - 固定 */}
+            <div className="p-6 border-t border-gray-200">
               <div className="flex gap-3">
                 <button
                   type="submit"
+                  form={editingVideo ? 'updateVideoForm' : 'createVideoForm'}
                   className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all duration-200"
                 >
                   {editingVideo ? '更新' : '作成'}
@@ -1870,7 +1884,7 @@ const LessonManagement = () => {
                   キャンセル
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
@@ -1952,66 +1966,78 @@ const LessonManagement = () => {
 
       {/* テキストと動画の紐づけ作成・編集モーダル */}
       {showLinkFormModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">
-              {editingLink ? 'テキストと動画の紐づけ編集' : '新しいテキストと動画の紐づけ'}
-            </h2>
-            <form onSubmit={editingLink ? handleUpdateTextVideoLink : handleCreateTextVideoLink}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  テキストファイル *
-                </label>
-                <select
-                  name="text_file_key"
-                  value={linkFormData.text_file_key}
-                  onChange={handleLinkInputChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">テキストファイルを選択</option>
-                  {availableTextFiles.map((file) => (
-                    <option key={file.file_name} value={file.file_name}>
-                      {file.file_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  動画 *
-                </label>
-                <select
-                  name="video_id"
-                  value={linkFormData.video_id}
-                  onChange={handleLinkInputChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">動画を選択</option>
-                  {availableVideos.map((video) => (
-                    <option key={video.id} value={video.id}>
-                      {video.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  表示順序
-                </label>
-                <input
-                  type="number"
-                  name="link_order"
-                  value={linkFormData.link_order}
-                  onChange={handleLinkInputChange}
-                  min="0"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[95vh] flex flex-col">
+            {/* ヘッダー - 固定 */}
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-800">
+                {editingLink ? 'テキストと動画の紐づけ編集' : '新しいテキストと動画の紐づけ'}
+              </h2>
+            </div>
+            
+            {/* コンテンツ - スクロール可能 */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <form onSubmit={editingLink ? handleUpdateTextVideoLink : handleCreateTextVideoLink}>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    テキストファイル *
+                  </label>
+                  <select
+                    name="text_file_key"
+                    value={linkFormData.text_file_key}
+                    onChange={handleLinkInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">テキストファイルを選択</option>
+                    {availableTextFiles.map((file) => (
+                      <option key={file.file_name} value={file.file_name}>
+                        {file.file_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    動画 *
+                  </label>
+                  <select
+                    name="video_id"
+                    value={linkFormData.video_id}
+                    onChange={handleLinkInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">動画を選択</option>
+                    {availableVideos.map((video) => (
+                      <option key={video.id} value={video.id}>
+                        {video.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    表示順序
+                  </label>
+                  <input
+                    type="number"
+                    name="link_order"
+                    value={linkFormData.link_order}
+                    onChange={handleLinkInputChange}
+                    min="0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </form>
+            </div>
+            
+            {/* フッター - 固定 */}
+            <div className="p-6 border-t border-gray-200">
               <div className="flex gap-3">
                 <button
                   type="submit"
+                  form={editingLink ? 'updateLinkForm' : 'createLinkForm'}
                   className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all duration-200"
                 >
                   {editingLink ? '更新' : '作成'}
@@ -2032,7 +2058,7 @@ const LessonManagement = () => {
                   キャンセル
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}

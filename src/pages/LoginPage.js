@@ -82,18 +82,37 @@ const LoginPage = () => {
   const adminLoginAPI = async (username, password) => {
     try {
       console.log('LoginPage: 管理者ログインAPI呼び出し開始');
+      console.log('LoginPage: リクエストデータ', { username, password: password ? '***' : 'なし' });
+      
+      const requestBody = JSON.stringify({ username, password });
+      console.log('LoginPage: リクエストボディ', requestBody);
       
       const response = await fetch('/api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body: requestBody,
       });
 
-      console.log('LoginPage: ログインAPI応答', { status: response.status, ok: response.ok });
+      console.log('LoginPage: ログインAPI応答', { 
+        status: response.status, 
+        ok: response.ok,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      });
 
-      const data = await response.json();
+      // レスポンスのテキストを先に取得
+      const responseText = await response.text();
+      console.log('LoginPage: レスポンステキスト', responseText);
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('LoginPage: JSONパースエラー', parseError);
+        throw new Error('サーバーからの応答が不正です');
+      }
       
       if (!response.ok) {
         console.log('LoginPage: ログイン失敗', data);

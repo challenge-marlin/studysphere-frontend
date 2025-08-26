@@ -4,6 +4,8 @@ import { logAdminAccountOperation } from '../utils/adminLogger';
 import { getUserInfo, reauthenticateForSatellite } from '../utils/api';
 import CompanySatelliteSwitchModal from './CompanySatelliteSwitchModal';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
 const InstructorHeader = ({ user, onLocationChange }) => {
   const [isSwitchModalOpen, setIsSwitchModalOpen] = useState(false);
   const [currentCompany, setCurrentCompany] = useState(null);
@@ -407,7 +409,7 @@ const InstructorHeader = ({ user, onLocationChange }) => {
             
             // 通常のトークン更新処理
             try {
-              const refreshResponse = await fetch('http://localhost:5000/api/refresh', {
+              const refreshResponse = await fetch(`${API_BASE_URL}/api/refresh`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',

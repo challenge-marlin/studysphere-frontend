@@ -198,7 +198,7 @@ const HomeSupportUserAdditionModal = ({ isOpen, onClose, onSuccess }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[95vh] flex flex-col">
         {/* ヘッダー部分 */}
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
@@ -225,24 +225,38 @@ const HomeSupportUserAdditionModal = ({ isOpen, onClose, onSuccess }) => {
 
         {/* メッセージ表示 */}
         {message && (
-          <div className={`mx-6 mt-4 p-4 rounded-xl border ${
+          <div className={
             messageType === 'success' 
-              ? 'bg-green-50 border-green-200 text-green-800' 
-              : 'bg-red-50 border-red-200 text-red-800'
-          }`}>
-            <div className="flex items-center justify-between">
-              <span>{message}</span>
-              <button
-                onClick={clearMessage}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
+              ? 'bg-green-50 border-l-4 border-green-400 p-4' 
+              : 'bg-red-50 border-l-4 border-red-400 p-4'
+          }>
+            <div className="flex">
+              <div className="flex-shrink-0">
+                {messageType === 'success' ? (
+                  <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                ) : (
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </div>
+              <div className="ml-3">
+                <p className={
+                  messageType === 'success' 
+                    ? 'text-sm text-green-700' 
+                    : 'text-sm text-red-700'
+                }>
+                  {message}
+                </p>
+              </div>
             </div>
           </div>
         )}
 
-        <div className="p-6 space-y-6">
+        {/* コンテンツ - スクロール可能 */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* 指導員選択 */}
           <div className="bg-gray-50 rounded-xl p-6">
             <h4 className="text-lg font-semibold text-gray-800 mb-4">👨‍🏫 指導員選択</h4>

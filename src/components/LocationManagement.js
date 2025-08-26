@@ -5,6 +5,8 @@ import { apiGet, apiPut } from '../utils/api';
 import { useAuth } from './contexts/AuthContext';
 // import { fetch } from '../utils/httpInterceptor'; // 一時的に無効化
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
 const LocationManagement = () => {
   const { currentUser } = useAuth();
   
@@ -76,7 +78,7 @@ const LocationManagement = () => {
       setManagersLoading(true);
       console.log('管理者情報取得開始');
       
-      const response = await fetch('http://localhost:5000/api/users');
+      const response = await fetch(`${API_BASE_URL}/api/users`);
       console.log('管理者情報取得レスポンス:', response.status, response.statusText);
       
       if (!response.ok) {
@@ -117,7 +119,7 @@ const LocationManagement = () => {
       
       // 常に代替方法を使用（全ユーザーから拠点の指導員をフィルタリング）
       console.log('全ユーザーから拠点の指導員を抽出します');
-      const allUsersResponse = await fetch('http://localhost:5000/api/users');
+      const allUsersResponse = await fetch(`${API_BASE_URL}/api/users`);
       if (allUsersResponse.ok) {
         const allUsers = await allUsersResponse.json();
         console.log('全ユーザー取得成功:', allUsers.length, '件');
@@ -275,7 +277,7 @@ const LocationManagement = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
       
-      const response = await fetch('http://localhost:5000/api/office-types', {
+      const response = await fetch(`${API_BASE_URL}/api/office-types`, {
         signal: controller.signal
       });
       
@@ -321,7 +323,7 @@ const LocationManagement = () => {
       setCompaniesLoading(true);
       console.log('企業一覧取得開始');
       
-      const response = await fetch('http://localhost:5000/api/companies');
+      const response = await fetch(`${API_BASE_URL}/api/companies`);
       console.log('企業一覧取得レスポンス:', response.status, response.statusText);
       
       if (!response.ok) {
@@ -379,7 +381,7 @@ const LocationManagement = () => {
     try {
       console.log('satellites一覧取得開始');
       
-      const response = await fetch('http://localhost:5000/api/satellites');
+      const response = await fetch(`${API_BASE_URL}/api/satellites`);
       console.log('satellites一覧取得レスポンス:', response.status, response.statusText);
       
       if (!response.ok) {
@@ -416,7 +418,7 @@ const LocationManagement = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒タイムアウト
       
-      const response = await fetch('http://localhost:5000/api/office-types', {
+      const response = await fetch(`${API_BASE_URL}/api/office-types`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -461,7 +463,7 @@ const LocationManagement = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒タイムアウト
 
-      const response = await fetch(`http://localhost:5000/api/office-types/${typeData.id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/office-types/${typeData.id}`, {
         method: 'DELETE',
         signal: controller.signal
       });
@@ -498,7 +500,7 @@ const LocationManagement = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
-      const response = await fetch('http://localhost:5000/', { 
+      const response = await fetch(`${API_BASE_URL}/`, { 
         method: 'GET',
         signal: controller.signal
       });
@@ -707,7 +709,7 @@ const LocationManagement = () => {
       });
       
       // バックエンドAPIに管理者更新リクエストを送信
-      const response = await fetch(`http://localhost:5000/api/satellites/${selectedOfficeForManager.id}/managers`, {
+      const response = await fetch(`${API_BASE_URL}/api/satellites/${selectedOfficeForManager.id}/managers`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -756,7 +758,7 @@ const LocationManagement = () => {
         updateData.token_expiry_at = new Date(updateData.token_expiry_at).toISOString();
       }
 
-      const response = await fetch(`http://localhost:5000/api/satellites/${selectedOfficeForEdit.id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/satellites/${selectedOfficeForEdit.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -833,7 +835,7 @@ const LocationManagement = () => {
           phoneType: typeof companyData.phone,
           officeTypeIdType: typeof newCompany.office_type_id
         });
-        const companyResponse = await fetch('http://localhost:5000/api/companies', {
+        const companyResponse = await fetch(`${API_BASE_URL}/api/companies`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(companyData)
@@ -864,7 +866,7 @@ const LocationManagement = () => {
         max_users: newOffice.max_users
       };
       console.log('拠点作成データ:', satelliteData);
-      const response = await fetch('http://localhost:5000/api/satellites', {
+      const response = await fetch(`${API_BASE_URL}/api/satellites`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(satelliteData)
@@ -1314,7 +1316,7 @@ const LocationManagement = () => {
   // 企業トークン再生成
   const handleRegenerateCompanyToken = async (companyId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/companies/${companyId}/regenerate-token`, {
+      const response = await fetch(`${API_BASE_URL}/api/companies/${companyId}/regenerate-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -1345,7 +1347,7 @@ const LocationManagement = () => {
   const handleDeleteCompany = async (company) => {
     if (window.confirm(`「${company.name}」を削除しますか？\n\n注意: この企業に所属するユーザーが存在する場合は削除できません。\nこの操作は取り消せません。`)) {
       try {
-        const response = await fetch(`http://localhost:5000/api/companies/${company.id}`, {
+        const response = await fetch(`${API_BASE_URL}/api/companies/${company.id}`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' }
         });

@@ -1,12 +1,14 @@
 import React from 'react';
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './components/contexts/AuthContext';
 import TokenCountdown from './components/TokenCountdown';
+import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 import InstructorDashboard from './pages/InstructorDashboard';
 import StudentLogin from './pages/StudentLogin';
 import StudentDashboard from './pages/StudentDashboard';
+import AutoLoginPage from './pages/AutoLoginPage';
 import LearningPage from './pages/LearningPage';
 import EnhancedLearningPage from './pages/EnhancedLearningPage';
 import AdvancedLearningPage from './pages/AdvancedLearningPage';
@@ -25,8 +27,12 @@ function App() {
       <AuthProvider>
                 <div className="App">
           <Routes>
-            {/* 管理者・指導員用ログインページ（メインページ） */}
-            <Route path="/" element={<LoginPage />} />
+            {/* ルートパスから /homepage へのリダイレクト */}
+            <Route path="/" element={<Navigate to="/homepage" replace />} />
+            {/* 一般向け概要説明ページ（メインページ） */}
+            <Route path="/homepage" element={<HomePage />} />
+            {/* 管理者・指導員用ログインページ */}
+            <Route path="/admin-instructor-login" element={<LoginPage />} />
             {/* 管理者用ダッシュボード */}
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
             {/* 指導員用ダッシュボード */}
@@ -35,6 +41,10 @@ function App() {
             <Route path="/teacher/dashboard" element={<InstructorDashboard />} />
             {/* 生徒用ログイン（トークンベース） */}
             <Route path="/student/login/:token" element={<StudentLogin />} />
+            {/* 生徒用ログイン（パラメータなし） */}
+            <Route path="/student-login/" element={<StudentLogin />} />
+            {/* 自動ログインページ（アプリからの自動ログイン用） */}
+            <Route path="/auto-login/" element={<AutoLoginPage />} />
             {/* 生徒用ダッシュボード */}
             <Route path="/student/dashboard" element={<StudentDashboard />} />
             {/* 学習画面 */}

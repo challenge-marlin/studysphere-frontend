@@ -15,8 +15,22 @@ const useUserCourses = () => {
 
   // 現在選択されている拠点IDを取得
   const getCurrentSatelliteId = () => {
+    // まずsessionStorageから取得（管理者ログイン時用）
+    const sessionSelectedSatellite = sessionStorage.getItem('selectedSatellite');
+    if (sessionSelectedSatellite) {
+      try {
+        const satelliteData = JSON.parse(sessionSelectedSatellite);
+        if (satelliteData.id) {
+          return satelliteData.id;
+        }
+      } catch (error) {
+        console.error('sessionStorageのselectedSatelliteパースエラー:', error);
+      }
+    }
+    
+    // sessionStorageにない場合はlocalStorageから取得
     const selectedSatellite = JSON.parse(localStorage.getItem('selectedSatellite') || '{}');
-    return selectedSatellite.id || currentInstructor.satellite_ids?.[0] || 1; // デフォルト値
+    return selectedSatellite.id || currentInstructor.satellite_ids?.[0] || currentInstructor.satellite_id || 1; // デフォルト値
   };
 
   // 利用者のコース関連付けを取得
@@ -35,6 +49,10 @@ const useUserCourses = () => {
             c.course_id === course.course_id
           )
         );
+        console.log('=== useUserCourses デバッグ ===');
+        console.log('satelliteId:', satelliteId);
+        console.log('response.data:', response.data);
+        console.log('uniqueCourses:', uniqueCourses);
         setUserCourses(uniqueCourses);
       }
     } catch (error) {

@@ -352,7 +352,7 @@ const SatelliteManagement = ({ currentUser }) => {
         email: newInstructor.email
       };
 
-      const response = await apiPost('/api/users', requestData);
+      const response = await apiPost('/api/users/create', requestData);
       
       if (response.success) {
         alert('指導員が追加されました');
@@ -929,8 +929,10 @@ const SatelliteManagement = ({ currentUser }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.filter(user => user.role === 1).map(user => (
-                    <tr key={user.id} className="border-b border-gray-200">
+                  {users.filter(user => user.role === 1).map((user, index) => (
+                    <tr key={user.id} className={`border-b border-gray-200 ${
+                      index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                    }`}>
                       <td className="px-4 py-2">{user.name}</td>
                       <td className="px-4 py-2">
                         {user.instructor_name || '未割り当て'}

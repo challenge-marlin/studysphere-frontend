@@ -1787,7 +1787,7 @@ const LessonManagement = () => {
             
             {/* コンテンツ - スクロール可能 */}
             <div className="flex-1 overflow-y-auto p-6">
-              <form onSubmit={editingVideo ? handleUpdateVideo : handleCreateVideo}>
+              <form id={editingVideo ? 'updateVideoForm' : 'createVideoForm'} onSubmit={editingVideo ? handleUpdateVideo : handleCreateVideo}>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     タイトル *
@@ -1977,7 +1977,7 @@ const LessonManagement = () => {
             
             {/* コンテンツ - スクロール可能 */}
             <div className="flex-1 overflow-y-auto p-6">
-              <form onSubmit={editingLink ? handleUpdateTextVideoLink : handleCreateTextVideoLink}>
+              <form id={editingLink ? 'updateLinkForm' : 'createLinkForm'} onSubmit={editingLink ? handleUpdateTextVideoLink : handleCreateTextVideoLink}>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     テキストファイル *

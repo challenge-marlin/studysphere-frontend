@@ -15,20 +15,52 @@ const AutoLoginPage = () => {
       console.log('AutoLoginPage: コンポーネントがマウントされました');
       console.log('AutoLoginPage: 現在のURL:', window.location.href);
       console.log('AutoLoginPage: searchParams:', searchParams.toString());
+      console.log('AutoLoginPage: PUBLIC_URL:', process.env.PUBLIC_URL);
+      console.log('AutoLoginPage: basename:', process.env.PUBLIC_URL);
       
       try {
         // クエリパラメータからログインコードと一時パスワードを取得
-        const loginCode = searchParams.get('loginCode') || searchParams.get('code');
-        const tempPassword = searchParams.get('tempPassword') || searchParams.get('password');
+        // 複数のパラメータ名に対応
+        const loginCode = searchParams.get('loginCode') || 
+                         searchParams.get('code') || 
+                         searchParams.get('login_code');
+        const tempPassword = searchParams.get('tempPassword') || 
+                           searchParams.get('password') || 
+                           searchParams.get('temp_password');
 
         console.log('AutoLoginPage: クエリパラメータ確認:', { 
           loginCode, 
-          tempPassword: tempPassword ? '***' : 'なし' 
+          tempPassword: tempPassword ? '***' : 'なし',
+          allParams: Object.fromEntries(searchParams.entries())
+        });
+
+        // URLから直接パラメータを取得する試行（プレフィックス問題対策）
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlLoginCode = urlParams.get('loginCode') || 
+                           urlParams.get('code') || 
+                           urlParams.get('login_code');
+        const urlTempPassword = urlParams.get('tempPassword') || 
+                              urlParams.get('password') || 
+                              urlParams.get('temp_password');
+
+        console.log('AutoLoginPage: URL直接取得パラメータ:', {
+          urlLoginCode,
+          urlTempPassword: urlTempPassword ? '***' : 'なし'
+        });
+
+        // 最終的なパラメータを決定
+        const finalLoginCode = loginCode || urlLoginCode;
+        const finalTempPassword = tempPassword || urlTempPassword;
+
+        console.log('AutoLoginPage: 最終パラメータ:', {
+          finalLoginCode,
+          finalTempPassword: finalTempPassword ? '***' : 'なし'
         });
 
         // 必要なパラメータが不足している場合
-        if (!loginCode || !tempPassword) {
+        if (!finalLoginCode || !finalTempPassword) {
           console.error('AutoLoginPage: 必要なパラメータが不足しています');
+          console.error('AutoLoginPage: 利用可能なパラメータ:', Object.fromEntries(searchParams.entries()));
           setError('ログインコードまたは一時パスワードが指定されていません');
           setTimeout(() => {
             navigate('/student-login/');
@@ -46,19 +78,19 @@ const AutoLoginPage = () => {
         console.log('AutoLoginPage: 一時パスワード認証を開始');
         
         // 一時パスワード認証を実行
-        const result = await verifyTemporaryPasswordAPI(loginCode, tempPassword);
+        const result = await verifyTemporaryPasswordAPI(finalLoginCode, finalTempPassword);
         
         if (result.success) {
           console.log('AutoLoginPage: 認証成功:', result.data);
           
-                     // ログイン成功
-           const userData = {
-             id: result.data.userId,
-             name: result.data.userName,
-             role: 'student',
-             login_code: loginCode,
-             instructorName: result.data.instructorName
-           };
+          // ログイン成功
+          const userData = {
+            id: result.data.userId,
+            name: result.data.userName,
+            role: 'student',
+            login_code: finalLoginCode,
+            instructorName: result.data.instructorName
+          };
           
           // 認証処理を実行（トークンなしでログイン）
           login(userData);

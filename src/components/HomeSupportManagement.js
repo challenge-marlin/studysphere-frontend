@@ -307,8 +307,10 @@ const HomeSupportManagement = () => {
                     </td>
                   </tr>
                 ) : (
-                  getFilteredStudents().map(student => (
-                <tr key={student.id} className="hover:bg-gradient-to-r hover:from-green-50 hover:to-emerald-50 transition-all duration-200">
+                  getFilteredStudents().map((student, index) => (
+                <tr key={student.id} className={`hover:bg-gradient-to-r hover:from-green-50 hover:to-emerald-50 transition-all duration-200 ${
+                  index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                }`}>
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
                       <span className="font-semibold text-green-600">{student.name}</span>

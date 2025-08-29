@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import WeeklyEvaluationDetail from './WeeklyEvaluationDetail';
 import MonthlyEvaluationDetail from './MonthlyEvaluationDetail';
+import { getCurrentJapanTime } from '../utils/dateUtils';
 
 const UnifiedReportsList = ({ student, reports, onNavigateToReport, onDownloadPDF }) => {
   const [filterType, setFilterType] = useState('all'); // all, daily, weekly, monthly
@@ -98,7 +99,7 @@ const UnifiedReportsList = ({ student, reports, onNavigateToReport, onDownloadPD
       return { label: '作成済み', class: 'completed' };
     }
     
-    const today = new Date();
+    const today = getCurrentJapanTime();
     const reportDate = new Date(report.date);
     const daysDiff = (today - reportDate) / (1000 * 60 * 60 * 24);
     
@@ -143,7 +144,7 @@ const UnifiedReportsList = ({ student, reports, onNavigateToReport, onDownloadPD
 
   // 新規作成ボタンの処理
   const handleCreateNew = (type) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getCurrentJapanTime().toISOString().split('T')[0];
     onNavigateToReport(type, today, null);
   };
 

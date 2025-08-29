@@ -19,9 +19,32 @@ const StudentLogin = () => {
 
   // URLパラメータからログインコードを取得
   useEffect(() => {
-    const codeFromUrl = searchParams.get('code');
-    if (codeFromUrl) {
-      setLoginCode(codeFromUrl);
+    console.log('StudentLogin: 現在のURL:', window.location.href);
+    console.log('StudentLogin: searchParams:', searchParams.toString());
+    console.log('StudentLogin: PUBLIC_URL:', process.env.PUBLIC_URL);
+    
+    // 複数のパラメータ名に対応
+    const codeFromUrl = searchParams.get('code') || 
+                       searchParams.get('loginCode') || 
+                       searchParams.get('login_code');
+    
+    // URLから直接パラメータを取得する試行（プレフィックス問題対策）
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlCodeFromUrl = urlParams.get('code') || 
+                          urlParams.get('loginCode') || 
+                          urlParams.get('login_code');
+    
+    const finalCodeFromUrl = codeFromUrl || urlCodeFromUrl;
+    
+    console.log('StudentLogin: URLパラメータ確認:', {
+      codeFromUrl,
+      urlCodeFromUrl,
+      finalCodeFromUrl,
+      allParams: Object.fromEntries(searchParams.entries())
+    });
+    
+    if (finalCodeFromUrl) {
+      setLoginCode(finalCodeFromUrl);
     }
   }, [searchParams]);
 

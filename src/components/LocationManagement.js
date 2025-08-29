@@ -3,6 +3,7 @@ import SanitizedInput from './SanitizedInput';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 import { apiGet, apiPut } from '../utils/api';
 import { useAuth } from './contexts/AuthContext';
+import { isExpired, getCurrentJapanTime } from '../utils/dateUtils';
 // import { fetch } from '../utils/httpInterceptor'; // 一時的に無効化
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
@@ -1233,9 +1234,12 @@ const LocationManagement = () => {
   // 30日以内に期限切れになる事業所数
   const expiringSoonFacilities = facilities.filter(facility => {
     if (!facility.token_expiry_at) return false;
-    const expiryDate = new Date(facility.token_expiry_at);
-    const now = new Date();
-    const diffTime = expiryDate - now;
+    // バックエンドから返されるtoken_expiry_atは日本時間の文字列
+    // データベースから返される値は日本時間なので、UTCとして扱ってから日本時間に変換
+    const utcDate = new Date(facility.token_expiry_at + 'Z'); // UTCとして解釈
+    const japanExpiryDate = new Date(utcDate.getTime() + (9 * 60 * 60 * 1000)); // 日本時間に変換
+    const now = getCurrentJapanTime();
+    const diffTime = japanExpiryDate - now;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays <= 30 && diffDays > 0;
   }).length;
@@ -1583,20 +1587,106 @@ const LocationManagement = () => {
                   </td>
                   <td className="px-6 py-4 text-gray-600">
                     {office.token_expiry_at ? (
-                      <div className={`text-sm ${new Date(office.token_expiry_at) < new Date() ? 'text-red-600 font-medium' : 'text-gray-600'}`}>
-                        <div>{new Date(office.token_expiry_at).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })}</div>
+                      <div className={`text-sm ${isExpired(office.token_expiry_at) ? 'text-red-600 font-medium' : 'text-gray-600'}`}>
+                        <div>
+                          {(() => {
+                            try {
+                              if (!office.token_expiry_at || 
+                                  office.token_expiry_at === '0000-00-00 00:00:00' || 
+                                  office.token_expiry_at === '0000-00-00' || 
+                                  office.token_expiry_at === 'null' || 
+                                  office.token_expiry_at === 'undefined' ||
+                                  office.token_expiry_at === '' ||
+                                  office.token_expiry_at === 'NULL' ||
+                                  office.token_expiry_at === 'None') {
+                                return '期限なし';
+                              }
+                              
+                              // 文字列でない場合は文字列に変換
+                              const expiryString = String(office.token_expiry_at).trim();
+                              
+                              // 空文字列のチェック
+                              if (expiryString === '') {
+                                return '期限なし';
+                              }
+                              
+                              // 日本時間として直接解釈（UTC変換なし）
+                              const japanDate = new Date(expiryString);
+                              if (isNaN(japanDate.getTime())) {
+                                return '無効な日付';
+                              }
+                              
+                              return japanDate.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' });
+                            } catch (error) {
+                              console.error('日付表示エラー:', error, 'token_expiry_at:', office.token_expiry_at);
+                              return 'エラー';
+                            }
+                          })()}
+                        </div>
                         {(() => {
-                          const expiryDate = new Date(office.token_expiry_at);
-                          const now = new Date();
-                          const diffTime = expiryDate - now;
-                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                          
-                          if (diffDays < 0) {
+                          try {
+                            // 詳細なデバッグログ
+                            console.log('期限切れ判定開始:', {
+                              token_expiry_at: office.token_expiry_at,
+                              type: typeof office.token_expiry_at
+                            });
+                            
+                            // 無効な日付値のチェック
+                            if (!office.token_expiry_at || 
+                                office.token_expiry_at === '0000-00-00 00:00:00' || 
+                                office.token_expiry_at === '0000-00-00' || 
+                                office.token_expiry_at === 'null' || 
+                                office.token_expiry_at === 'undefined' ||
+                                office.token_expiry_at === '' ||
+                                office.token_expiry_at === 'NULL' ||
+                                office.token_expiry_at === 'None') {
+                              console.log('期限切れ判定: 無効な日付値のため期限切れとして扱う:', office.token_expiry_at);
+                              return <span className="text-xs bg-red-100 text-red-800 px-1 py-0.5 rounded">期限切れ</span>;
+                            }
+                            
+                            // 文字列でない場合は文字列に変換
+                            const expiryString = String(office.token_expiry_at).trim();
+                            
+                            // 空文字列のチェック
+                            if (expiryString === '') {
+                              console.log('期限切れ判定: 空文字列のため期限切れとして扱う');
+                              return <span className="text-xs bg-red-100 text-red-800 px-1 py-0.5 rounded">期限切れ</span>;
+                            }
+                            
+                            // 日本時間として直接解釈（UTC変換なし）
+                            const japanDate = new Date(expiryString);
+                            
+                            // 無効な日付かチェック
+                            if (isNaN(japanDate.getTime())) {
+                              console.warn('期限切れ判定: 無効な日付値:', expiryString);
+                              return <span className="text-xs bg-red-100 text-red-800 px-1 py-0.5 rounded">期限切れ</span>;
+                            }
+                            
+                            const now = getCurrentJapanTime();
+                            const diffTime = japanDate - now;
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                            
+                            console.log('期限切れ判定:', {
+                              original: office.token_expiry_at,
+                              expiryString,
+                              japanDateValid: !isNaN(japanDate.getTime()),
+                              nowValid: !isNaN(now.getTime()),
+                              japanDateTimestamp: japanDate.getTime(),
+                              nowTimestamp: now.getTime(),
+                              diffTime,
+                              diffDays
+                            });
+                            
+                            if (diffDays < 0) {
+                              return <span className="text-xs bg-red-100 text-red-800 px-1 py-0.5 rounded">期限切れ</span>;
+                            } else if (diffDays <= 30) {
+                              return <span className="text-xs bg-yellow-100 text-yellow-800 px-1 py-0.5 rounded">残り{diffDays}日</span>;
+                            } else {
+                              return <span className="text-xs bg-green-100 text-green-800 px-1 py-0.5 rounded">有効</span>;
+                            }
+                          } catch (error) {
+                            console.error('期限切れ判定エラー:', error, 'token_expiry_at:', office.token_expiry_at);
                             return <span className="text-xs bg-red-100 text-red-800 px-1 py-0.5 rounded">期限切れ</span>;
-                          } else if (diffDays <= 30) {
-                            return <span className="text-xs bg-yellow-100 text-yellow-800 px-1 py-0.5 rounded">残り{diffDays}日</span>;
-                          } else {
-                            return <span className="text-xs bg-green-100 text-green-800 px-1 py-0.5 rounded">有効</span>;
                           }
                         })()}
                       </div>
@@ -2482,13 +2572,13 @@ const LocationManagement = () => {
                     console.log('手動で指導員情報を更新します');
                     await fetchSatelliteInstructors(selectedOfficeForManager.id);
                   }}
-                  className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors duration-300"
+                  className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors duration-300"
                 >
                   🔄 指導員情報を更新
                 </button>
                 <button
                   onClick={() => setSelectedManagers([])}
-                  className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors duration-300"
+                  className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors duration-300"
                 >
                   🗑️ 全選択解除
                 </button>
@@ -2685,7 +2775,7 @@ const LocationManagement = () => {
                           token_expiry_at: thirtyDaysLater.toISOString().slice(0, 16) 
                         });
                       }}
-                      className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors duration-300"
+                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors duration-300"
                     >
                       +30日
                     </button>
@@ -2700,7 +2790,7 @@ const LocationManagement = () => {
                           token_expiry_at: ninetyDaysLater.toISOString().slice(0, 16) 
                         });
                       }}
-                      className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors duration-300"
+                      className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors duration-300"
                     >
                       +90日
                     </button>
@@ -2715,7 +2805,7 @@ const LocationManagement = () => {
                           token_expiry_at: oneYearLater.toISOString().slice(0, 16) 
                         });
                       }}
-                      className="px-3 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors duration-300"
+                      className="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors duration-300"
                     >
                       +1年
                     </button>

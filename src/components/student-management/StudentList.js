@@ -7,8 +7,7 @@ const StudentList = ({
   onEditStudent, 
   onToggleStatus, 
   onDeleteStudent,
-  selectedStudents,
-  onSelectStudent 
+  onViewDailyReports
 }) => {
   return (
     <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
@@ -16,20 +15,7 @@ const StudentList = ({
         <table className="w-full">
           <thead className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
             <tr>
-              <th className="px-4 py-3 text-left">
-                <input
-                  type="checkbox"
-                  checked={selectedStudents.length === students.length && students.length > 0}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      onSelectStudent(students.map(s => s.id));
-                    } else {
-                      onSelectStudent([]);
-                    }
-                  }}
-                  className="rounded border-gray-300"
-                />
-              </th>
+
               <th className="px-4 py-3 text-left">利用者名</th>
               <th className="px-4 py-3 text-left">担当指導員</th>
               <th className="px-4 py-3 text-left">タグ</th>
@@ -40,22 +26,11 @@ const StudentList = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {students.map((student) => (
-              <tr key={student.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedStudents.includes(student.id)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        onSelectStudent([...selectedStudents, student.id]);
-                      } else {
-                        onSelectStudent(selectedStudents.filter(id => id !== student.id));
-                      }
-                    }}
-                    className="rounded border-gray-300"
-                  />
-                </td>
+            {students.map((student, index) => (
+              <tr key={student.id} className={`hover:bg-gray-50 transition-colors ${
+                index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+              }`}>
+
                 <td className="px-4 py-3">
                   <div className="font-medium text-gray-900">{student.name}</div>
                   <div className="text-sm text-gray-500">{student.login_code}</div>
@@ -65,8 +40,8 @@ const StudentList = ({
                     {student.instructor_name || '未設定'}
                   </div>
                 </td>
-                <td className="px-4 py-3 w-48">
-                  <div className="flex flex-wrap gap-1 max-w-44">
+                <td className="px-4 py-3 w-40">
+                  <div className="flex flex-wrap gap-1 max-w-36">
                     {student.tags && student.tags.length > 0 ? (
                       student.tags.map((tag, index) => (
                         <span
@@ -143,24 +118,31 @@ const StudentList = ({
                     )}
                   </div>
                 </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-col gap-1">
+                <td className="px-4 py-3" style={{ width: '200px' }}>
+                  <div className="grid grid-cols-2 gap-1">
                     <button 
-                      className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200 transition-all duration-200"
+                      className="px-2 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 transition-all duration-200"
                       onClick={() => onEditStudent(student)}
                       title="利用者情報と個別支援計画を編集"
                     >
                       ✏️ 編集
                     </button>
                     <button 
-                      className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium hover:bg-green-200 transition-all duration-200"
+                      className="px-2 py-1 bg-orange-600 text-white rounded text-xs font-medium hover:bg-orange-700 transition-all duration-200"
+                      onClick={() => onViewDailyReports && onViewDailyReports(student)}
+                      title="日報確認・編集・コメント"
+                    >
+                      📊 日報確認
+                    </button>
+                    <button 
+                      className="px-2 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 transition-all duration-200"
                       onClick={() => {/* TODO: テスト合否確認機能を実装 */}}
                       title="テストの合否確認"
                     >
                       📝 合否確認
                     </button>
                     <button 
-                      className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium hover:bg-purple-200 transition-all duration-200"
+                      className="px-2 py-1 bg-purple-600 text-white rounded text-xs font-medium hover:bg-purple-700 transition-all duration-200"
                       onClick={() => {/* TODO: 提出物確認機能を実装 */}}
                       title="提出物の確認"
                     >
@@ -169,15 +151,15 @@ const StudentList = ({
                     <button 
                       className={`px-2 py-1 rounded text-xs font-medium transition-all duration-200 ${
                         student.status === 1 
-                          ? 'bg-red-100 text-red-700 hover:bg-red-200' 
-                          : 'bg-green-100 text-green-700 hover:bg-green-200'
+                          ? 'bg-red-600 text-white hover:bg-red-700' 
+                          : 'bg-green-600 text-white hover:bg-green-700'
                       }`}
                       onClick={() => onToggleStatus(student.id)}
                     >
                       {student.status === 1 ? '停止' : '再開'}
                     </button>
                     <button 
-                      className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-medium hover:bg-red-200 transition-all duration-200"
+                      className="px-2 py-1 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700 transition-all duration-200"
                       onClick={() => onDeleteStudent(student.id)}
                     >
                       削除

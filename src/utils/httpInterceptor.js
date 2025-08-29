@@ -36,6 +36,12 @@ export const setupFetchInterceptor = () => {
   window.fetch = async (url, options = {}) => {
     console.log('Fetchインターセプター: リクエスト開始', { url, method: options.method });
     
+    // 完全なURL（http://localhost:5000など）の場合は、インターセプトをスキップ
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      console.log('Fetchインターセプター: 完全なURLのため、インターセプトをスキップ');
+      return originalFetch(url, options);
+    }
+    
     // ログインエンドポイントの場合は、認証エラー処理を完全にスキップ
     if (isLoginEndpoint(url)) {
       console.log('Fetchインターセプター: ログインエンドポイントのため、認証処理をスキップ');

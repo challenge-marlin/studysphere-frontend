@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './contexts/AuthContext';
+import { getCurrentUserSatelliteId } from '../utils/locationUtils';
+import { getSatelliteUsers } from '../utils/api';
+import { debugAllStorage } from '../utils/debugUtils';
 import TempPasswordManager from './student-management/TempPasswordManager';
 import StudentEditor from './student-management/StudentEditor';
 import CourseManager from './student-management/CourseManager';
@@ -7,7 +10,7 @@ import StudentAdder from './student-management/StudentAdder';
 import TagManager from './student-management/TagManager';
 import CourseAssignmentModal from './student-management/CourseAssignmentModal';
 import StudentTable from './student-management/StudentTable';
-import useUserCourses from './student-management/useUserCourses';
+
 import TodayActiveModal from './student-management/TodayActiveModal';
 import DailyReportManagement from './DailyReportManagement';
 
@@ -19,7 +22,10 @@ const StudentManagementRefactored = ({ teacherId }) => {
   // 基本状態管理
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedStudents, setSelectedStudents] = useState([]);
+  const [currentSatelliteId, setCurrentSatelliteId] = useState(null);
+  const [currentSatelliteName, setCurrentSatelliteName] = useState('');
+  const [error, setError] = useState(null);
+
   const [instructors, setInstructors] = useState([]);
   
   // フィルター関連のstate
@@ -27,84 +33,213 @@ const StudentManagementRefactored = ({ teacherId }) => {
   const [selectedTags, setSelectedTags] = useState([]);
   const [statusFilter, setStatusFilter] = useState('all');
   
+  // タグ管理用の選択状態
+  const [selectedStudents, setSelectedStudents] = useState([]);
+  
   // 今日の活動メッセージ関連のstate
   const [showTodayActiveModal, setShowTodayActiveModal] = useState(false);
 
   // 学習コース追加モーダルの状態
   const [showCourseAssignmentModal, setShowCourseAssignmentModal] = useState(false);
+  const [showCourseManagerModal, setShowCourseManagerModal] = useState(false);
 
   // 日報管理モーダルの状態
   const [showDailyReportModal, setShowDailyReportModal] = useState(false);
   const [selectedStudentForReports, setSelectedStudentForReports] = useState(null);
 
-  // コース情報を取得するカスタムフック
-  const { userCourses, refetch: refetchUserCourses } = useUserCourses();
 
-  // 利用者データを取得
+
+  // 現在の拠点IDを取得
+  useEffect(() => {
+    console.log('=== StudentManagement 拠点ID取得開始 ===');
+    console.log('currentUser:', currentUser);
+    console.log('currentUser.role:', currentUser?.role);
+    console.log('currentUser.satellite_id:', currentUser?.satellite_id);
+    console.log('currentUser.satellite_ids:', currentUser?.satellite_ids);
+    console.log('currentUser.satellite_name:', currentUser?.satellite_name);
+    
+    // 全ストレージのデバッグ情報を出力
+    debugAllStorage();
+    
+    // セッションストレージの確認
+    const selectedSatellite = sessionStorage.getItem('selectedSatellite');
+    console.log('セッションストレージのselectedSatellite:', selectedSatellite);
+    
+    if (selectedSatellite) {
+      try {
+        const satelliteData = JSON.parse(selectedSatellite);
+        console.log('パースされた拠点データ:', satelliteData);
+      } catch (error) {
+        console.error('拠点情報のパースエラー:', error);
+      }
+    }
+    
+    const satelliteId = getCurrentUserSatelliteId(currentUser);
+    setCurrentSatelliteId(satelliteId);
+    console.log('=== 拠点ID取得 ===');
+    console.log('現在の拠点ID:', satelliteId);
+    
+    // 拠点IDが取得できない場合の詳細デバッグ
+    if (!satelliteId) {
+      console.log('=== 拠点ID取得失敗の詳細デバッグ ===');
+      console.log('currentUser:', currentUser);
+      console.log('currentUser.role:', currentUser?.role);
+      console.log('currentUser.satellite_id:', currentUser?.satellite_id);
+      console.log('currentUser.satellite_ids:', currentUser?.satellite_ids);
+      console.log('currentUser.satellite_name:', currentUser?.satellite_name);
+      
+      // セッションストレージの確認
+      const selectedSatellite = sessionStorage.getItem('selectedSatellite');
+      console.log('セッションストレージのselectedSatellite:', selectedSatellite);
+      
+      if (selectedSatellite) {
+        try {
+          const satelliteData = JSON.parse(selectedSatellite);
+          console.log('パースされた拠点データ:', satelliteData);
+        } catch (error) {
+          console.error('拠点情報のパースエラー:', error);
+        }
+      }
+      
+      // localStorageの確認
+      const storedUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      console.log('localStorageのcurrentUser:', storedUser);
+    }
+    
+    // 拠点名を取得
+    if (satelliteId) {
+      // まずセッションストレージから取得
+      if (selectedSatellite) {
+        try {
+          const satelliteData = JSON.parse(selectedSatellite);
+          console.log('パースされた拠点データ:', satelliteData);
+          setCurrentSatelliteName(satelliteData.name || '');
+        } catch (error) {
+          console.error('拠点情報のパースエラー:', error);
+        }
+      } else {
+        // セッションストレージにない場合は、ユーザーデータから取得
+        console.log('セッションストレージに拠点情報なし、ユーザーデータから取得');
+        if (currentUser && currentUser.satellite_name) {
+          console.log('ユーザーデータから拠点名を取得:', currentUser.satellite_name);
+          setCurrentSatelliteName(currentUser.satellite_name);
+        }
+      }
+    } else {
+      console.log('拠点IDが取得できませんでした');
+      console.log('currentUser.role:', currentUser?.role);
+      console.log('currentUser.satellite_id:', currentUser?.satellite_id);
+      console.log('currentUser.satellite_ids:', currentUser?.satellite_ids);
+    }
+    
+    console.log('=== StudentManagement 拠点ID取得完了 ===');
+  }, [currentUser]);
+
+  // 利用者データを取得（拠点フィルタリング付き）
   const fetchStudents = async () => {
     try {
+      console.log('=== fetchStudents開始 ===');
+      console.log('currentSatelliteId:', currentSatelliteId);
+      console.log('localStorage accessToken:', localStorage.getItem('accessToken') ? '存在' : 'なし');
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/users`);
-      if (response.ok) {
-        const result = await response.json();
-        const users = result.data?.users || result;
-        const studentUsers = users.filter(user => user.role === 1);
+      setError(null); // エラーをクリア
+      
+      // 拠点IDが取得できない場合はエラーを設定
+      if (!currentSatelliteId) {
+        console.log('拠点IDが取得できないため、利用者取得をスキップします');
+        setError('拠点IDが取得できません。拠点を選択してください。');
+        setStudents([]);
+        return;
+      }
+
+      // 拠点に所属する利用者のみを取得
+      console.log(`拠点ID ${currentSatelliteId} の利用者を取得します`);
+      
+      // 認証トークンの確認
+      const accessToken = localStorage.getItem('accessToken');
+      console.log('認証トークン確認:', {
+        hasToken: !!accessToken,
+        tokenLength: accessToken ? accessToken.length : 0,
+        tokenPreview: accessToken ? accessToken.substring(0, 20) + '...' : 'なし'
+      });
+      
+      console.log('getSatelliteUsers呼び出し前');
+      const response = await getSatelliteUsers(currentSatelliteId);
+      console.log('getSatelliteUsers呼び出し後:', response);
+      console.log('レスポンス詳細:', {
+        success: response.success,
+        message: response.message,
+        error: response.error,
+        hasData: !!response.data,
+        dataLength: response.data ? response.data.length : 0
+      });
+      
+      if (response.success) {
+        const studentUsers = response.data.filter(user => user.role === 1);
         
-        console.log('=== 利用者データ取得デバッグ ===');
-        console.log('全ユーザー数:', users.length);
+        console.log('=== 拠点利用者データ取得デバッグ ===');
+        console.log('拠点ID:', currentSatelliteId);
+        console.log('全ユーザー数:', response.data.length);
         console.log('利用者数:', studentUsers.length);
         
-        // 各利用者のタグと一時パスワード情報を確認
-        studentUsers.forEach((student, index) => {
-          // タグデータを適切に処理
-          let processedTags = [];
-          if (student.tags) {
-            if (typeof student.tags === 'string') {
-              // 文字列の場合はカンマで分割
-              processedTags = student.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-            } else if (Array.isArray(student.tags)) {
-              // 配列の場合はそのまま使用
-              processedTags = student.tags;
-            }
-          }
-          
-          // 学習コースを除外するフィルタリング
-          const courseKeywords = [
-            'ITリテラシー・AI',
-            'LP制作（HTML・CS',
-            'SNS運用の基礎・画像生',
-            'ITリテラシー・AIの基',
-            'LP制作（HTML・',
-            'SNS運用の基礎・画'
-          ];
-          
-          processedTags = processedTags.filter(tag => {
-            // 学習コースに関連するキーワードを含むタグを除外
-            return !courseKeywords.some(keyword => tag.includes(keyword));
-          });
-          
-          // 処理済みタグを設定
-          student.tags = processedTags;
-          
-          console.log(`利用者${index + 1} (${student.name}):`, {
-            id: student.id,
-            name: student.name,
-            tags: student.tags,
-            tagsType: typeof student.tags,
-            temp_password: student.temp_password,
-            expires_at: student.expires_at,
-            instructor_name: student.instructor_name,
-            is_remote_user: student.is_remote_user,
-            course_names: student.course_names
-          });
-        });
+                 // 各利用者のタグとコース情報を確認
+         studentUsers.forEach((student, index) => {
+           console.log(`利用者${index + 1} (${student.name}):`, {
+             id: student.id,
+             name: student.name,
+             tags: student.tags,
+             tagsType: typeof student.tags,
+             courses: student.courses,
+             coursesType: typeof student.courses,
+             temp_password: student.temp_password,
+             expires_at: student.expires_at,
+             instructor_name: student.instructor_name,
+             is_remote_user: student.is_remote_user
+           });
+         });
         
         setStudents(studentUsers);
       } else {
-        console.error('利用者データ取得エラー:', response.status);
+        console.error('拠点利用者取得に失敗しました:', response.message || response.error || '不明なエラー');
+        console.error('失敗レスポンスの詳細:', {
+          response: response,
+          responseType: typeof response,
+          responseKeys: Object.keys(response || {}),
+          message: response.message,
+          error: response.error,
+          success: response.success
+        });
+        
+        // 認証エラーの場合は特別な処理
+        if ((response.message && response.message.includes('認証')) || 
+            (response.error && response.error.includes('認証'))) {
+          setError('認証に失敗しました。ログインし直してください。');
+        } else {
+          const errorMessage = response.message || response.error || '不明なエラー';
+          setError(`拠点利用者の取得に失敗しました: ${errorMessage}`);
+        }
+        setStudents([]);
       }
     } catch (error) {
       console.error('利用者データ取得エラー:', error);
+      console.error('エラー詳細:', {
+        errorMessage: error.message,
+        errorName: error.name,
+        errorStack: error.stack,
+        errorType: typeof error
+      });
+      
+      // 認証エラーの場合は特別な処理
+      if (error.message && error.message.includes('Authentication')) {
+        setError('認証に失敗しました。ログインし直してください。');
+      } else if (error.message && error.message.includes('バックエンドサーバーに接続できません')) {
+        setError('バックエンドサーバーに接続できません。サーバーが起動しているか確認してください。');
+      } else if (error.message && error.message.includes('拠点IDが無効です')) {
+        setError('拠点IDが無効です。拠点を選択し直してください。');
+      } else {
+        setError('利用者データの取得中にエラーが発生しました');
+      }
+      setStudents([]);
     } finally {
       setLoading(false);
     }
@@ -138,10 +273,8 @@ const StudentManagementRefactored = ({ teacherId }) => {
     instructors 
   });
 
-  const courseManager = CourseManager({ 
-    students, 
-    onStudentsUpdate: setStudents 
-  });
+  // CourseManagerが利用可能かチェック
+  const isCourseManagerReady = currentSatelliteId;
 
   const studentAdder = StudentAdder({ 
     onStudentAdded: fetchStudents, 
@@ -255,40 +388,101 @@ const StudentManagementRefactored = ({ teacherId }) => {
     );
   };
 
-  // 利用者選択の処理
-  const handleSelectStudent = (studentId) => {
-    setSelectedStudents(prev => 
-      prev.includes(studentId) 
-        ? prev.filter(id => id !== studentId)
-        : [...prev, studentId]
-    );
-  };
 
-  // 全利用者選択/選択解除
-  const handleSelectAllStudents = () => {
-    const filteredStudents = getFilteredStudents();
-    if (selectedStudents.length === filteredStudents.length) {
-      setSelectedStudents([]);
-    } else {
-      setSelectedStudents(filteredStudents.map(s => s.id));
-    }
-  };
 
   // コース更新時の処理
   const handleCoursesUpdated = () => {
-    refetchUserCourses();
+    console.log('=== コース更新処理開始 ===');
+    
+    fetchStudents(); // 利用者データも更新
+    console.log('=== コース更新処理完了 ===');
   };
 
   useEffect(() => {
     fetchStudents();
     fetchInstructors();
-  }, []);
+  }, [currentSatelliteId]);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
         <div className="flex items-center justify-center h-64">
           <div className="text-xl text-gray-600">読み込み中...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // 拠点が選択されていない場合のメッセージ
+  if (!currentSatelliteId) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
+            <div className="text-center">
+              <div className="text-6xl mb-4">📍</div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">拠点が選択されていません</h2>
+              <p className="text-gray-600 mb-6">
+                利用者一覧を表示するには、まず拠点を選択してください。
+              </p>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                <p className="text-yellow-800 text-sm">
+                  💡 ヒント: 右上の拠点切り替えボタンから拠点を選択してください。
+                </p>
+              </div>
+              {currentUser && currentUser.role >= 6 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                  <p className="text-blue-800 text-sm">
+                    🔧 管理者向け: ログイン時に選択した拠点情報が正しく保存されていない可能性があります。
+                    <br />
+                    解決方法: ログアウトして再度ログインしてください。
+                  </p>
+                </div>
+              )}
+              <button 
+                onClick={() => window.location.reload()}
+                className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 mr-4"
+              >
+                🔄 ページを再読み込み
+              </button>
+              <button 
+                onClick={() => window.location.href = '/instructor/dashboard'}
+                className="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+              >
+                🏠 ダッシュボードに戻る
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // エラーが発生した場合のメッセージ
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
+            <div className="text-center">
+              <div className="text-6xl mb-4">⚠️</div>
+              <h2 className="text-2xl font-bold text-red-800 mb-4">エラーが発生しました</h2>
+              <p className="text-gray-600 mb-6">
+                {error}
+              </p>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <p className="text-red-800 text-sm">
+                  💡 解決方法: ページを再読み込みするか、管理者に連絡してください。
+                </p>
+              </div>
+              <button 
+                onClick={() => window.location.reload()}
+                className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+              >
+                🔄 ページを再読み込み
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -309,8 +503,8 @@ const StudentManagementRefactored = ({ teacherId }) => {
               <div className="flex items-center gap-2 text-gray-600">
                 <span className="text-lg">📍</span>
                 <div>
-                  <p className="font-medium">指導員ダッシュボード</p>
-                  <p className="text-sm text-gray-500">※利用者の管理と一時パスワード発行を行います</p>
+                                     <p className="font-medium">指導員ダッシュボード</p>
+                   <p className="text-sm text-gray-500">※利用者の管理と一時パスワード発行を行います</p>
                 </div>
               </div>
             </div>
@@ -335,7 +529,11 @@ const StudentManagementRefactored = ({ teacherId }) => {
               </button>
               <button 
                 className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2"
-                onClick={() => studentAdder.setShowAddForm(true)}
+                onClick={() => {
+                  studentAdder.setShowAddForm(true);
+                  studentAdder.setBulkInputText('');
+                  studentAdder.setBulkInstructorId('');
+                }}
               >
                 + 新しい利用者を追加
               </button>
@@ -427,14 +625,11 @@ const StudentManagementRefactored = ({ teacherId }) => {
         <div className="mb-8">
           <StudentTable
             students={filteredStudents}
-            selectedStudents={selectedStudents}
-            onSelectStudent={handleSelectStudent}
-            onSelectAllStudents={handleSelectAllStudents}
             onIssueTemporaryPassword={tempPasswordManager.issueTemporaryPassword}
             onEditStudent={openEditModal}
             onToggleStatus={toggleStudentStatus}
             onDeleteStudent={deleteStudent}
-            userCourses={userCourses}
+            
             onViewDailyReports={openDailyReportModal}
           />
         </div>
@@ -752,14 +947,14 @@ const StudentManagementRefactored = ({ teacherId }) => {
                         />
                       </div>
                       <div>
-                        <label htmlFor="login_code" className="block text-sm font-semibold text-gray-700 mb-2">ログインコード</label>
+                        <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">メールアドレス（任意）</label>
                         <input
-                          type="text"
-                          id="login_code"
-                          name="login_code"
-                          value={studentAdder.newStudent.login_code}
+                          type="email"
+                          id="email"
+                          name="email"
+                          value={studentAdder.newStudent.email}
                           onChange={studentAdder.handleInputChange}
-                          required
+                          placeholder="example@example.com"
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                       </div>
@@ -813,14 +1008,15 @@ const StudentManagementRefactored = ({ teacherId }) => {
                   // 一括入力モード
                   <div className="space-y-6">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">利用者情報（1行1人、カンマ区切り）</label>
-                      <textarea
-                        value={studentAdder.bulkInputText}
-                        onChange={(e) => studentAdder.setBulkInputText(e.target.value)}
-                        placeholder="利用者名,ログインコード&#10;利用者名,ログインコード"
-                        rows={8}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
+                                             <label className="block text-sm font-semibold text-gray-700 mb-2">利用者情報（1行1人、カンマ区切り）</label>
+                       <p className="text-xs text-gray-500 mb-2">※メールアドレスは任意です。空欄の場合はnullとして登録されます。</p>
+                                             <textarea
+                         value={studentAdder.bulkInputText}
+                         onChange={(e) => studentAdder.setBulkInputText(e.target.value)}
+                         placeholder="利用者名,メールアドレス（任意）&#10;例：田中太郎,tanaka@example.com&#10;例：佐藤花子,&#10;例：山田次郎,&#10;例：鈴木一郎,suzuki@example.com&#10;例：高橋美咲,"
+                         rows={8}
+                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                       />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">担当指導員（全員共通）</label>
@@ -837,6 +1033,11 @@ const StudentManagementRefactored = ({ teacherId }) => {
                         ))}
                       </select>
                     </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          選択中の拠点の企業・拠点に所属する利用者として追加されます
+                        </p>
+                     </div>
                     <div className="flex justify-end gap-4">
                       <button
                         onClick={() => studentAdder.setShowAddForm(false)}
@@ -997,6 +1198,32 @@ const StudentManagementRefactored = ({ teacherId }) => {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* CourseManagerモーダル */}
+        {showCourseManagerModal && isCourseManagerReady && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-2xl font-bold text-gray-800">🎯 コース管理</h3>
+                  <button 
+                    className="text-gray-400 hover:text-gray-600 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-all duration-200"
+                    onClick={() => setShowCourseManagerModal(false)}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              <div className="p-6">
+                <CourseManager
+                  students={students}
+                  onStudentsUpdate={setStudents}
+                  satelliteId={currentSatelliteId}
+                />
               </div>
             </div>
           </div>

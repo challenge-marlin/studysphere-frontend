@@ -69,7 +69,7 @@ const CompanySatelliteSwitchModal = ({
         console.log('処理後の拠点データの長さ:', satellitesArray?.length);
         
         setSatellites(Array.isArray(satellitesArray) ? satellitesArray : []);
-      } else if (userSatellites && userSatellites.length > 1) {
+      } else if (userSatellites && userSatellites.length > 0) {
         console.log('ユーザー拠点データ設定:', userSatellites);
         setSatellites(Array.isArray(userSatellites) ? userSatellites : []);
       }
@@ -90,16 +90,22 @@ const CompanySatelliteSwitchModal = ({
     }
   };
 
-  const handleSatelliteConfirm = () => {
+  const handleSatelliteConfirm = async () => {
     if (selectedSatellite && onSatelliteSelect) {
-      onSatelliteSelect(selectedSatellite);
-      onClose();
+      try {
+        console.log('拠点切り替え確認処理開始:', selectedSatellite);
+        await onSatelliteSelect(selectedSatellite);
+        onClose();
+      } catch (error) {
+        console.error('拠点切り替えエラー:', error);
+        // エラーが発生した場合はモーダルを閉じない
+      }
     }
   };
 
-  // アドミン権限の場合は拠点切り替えも可能
+  // 拠点切り替えの権限チェック
   const canSwitchSatelliteForAdmin = userRole >= 9 && satellites.length > 0;
-  const canSwitchSatelliteForUser = Array.isArray(userSatellites) && userSatellites.length > 1;
+  const canSwitchSatelliteForUser = Array.isArray(userSatellites) && userSatellites.length > 0;
   const canSwitchSatellite = canSwitchSatelliteForAdmin || canSwitchSatelliteForUser;
 
   // デバッグ情報を追加
@@ -189,6 +195,13 @@ const CompanySatelliteSwitchModal = ({
                 <h3 className="font-medium text-gray-700">
                   {userRole >= 9 ? '全拠点から選択' : '所属拠点から選択'}
                 </h3>
+                {userRole < 9 && userSatellites && userSatellites.length === 1 && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                    <p className="text-sm text-blue-700">
+                      現在1つの拠点にのみ所属しています。拠点切り替えを行うには、管理者に複数拠点への所属を依頼してください。
+                    </p>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 gap-3">
                   {(() => {
                     const satelliteList = userRole >= 9 ? (satellites || []) : (userSatellites || []);

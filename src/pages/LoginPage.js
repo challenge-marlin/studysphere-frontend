@@ -61,19 +61,24 @@ const LoginPage = () => {
   // 認証済みユーザーがログインページにアクセスした場合のリダイレクト
   useEffect(() => {
     if (isAuthenticated && currentUser) {
-      switch (currentUser.role) {
-        case 'admin':
-          navigate('/admin/dashboard');
-          break;
-        case 'instructor':
-          navigate('/instructor/dashboard');
-          break;
-        case 'student':
-          navigate('/student/dashboard');
-          break;
-        default:
-          // デフォルトはログインページに留まる
-          break;
+      const role = currentUser.role;
+      
+      // 指導員ダッシュボード選択中はリダイレクトを無効
+      const instructorDashboardSelection = sessionStorage.getItem('instructorDashboardSelection');
+      if (instructorDashboardSelection === 'true') {
+        console.log('指導員ダッシュボード選択中 - LoginPageリダイレクトを無効');
+        return;
+      }
+      
+      // 数値のロールに対応
+      if (role >= 9) {
+        navigate('/admin/dashboard');
+      } else if (role >= 4 && role <= 8) {
+        navigate('/instructor/dashboard');
+      } else if (role >= 1 && role <= 3) {
+        navigate('/student/dashboard');
+      } else {
+        // デフォルトはログインページに留まる
       }
     }
   }, [isAuthenticated, currentUser, navigate]);
@@ -81,13 +86,14 @@ const LoginPage = () => {
   // 管理者ログインAPI呼び出し
   const adminLoginAPI = async (username, password) => {
     try {
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       console.log('LoginPage: 管理者ログインAPI呼び出し開始');
       console.log('LoginPage: リクエストデータ', { username, password: password ? '***' : 'なし' });
       
       const requestBody = JSON.stringify({ username, password });
       console.log('LoginPage: リクエストボディ', requestBody);
       
-      const response = await fetch('/api/login', {
+      const response = await fetch(`${API_BASE_URL}/api/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -130,11 +136,12 @@ const LoginPage = () => {
   // 企業・拠点情報取得API
   const getUserCompaniesAPI = async (username) => {
     try {
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       console.log('=== getUserCompaniesAPI Debug ===');
       console.log('Username:', username);
-      console.log('API URL:', `/api/user-companies/${username}`);
+      console.log('API URL:', `${API_BASE_URL}/api/user-companies/${username}`);
       
-      const response = await fetch(`/api/user-companies/${username}`, {
+      const response = await fetch(`${API_BASE_URL}/api/user-companies/${username}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -161,7 +168,8 @@ const LoginPage = () => {
   // 指導員ログインAPI
   const instructorLoginAPI = async (username, password, companyId, satelliteId) => {
     try {
-      const response = await fetch('/api/instructor-login', {
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${API_BASE_URL}/api/instructor-login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -208,8 +216,10 @@ const LoginPage = () => {
         const user = adminData.data;
         console.log('User data:', user);
         console.log('User role:', user.role);
+        console.log('Role type:', typeof user.role);
         console.log('Role >= 9:', user.role >= 9);
         console.log('Role >= 4:', user.role >= 4);
+        console.log('Role >= 6:', user.role >= 6);
         
         // ロール9以上（システム管理者）の場合はダッシュボード選択を表示
         if (user.role >= 9) {
@@ -267,17 +277,15 @@ const LoginPage = () => {
                     refresh_token: user.refresh_token
                   };
                   
-                  // 管理者の場合、選択した拠点情報をセッションストレージに保存
-                  if (user.role >= 6) {
-                    const selectedSatelliteInfo = {
-                      id: user.satellite_id,
-                      name: user.satellite_name,
-                      company_id: user.company_id,
-                      company_name: user.company_name
-                    };
-                    sessionStorage.setItem('selectedSatellite', JSON.stringify(selectedSatelliteInfo));
-                    console.log('管理者自動選択時: selectedSatelliteを保存:', selectedSatelliteInfo);
-                  }
+                  // 全ユーザー共通で拠点・企業情報をセッションストレージに保存
+                  const selectedSatelliteInfo = {
+                    id: user.satellite_id,
+                    name: user.satellite_name,
+                    company_id: user.company_id,
+                    company_name: user.company_name
+                  };
+                  sessionStorage.setItem('selectedSatellite', JSON.stringify(selectedSatelliteInfo));
+                  console.log('ログイン成功時: selectedSatelliteを保存:', selectedSatelliteInfo);
                   
                   login(userData, user.access_token, user.refresh_token);
                   
@@ -318,7 +326,7 @@ const LoginPage = () => {
               name: user.user_name,
               email: user.email || '',
               login_code: user.login_code,
-              role: 'instructor',
+              role: user.role, // 数値のロールを保持
               passwordResetRequired: user.password_reset_required || false,
               access_token: user.access_token,
               refresh_token: user.refresh_token
@@ -338,48 +346,31 @@ const LoginPage = () => {
           }
         }
         
-        // ロール6-8（一般管理者）の場合は企業・拠点選択を表示
-        if (user.role >= 6) {
-          console.log('Showing company selection for admin (role 6-8)');
-          setUserData(user);
+        // ロール6-8（一般管理者）の場合は指導員ダッシュボードにリダイレクト
+        if (user.role >= 6 && user.role <= 8) {
+          console.log('Redirecting role 6-8 user to instructor dashboard');
+          const instructorUserData = {
+            id: user.user_id,
+            name: user.user_name,
+            email: user.email || '',
+            login_code: user.login_code,
+            role: user.role, // 数値のロールを保持
+            passwordResetRequired: user.password_reset_required || false,
+            access_token: user.access_token,
+            refresh_token: user.refresh_token
+          };
           
-          // 企業・拠点情報を取得
-          console.log('Fetching companies data for user:', credentials.id);
-          const companiesData = await getUserCompaniesAPI(credentials.id);
-          console.log('Companies data response:', companiesData);
+          login(instructorUserData, user.access_token, user.refresh_token);
           
-          if (companiesData.success && companiesData.data.companies.length > 0) {
-            console.log('Companies found:', companiesData.data.companies.length);
-            setCompanies(companiesData.data.companies);
-            setShowCompanySelection(true);
-            setIsLoading(false);
-            return;
-          } else {
-            console.log('No companies found, proceeding to admin dashboard');
-            // 企業・拠点が割り当てられていない場合は直接管理者ダッシュボードへ
-            const adminUserData = {
-              id: user.user_id,
-              name: user.user_name,
-              email: user.email || '',
-              login_code: user.login_code,
-              role: 'admin',
-              passwordResetRequired: user.password_reset_required || false,
-              access_token: user.access_token,
-              refresh_token: user.refresh_token
-            };
-            
-            login(adminUserData, user.access_token, user.refresh_token);
-            
-            await addOperationLog({
-              action: 'ログイン',
-              details: `管理者「${user.user_name}」がログインしました`,
-              adminId: user.user_id,
-              adminName: user.user_name
-            });
-            
-            navigate('/admin/dashboard');
-            return;
-          }
+          await addOperationLog({
+            action: 'ログイン',
+            details: `一般管理者「${user.user_name}」が指導員ダッシュボードでログインしました`,
+            adminId: user.user_id,
+            adminName: user.user_name
+          });
+          
+          navigate('/instructor/dashboard');
+          return;
         }
         
         console.log('Proceeding to admin dashboard for other roles');
@@ -389,7 +380,7 @@ const LoginPage = () => {
           name: user.user_name,
           email: user.email || '',
           login_code: user.login_code,
-          role: 'admin',
+          role: user.role, // 数値のロールを保持
           password_reset_required: user.password_reset_required || false,
           access_token: user.access_token,
           refresh_token: user.refresh_token
@@ -420,27 +411,51 @@ const LoginPage = () => {
   };
 
   const handleDashboardSelection = async (dashboardType) => {
+    console.log('=== handleDashboardSelection Debug ===');
+    console.log('dashboardType:', dashboardType);
+    console.log('userData:', userData);
+    console.log('userData.role:', userData?.role);
+    console.log('userData.role type:', typeof userData?.role);
+    
+    // 指導員ダッシュボード選択時はリダイレクト制御フラグを設定（即座に設定）
+    if (dashboardType === 'instructor') {
+      sessionStorage.setItem('instructorDashboardSelection', 'true');
+      console.log('指導員ダッシュボード選択フラグを設定');
+      
+      // フラグ設定後、少し待ってから処理を続行（ガード処理が確実にスキップされるように）
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
     if (dashboardType === 'admin') {
+      // ロール9以上のユーザーのみ管理者ダッシュボードにアクセス可能
+      if (userData.role < 9) {
+        console.log('User role not authorized for admin dashboard:', userData.role);
+        setError('管理者ダッシュボードへのアクセス権限がありません。');
+        return;
+      }
+      
       const adminUserData = {
         id: userData.user_id,
         name: userData.user_name,
         email: userData.email || '',
         login_code: userData.login_code,
-        role: 'admin',
+        role: userData.role, // 数値のロールを保持
         password_reset_required: userData.password_reset_required || false,
         access_token: userData.access_token,
         refresh_token: userData.refresh_token
       };
       
+      console.log('Logging in admin user:', adminUserData);
       login(adminUserData, userData.access_token, userData.refresh_token);
       
       addOperationLog({
         action: 'ログイン',
-        details: `管理者「${userData.user_name}」が管理者ダッシュボードでログインしました`,
+        details: `システム管理者「${userData.user_name}」が管理者ダッシュボードでログインしました`,
         adminId: userData.user_id,
         adminName: userData.user_name
       });
       
+      console.log('Navigating to admin dashboard');
       navigate('/admin/dashboard');
     } else if (dashboardType === 'instructor') {
       console.log('=== Instructor Dashboard Selection Debug ===');
@@ -489,17 +504,15 @@ const LoginPage = () => {
                  refresh_token: user.refresh_token
                };
                
-               // 管理者の場合、選択した拠点情報をセッションストレージに保存
-               if (user.role >= 6) {
-                 const selectedSatelliteInfo = {
-                   id: user.satellite_id,
-                   name: user.satellite_name,
-                   company_id: user.company_id,
-                   company_name: user.company_name
-                 };
-                 sessionStorage.setItem('selectedSatellite', JSON.stringify(selectedSatelliteInfo));
-                 console.log('管理者ダッシュボード選択時自動選択: selectedSatelliteを保存:', selectedSatelliteInfo);
-               }
+               // 全ユーザー共通で拠点・企業情報をセッションストレージに保存
+               const selectedSatelliteInfo = {
+                 id: user.satellite_id,
+                 name: user.satellite_name,
+                 company_id: user.company_id,
+                 company_name: user.company_name
+               };
+               sessionStorage.setItem('selectedSatellite', JSON.stringify(selectedSatelliteInfo));
+               console.log('ダッシュボード選択時自動選択: selectedSatelliteを保存:', selectedSatelliteInfo);
                
                login(userData, user.access_token, user.refresh_token);
               
@@ -510,6 +523,8 @@ const LoginPage = () => {
                 adminName: user.user_name
               });
               
+              // 指導員ダッシュボード選択フラグをクリア
+              sessionStorage.removeItem('instructorDashboardSelection');
               navigate('/instructor/dashboard');
               return;
             }
@@ -537,7 +552,7 @@ const LoginPage = () => {
           name: userData.user_name,
           email: userData.email || '',
           login_code: userData.login_code,
-          role: 'instructor',
+          role: userData.role, // 元のロールを保持（管理者の場合は9のまま）
           passwordResetRequired: userData.password_reset_required || false,
           access_token: userData.access_token,
           refresh_token: userData.refresh_token
@@ -552,6 +567,8 @@ const LoginPage = () => {
           adminName: userData.user_name
         });
         
+        // 指導員ダッシュボード選択フラグをクリア
+        sessionStorage.removeItem('instructorDashboardSelection');
         navigate('/instructor/dashboard');
       }
     }
@@ -591,20 +608,22 @@ const LoginPage = () => {
           refresh_token: user.refresh_token
         };
         
-        // 管理者の場合、選択した拠点情報をセッションストレージに保存
-        if (user.role >= 6) {
-          const selectedSatelliteInfo = {
-            id: user.satellite_id,
-            name: user.satellite_name,
-            company_id: user.company_id,
-            company_name: user.company_name
-          };
-          sessionStorage.setItem('selectedSatellite', JSON.stringify(selectedSatelliteInfo));
-          console.log('管理者ログイン時: selectedSatelliteを保存:', selectedSatelliteInfo);
-          
-          // ユーザーデータにも拠点情報を追加
-          userData.satellite_ids = [user.satellite_id];
-        }
+        // 全ユーザー共通で拠点・企業情報をセッションストレージに保存
+        const selectedSatelliteInfo = {
+          id: user.satellite_id,
+          name: user.satellite_name,
+          company_id: user.company_id,
+          company_name: user.company_name
+        };
+        sessionStorage.setItem('selectedSatellite', JSON.stringify(selectedSatelliteInfo));
+        console.log('企業選択時ログイン: selectedSatelliteを保存:', selectedSatelliteInfo);
+        
+        // ユーザーデータにも拠点情報を追加
+        userData.satellite_id = user.satellite_id;
+        userData.satellite_ids = [user.satellite_id];
+        userData.satellite_name = user.satellite_name;
+        userData.company_id = user.company_id;
+        userData.company_name = user.company_name;
         
         login(userData, user.access_token, user.refresh_token);
         
@@ -615,6 +634,8 @@ const LoginPage = () => {
           adminName: user.user_name
         });
         
+        // 指導員ダッシュボード選択フラグをクリア
+        sessionStorage.removeItem('instructorDashboardSelection');
         navigate('/instructor/dashboard');
       } else {
         throw new Error(instructorData.message || '指導員ログインに失敗しました');
@@ -698,10 +719,8 @@ const LoginPage = () => {
         sessionStorage.setItem('selectedSatellite', JSON.stringify(selectedSatelliteData));
         console.log('ログイン成功時: selectedSatelliteに保存:', selectedSatelliteData);
         
-        // 管理者の場合、ユーザーデータにも拠点情報を追加
-        if (user.role >= 6) {
-          userData.satellite_ids = [user.satellite_id];
-        }
+        // 全ユーザー共通でユーザーデータにも拠点情報を追加
+        userData.satellite_ids = [user.satellite_id];
         
         login(userData, user.access_token, user.refresh_token);
         
@@ -717,6 +736,9 @@ const LoginPage = () => {
         console.log('Current location:', window.location.href);
         console.log('Current pathname:', window.location.pathname);
         console.log('Current hash:', window.location.hash);
+        
+        // 指導員ダッシュボード選択フラグをクリア
+        sessionStorage.removeItem('instructorDashboardSelection');
         
         // 強制的にリロードしてナビゲーションを確実にする
         navigate('/instructor/dashboard', { replace: true });
@@ -762,12 +784,15 @@ const LoginPage = () => {
           </div>
 
           <div className="space-y-4">
-            <button
-              onClick={() => handleDashboardSelection('admin')}
-              className="w-full bg-gradient-to-r from-red-500 to-red-400 text-white py-3 px-4 rounded-lg hover:from-red-600 hover:to-red-500 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-            >
-              🏢 管理者ダッシュボード
-            </button>
+            {/* ロール9以上のユーザーのみ管理者ダッシュボードを表示 */}
+            {userData && userData.role >= 9 && (
+              <button
+                onClick={() => handleDashboardSelection('admin')}
+                className="w-full bg-gradient-to-r from-red-500 to-red-400 text-white py-3 px-4 rounded-lg hover:from-red-600 hover:to-red-500 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+              >
+                🏢 管理者ダッシュボード
+              </button>
+            )}
             <button
               onClick={() => handleDashboardSelection('instructor')}
               className="w-full bg-gradient-to-r from-indigo-600 to-purple-700 text-white py-3 px-4 rounded-lg hover:from-indigo-700 hover:to-purple-800 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"

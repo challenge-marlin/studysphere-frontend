@@ -62,10 +62,12 @@ const InstructorList = ({
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {instructors.map((instructor) => {
+              {instructors.map((instructor, index) => {
                 const isManager = isTeacherManager(instructor.id, instructors, locationInfo);
                 return (
-                  <tr key={instructor.id} className="hover:bg-gray-50">
+                  <tr key={instructor.id} className={`hover:bg-gray-50 ${
+                    index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                  }`}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
                         {instructor.name}
@@ -109,23 +111,23 @@ const InstructorList = ({
                         <div className="flex space-x-2">
                           <button
                             onClick={() => setEditingInstructor(instructor)}
-                            className="text-blue-600 hover:text-blue-900 text-sm px-3 py-1 rounded bg-blue-50 hover:bg-blue-100"
+                            className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
                           >
                             編集
                           </button>
                           <button
                             onClick={() => onToggleManager(instructor.id, !isManager)}
-                            className={`text-sm px-3 py-1 rounded ${
+                            className={`text-sm px-3 py-1 rounded text-white transition-colors duration-200 ${
                               isManager 
-                                ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200' 
-                                : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                                ? 'bg-yellow-600 hover:bg-yellow-700' 
+                                : 'bg-blue-600 hover:bg-blue-700'
                             }`}
                           >
                             {isManager ? '管理者解除' : '管理者設定'}
                           </button>
                           <button
                             onClick={() => onDeleteInstructor(instructor.id)}
-                            className="text-red-600 hover:text-red-900 text-sm px-3 py-1 rounded bg-red-50 hover:bg-red-100"
+                            className="text-white text-sm px-3 py-1 rounded bg-red-600 hover:bg-red-700 transition-colors duration-200"
                           >
                             削除
                           </button>

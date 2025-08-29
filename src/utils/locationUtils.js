@@ -35,10 +35,50 @@ export const getActualRoleId = (authUser) => {
 
 // 現在のユーザーの拠点IDを取得
 export const getCurrentUserSatelliteId = (currentUser) => {
+  console.log('=== getCurrentUserSatelliteId デバッグ ===');
   console.log('現在のユーザー情報:', currentUser);
+  console.log('ユーザーロール:', currentUser?.role);
   console.log('satellite_ids:', currentUser?.satellite_ids);
+  console.log('satellite_id:', currentUser?.satellite_id);
+  console.log('satellite_name:', currentUser?.satellite_name);
   
-  // 1. ユーザーのsatellite_idsから取得（最優先）
+  // 1. 管理者の場合、ログイン時選択した拠点を最優先で確認
+  if (currentUser && currentUser.role >= 6 && currentUser.satellite_id) {
+    console.log('管理者用: ログイン時選択拠点IDを使用:', currentUser.satellite_id);
+    
+    // セッションストレージとの同期を確認
+    const sessionSelectedSatellite = sessionStorage.getItem('selectedSatellite');
+    if (!sessionSelectedSatellite && currentUser.satellite_name) {
+      // セッションストレージにない場合は同期
+      const selectedSatelliteInfo = {
+        id: currentUser.satellite_id,
+        name: currentUser.satellite_name,
+        company_id: currentUser.company_id,
+        company_name: currentUser.company_name
+      };
+      sessionStorage.setItem('selectedSatellite', JSON.stringify(selectedSatelliteInfo));
+      console.log('セッションストレージに拠点情報を同期:', selectedSatelliteInfo);
+    }
+    
+    return currentUser.satellite_id;
+  }
+  
+  // 2. セッションストレージから拠点情報を取得（全ユーザー用）
+  try {
+    const selectedSatellite = sessionStorage.getItem('selectedSatellite');
+    if (selectedSatellite) {
+      const satellite = JSON.parse(selectedSatellite);
+      console.log('セッションストレージから取得した拠点情報:', satellite);
+      if (satellite.id) {
+        console.log('セッションストレージから拠点IDを取得:', satellite.id);
+        return satellite.id;
+      }
+    }
+  } catch (error) {
+    console.error('セッションストレージの拠点情報読み込みエラー:', error);
+  }
+  
+  // 3. ユーザーのsatellite_idsから取得
   if (currentUser && currentUser.satellite_ids && currentUser.satellite_ids.length > 0) {
     const satelliteId = currentUser.satellite_ids[0];
     console.log('ユーザーから取得した拠点ID:', satelliteId);
@@ -61,16 +101,16 @@ export const getCurrentUserSatelliteId = (currentUser) => {
     return satelliteId;
   }
   
-  // 2. 管理者の場合、ログイン時選択した拠点を確認
-  if (currentUser && currentUser.role >= 9 && currentUser.satellite_id) {
-    console.log('管理者用: ログイン時選択拠点IDを使用:', currentUser.satellite_id);
-    return currentUser.satellite_id;
-  }
-  
-  // 3. localStorageから拠点情報を取得
+  // 4. localStorageから拠点情報を取得
   try {
     const storedUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
     console.log('localStorageのユーザー情報:', storedUser);
+    
+    // 管理者の場合、ログイン時選択した拠点を確認
+    if (storedUser.role >= 6 && storedUser.satellite_id) {
+      console.log('localStorage管理者用: ログイン時選択拠点IDを使用:', storedUser.satellite_id);
+      return storedUser.satellite_id;
+    }
     
     if (storedUser.satellite_ids && storedUser.satellite_ids.length > 0) {
       const satelliteId = storedUser.satellite_ids[0];
@@ -79,18 +119,6 @@ export const getCurrentUserSatelliteId = (currentUser) => {
     }
   } catch (error) {
     console.error('localStorageの読み込みエラー:', error);
-  }
-  
-  // 4. 選択中の拠点情報を取得（フォールバック）
-  try {
-    const selectedSatellite = sessionStorage.getItem('selectedSatellite');
-    if (selectedSatellite) {
-      const satellite = JSON.parse(selectedSatellite);
-      console.log('選択中の拠点情報:', satellite);
-      return satellite.id;
-    }
-  } catch (error) {
-    console.error('選択中拠点の読み込みエラー:', error);
   }
   
   console.log('拠点IDが見つかりません');

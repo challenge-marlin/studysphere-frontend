@@ -15,6 +15,9 @@ import {
 import { refreshTokenAPI } from '../../utils/authUtils';
 import { setGlobalNavigate, setupFetchInterceptor } from '../../utils/httpInterceptor';
 import { addOperationLog } from '../../utils/operationLogManager';
+import { markTempPasswordAsUsedAPI } from '../../utils/api';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 // 認証コンテキストの作成
 const AuthContext = createContext();
@@ -207,7 +210,7 @@ export const AuthProvider = ({ children }) => {
       refreshAttempts.current++;
       console.log(`トークン更新試行 ${refreshAttempts.current}/${MAX_REFRESH_ATTEMPTS}`);
 
-      const response = await fetch('/api/refresh', {
+      const response = await fetch(`${API_BASE_URL}/api/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -346,14 +349,37 @@ export const AuthProvider = ({ children }) => {
     const userData = localStorage.getItem('currentUser');
     let userName = '不明';
     let userRole = '不明';
+    let userId = null;
+    let userRoleId = null;
     
     if (userData) {
       try {
         const user = JSON.parse(userData);
         userName = user.name || '不明';
-        userRole = user.role === 'admin' ? '管理者' : user.role === 'instructor' ? '指導員' : '不明';
+        userRoleId = user.role;
+        userId = user.id;
+        
+        // ロール番号に基づいてロール名を判定
+        if (userRoleId === 1) {
+          userRole = '利用者';
+        } else if (userRoleId >= 4) {
+          userRole = '管理者・指導員';
+        } else {
+          userRole = '不明';
+        }
       } catch (error) {
         console.error('ユーザー情報の解析に失敗しました:', error);
+      }
+    }
+    
+    // 利用者（role=1）の場合、一時パスワードを使用済みにマーク
+    if (userRoleId === 1 && userId) {
+      try {
+        console.log('利用者の一時パスワードを使用済みにマークします');
+        await markTempPasswordAsUsedAPI(userId);
+        console.log('一時パスワードを使用済みにマークしました');
+      } catch (error) {
+        console.error('一時パスワードの使用済みマークに失敗しました:', error);
       }
     }
     
@@ -381,8 +407,20 @@ export const AuthProvider = ({ children }) => {
     setIsAuthenticated(false);
     setCurrentUser(null);
     
-    // ログインページにリダイレクト
-    handleLogout(navigate);
+    // ロールに応じてナビゲーション先を変更
+    if (userRoleId === 1) {
+      // 利用者（ロール1）の場合
+      console.log('利用者のため、利用者ログインページにリダイレクトします');
+      navigate('/student-login/');
+    } else if (userRoleId >= 4) {
+      // 管理者・指導員（ロール4以上）の場合
+      console.log('管理者・指導員のため、管理者・指導員ログインページにリダイレクトします');
+      navigate('/admin-instructor-login');
+    } else {
+      // 不明なロールの場合、ホームページにリダイレクト
+      console.log('不明なロールのため、ホームページにリダイレクトします');
+      navigate('/homepage');
+    }
     
     console.log('ログアウト処理完了');
   };
@@ -396,6 +434,9 @@ export const AuthProvider = ({ children }) => {
     
     // 更新試行回数をリセット
     refreshAttempts.current = 0;
+    
+    // ローディング状態を開始
+    setIsLoading(true);
     
     // トークンの詳細を確認（デバッグ用）
     if (accessToken) {
@@ -421,6 +462,18 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('currentUser');
     clearStoredTokens();
     
+    // 管理者の場合、拠点情報をセッションストレージに保存
+    if (userData.role >= 6 && userData.satellite_id) {
+      const selectedSatelliteInfo = {
+        id: userData.satellite_id,
+        name: userData.satellite_name,
+        company_id: userData.company_id,
+        company_name: userData.company_name
+      };
+      sessionStorage.setItem('selectedSatellite', JSON.stringify(selectedSatelliteInfo));
+      console.log('管理者ログイン時: selectedSatelliteを保存:', selectedSatelliteInfo);
+    }
+    
     localStorage.setItem('currentUser', JSON.stringify(userData));
     console.log('ユーザーデータをlocalStorageに保存完了');
     
@@ -434,19 +487,14 @@ export const AuthProvider = ({ children }) => {
       console.log('トークンなし - モックログインとして処理');
     }
     
-    // 状態を強制的に更新
-    setCurrentUser(null);
-    setIsAuthenticated(false);
-    
-    // 次のティックで新しい状態を設定（強制更新のため）
-    setTimeout(() => {
-      setCurrentUser(userData);
-      setIsAuthenticated(true);
-      console.log('認証状態を設定完了（強制更新）');
-      
-      // ページの強制リロードを避けるため、コンポーネントの再レンダリングを促す
-      window.dispatchEvent(new Event('storage'));
-    }, 0);
+    // 状態を同期的に更新
+    setCurrentUser(userData);
+    setIsAuthenticated(true);
+    setIsLoading(false);
+    console.log('認証状態を設定完了');
+    console.log('設定されたユーザーデータ:', userData);
+    console.log('設定されたロール:', userData.role);
+    console.log('ロールの型:', typeof userData.role);
   };
 
   // 拠点変更時の認証更新処理

@@ -24,53 +24,97 @@ const StudentDashboard = () => {
         return;
       }
 
-      // クエリパラメータからトークンと一時パスワードを取得
-      const token = searchParams.get('token');
-      const tempPassword = searchParams.get('tempPassword');
-      const loginCode = searchParams.get('code');
+      console.log('StudentDashboard: 現在のURL:', window.location.href);
+      console.log('StudentDashboard: searchParams:', searchParams.toString());
+      console.log('StudentDashboard: PUBLIC_URL:', process.env.PUBLIC_URL);
 
-      console.log('クエリパラメータ確認:', { token, tempPassword: tempPassword ? '***' : 'なし', loginCode });
+      // クエリパラメータからトークンと一時パスワードを取得
+      // 複数のパラメータ名に対応
+      const token = searchParams.get('token');
+      const tempPassword = searchParams.get('tempPassword') || 
+                         searchParams.get('password') || 
+                         searchParams.get('temp_password');
+      const loginCode = searchParams.get('code') || 
+                       searchParams.get('loginCode') || 
+                       searchParams.get('login_code');
+
+      console.log('StudentDashboard: クエリパラメータ確認:', { 
+        token, 
+        tempPassword: tempPassword ? '***' : 'なし', 
+        loginCode,
+        allParams: Object.fromEntries(searchParams.entries())
+      });
+
+      // URLから直接パラメータを取得する試行（プレフィックス問題対策）
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlTempPassword = urlParams.get('tempPassword') || 
+                            urlParams.get('password') || 
+                            urlParams.get('temp_password');
+      const urlLoginCode = urlParams.get('code') || 
+                          urlParams.get('loginCode') || 
+                          urlParams.get('login_code');
+
+      console.log('StudentDashboard: URL直接取得パラメータ:', {
+        urlTempPassword: urlTempPassword ? '***' : 'なし',
+        urlLoginCode
+      });
+
+      // 最終的なパラメータを決定
+      const finalTempPassword = tempPassword || urlTempPassword;
+      const finalLoginCode = loginCode || urlLoginCode;
+
+      console.log('StudentDashboard: 最終パラメータ:', {
+        finalTempPassword: finalTempPassword ? '***' : 'なし',
+        finalLoginCode
+      });
 
       // 一時パスワードとログインコードが必要（トークンはオプション）
-      if (tempPassword && loginCode) {
-        console.log('クエリパラメータから認証情報を検出');
+      if (finalTempPassword && finalLoginCode) {
+        console.log('StudentDashboard: クエリパラメータから認証情報を検出');
         setIsAutoLoggingIn(true);
         setAuthError('');
 
         try {
-          console.log('一時パスワード認証を開始:', { loginCode, tempPassword: '***' });
+          console.log('StudentDashboard: 一時パスワード認証を開始:', { 
+            loginCode: finalLoginCode, 
+            tempPassword: '***' 
+          });
           // 一時パスワード認証を実行
-          const result = await verifyTemporaryPasswordAPI(loginCode, tempPassword);
+          const result = await verifyTemporaryPasswordAPI(finalLoginCode, finalTempPassword);
           
           if (result.success) {
-            console.log('認証成功:', result.data);
+            console.log('StudentDashboard: 認証成功:', result.data);
             // ログイン成功
             const userData = {
               id: result.data.userId,
               name: result.data.userName,
               role: 'student',
-              login_code: loginCode,
+              login_code: finalLoginCode,
               instructorName: result.data.instructorName
             };
             
             // 認証処理を実行（トークンなしでログイン）
             login(userData);
             
-            console.log('自動ログイン成功:', userData);
+            console.log('StudentDashboard: 自動ログイン成功:', userData);
             
             // クエリパラメータをクリア
             const newUrl = new URL(window.location);
             newUrl.searchParams.delete('token');
             newUrl.searchParams.delete('tempPassword');
+            newUrl.searchParams.delete('password');
+            newUrl.searchParams.delete('temp_password');
             newUrl.searchParams.delete('code');
+            newUrl.searchParams.delete('loginCode');
+            newUrl.searchParams.delete('login_code');
             window.history.replaceState({}, '', newUrl);
             
           } else {
             setAuthError(result.message || '認証に失敗しました');
-            console.error('認証失敗:', result.message);
+            console.error('StudentDashboard: 認証失敗:', result.message);
           }
         } catch (error) {
-          console.error('自動ログインエラー:', error);
+          console.error('StudentDashboard: 自動ログインエラー:', error);
           const errorMessage = error.message || '認証処理中にエラーが発生しました';
           setAuthError(errorMessage);
         } finally {
@@ -83,7 +127,7 @@ const StudentDashboard = () => {
         const autoLoginTarget = localStorage.getItem('autoLoginTarget');
 
         if (autoLoginCode && autoLoginUser && autoLoginTarget && !currentUser) {
-          console.log('自動ログイン情報を検出:', { autoLoginCode, autoLoginUser, autoLoginTarget });
+          console.log('StudentDashboard: 自動ログイン情報を検出:', { autoLoginCode, autoLoginUser, autoLoginTarget });
           setIsAutoLoggingIn(true);
           
           // 自動ログイン情報をクリア
@@ -94,7 +138,7 @@ const StudentDashboard = () => {
           // 一時パスワードが設定されている場合は自動ログインを試行
           // 注意: セキュリティ上の理由から、一時パスワードは自動入力せず、
           // ユーザーに手動で入力してもらう必要があります
-          console.log('自動ログインコードが検出されました。一時パスワードを入力してください。');
+          console.log('StudentDashboard: 自動ログインコードが検出されました。一時パスワードを入力してください。');
           setIsAutoLoggingIn(false);
         }
       }

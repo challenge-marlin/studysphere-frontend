@@ -93,14 +93,19 @@ export const isRefreshTokenExpired = (refreshToken) => {
     }
     
     // 現在時刻と比較（JWTのexpは秒単位）
+    // JWTのexpはUTC時間なので、ローカル時間で比較する
     const currentTime = Math.floor(Date.now() / 1000);
     const isExpired = currentTime >= payload.exp;
     
+    const remainingTime = Math.max(0, payload.exp - currentTime);
     console.log('リフレッシュトークン有効期限チェック:', {
       currentTime,
       expiryTime: payload.exp,
       isExpired,
-      remainingTime: Math.max(0, payload.exp - currentTime)
+      remainingTime,
+      remainingMinutes: Math.floor(remainingTime / 60),
+      currentDate: new Date(currentTime * 1000).toISOString(),
+      expiryDate: new Date(payload.exp * 1000).toISOString()
     });
     
     return isExpired;
@@ -144,7 +149,8 @@ export const refreshTokenAPI = async (refreshToken) => {
   try {
     console.log('トークン更新API呼び出し開始:', { refreshToken: refreshToken ? '存在' : 'なし' });
     
-    const response = await fetch('/api/refresh', {
+    const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+    const response = await fetch(`${API_BASE_URL}/api/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -187,6 +193,19 @@ export const isAuthRequiredPage = (pathname) => {
 export const handleLogout = (navigate) => {
   console.log('=== handleLogout 実行 ===');
   
+  // ユーザーデータを取得（ロール判定用）
+  const userData = localStorage.getItem('currentUser');
+  let userRoleId = null;
+  
+  if (userData) {
+    try {
+      const user = JSON.parse(userData);
+      userRoleId = user.role;
+    } catch (error) {
+      console.error('ユーザー情報の解析に失敗しました:', error);
+    }
+  }
+  
   // トークンをクリア
   clearStoredTokens();
   
@@ -199,8 +218,20 @@ export const handleLogout = (navigate) => {
   
   console.log('LocalStorageとSessionStorageを完全にクリアしました');
   
-  // ログインページにリダイレクト
-  navigate('/');
+  // ロールに応じてナビゲーション先を変更
+  if (userRoleId === 1) {
+    // 利用者（ロール1）の場合
+    console.log('利用者のため、利用者ログインページにリダイレクトします');
+    navigate('/student-login/');
+  } else if (userRoleId >= 4) {
+    // 管理者・指導員（ロール4以上）の場合
+    console.log('管理者・指導員のため、管理者・指導員ログインページにリダイレクトします');
+    navigate('/admin-instructor-login');
+  } else {
+    // 不明なロールの場合、ホームページにリダイレクト
+    console.log('不明なロールのため、ホームページにリダイレクトします');
+    navigate('/homepage');
+  }
 };
 
 // トークン無効時の即座リダイレクト処理
@@ -215,6 +246,19 @@ export const handleTokenInvalid = (navigate, reason = 'トークンが無効に�
   
   window.isRedirecting = true;
   
+  // ユーザーデータを取得（ロール判定用）
+  const userData = localStorage.getItem('currentUser');
+  let userRoleId = null;
+  
+  if (userData) {
+    try {
+      const user = JSON.parse(userData);
+      userRoleId = user.role;
+    } catch (error) {
+      console.error('ユーザー情報の解析に失敗しました:', error);
+    }
+  }
+  
   clearStoredTokens();
   localStorage.removeItem('currentUser');
   
@@ -226,16 +270,24 @@ export const handleTokenInvalid = (navigate, reason = 'トークンが無効に�
   const currentPath = window.location.pathname;
   
   // ログインページまたは生徒ログインページの場合はアラートを表示しない
-  const isLoginPage = currentPath === '/' || currentPath.startsWith('/student/login') || currentPath.startsWith('/login');
+  const isLoginPage = currentPath === '/homepage' || currentPath.startsWith('/student/login') || currentPath.startsWith('/login');
+  
+  // ロールに応じてナビゲーション先を決定
+  let targetPath = '/homepage'; // デフォルト（ホームページ）
+  if (userRoleId === 1) {
+    targetPath = '/student-login/';
+  } else if (userRoleId >= 4) {
+    targetPath = '/admin-instructor-login';
+  }
   
   // ログインページでない場合のみアラートを表示してからナビゲーション
   if (!isLoginPage && typeof window !== 'undefined' && window.alert) {
     alert(`${reason}\nログインページに戻ります。`);
     // アラート後に通常のナビゲーション（強制リロードを避ける）
-    navigate('/', { replace: true });
+    navigate(targetPath, { replace: true });
   } else {
     // ログインページの場合は即座にリダイレクト（アラートなし）
-    navigate('/', { replace: true });
+    navigate(targetPath, { replace: true });
   }
   
   // リダイレクト処理完了後にフラグをリセット

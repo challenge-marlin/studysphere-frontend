@@ -237,7 +237,8 @@ const InstructorDashboard = () => {
   const handlePasswordChange = async (currentPassword, newPassword) => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`/api/users/${currentUser.id}/change-password`, {
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${API_BASE_URL}/api/users/${currentUser.id}/change-password`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -354,27 +355,24 @@ const InstructorDashboard = () => {
   const handleLocationChange = (newLocation) => {
     console.log('拠点情報が変更されました:', newLocation);
     
-    // LocationManagementForInstructorからの拠点情報更新の場合
-    if (newLocation.id && newLocation.name) {
-      // 拠点情報をsessionStorageに保存
-      sessionStorage.setItem('selectedSatellite', JSON.stringify(newLocation));
-      
-      // ユーザー情報のsatellite_idsを更新
-      const updatedUser = {
-        ...localUser,
-        satellite_ids: [newLocation.id]
-      };
-      setLocalUser(updatedUser);
-      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-    } else {
-      // 従来の拠点情報更新の場合
-      const updatedUser = {
-        ...localUser,
-        location: newLocation
-      };
-      setLocalUser(updatedUser);
-      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-    }
+    // 拠点情報をsessionStorageに保存
+    sessionStorage.setItem('selectedSatellite', JSON.stringify(newLocation));
+    
+    // ユーザー情報を更新
+    const updatedUser = {
+      ...localUser,
+      satellite_id: newLocation.id,
+      satellite_name: newLocation.name,
+      company_id: newLocation.company_id,
+      company_name: newLocation.company_name
+    };
+    
+    setLocalUser(updatedUser);
+    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+    
+    // ページをリロードして新しい拠点情報を反映
+    console.log('拠点変更によりページをリロードします');
+    window.location.reload();
   };
 
   const handleHomeSupportSuccess = (result) => {

@@ -749,8 +749,10 @@ const AdminManagement = () => {
               <tbody>
                 {getSortedAdmins()
                   .filter(admin => showDeleted || admin.status === 'active')
-                  .map(admin => (
-                  <tr key={admin.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200">
+                  .map((admin, index) => (
+                  <tr key={admin.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200 ${
+                    index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                  }`}>
                     <td className="px-6 py-4">
                       <strong className="text-gray-800">{admin.name}</strong>
                     </td>

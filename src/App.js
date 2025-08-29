@@ -21,12 +21,25 @@ import HomeSupportDailyRecordsPage from './pages/HomeSupportDailyRecordsPage';
 import HomeSupportEvaluationsPage from './pages/HomeSupportEvaluationsPage';
 import './App.css';
 
+// デバッグ用のテストコンポーネント
+const TestComponent = () => (
+  <div style={{ padding: '20px', backgroundColor: '#f0f0f0', minHeight: '100vh' }}>
+    <h1>Test Component - App is working!</h1>
+    <p>If you can see this, the React app is loading correctly.</p>
+    <p>Current URL: {window.location.href}</p>
+    <p>PUBLIC_URL: {process.env.PUBLIC_URL}</p>
+    <p>NODE_ENV: {process.env.NODE_ENV}</p>
+  </div>
+);
+
 function App() {
   return (
-    <Router>
+    <Router basename={process.env.PUBLIC_URL}>
       <AuthProvider>
-                <div className="App">
+        <div className="App">
           <Routes>
+            {/* デバッグ用テストルート */}
+            <Route path="/test" element={<TestComponent />} />
             {/* ルートパスから /homepage へのリダイレクト */}
             <Route path="/" element={<Navigate to="/homepage" replace />} />
             {/* 一般向け概要説明ページ（メインページ） */}

@@ -32,8 +32,8 @@ const HomePage = () => {
               次世代の学習管理システム
             </h2>
             <p className="text-xl mb-8 max-w-3xl mx-auto">
-              StudySphereは、企業の教育・研修を効率化し、学習者の成長をサポートする
-              包括的な学習管理プラットフォームです。
+              StudySphereは、企業の教育・研修を効率化し、<br />
+              学習者の成長をサポートする包括的な学習管理プラットフォームです。
             </p>
             <div className="flex justify-center space-x-4">
               <Link

@@ -7,8 +7,24 @@
  * @returns {Date} 日本時間のDateオブジェクト
  */
 export const getCurrentJapanTime = () => {
-  const now = new Date();
-  return new Date(now.toLocaleString("en-US", {timeZone: "Asia/Tokyo"}));
+  try {
+    const now = new Date();
+    
+    // 日本時間のオフセット（UTC+9）を適用
+    const japanOffset = 9 * 60 * 60 * 1000; // 9時間をミリ秒で
+    const japanTime = new Date(now.getTime() + japanOffset);
+    
+    // 無効な日付の場合は現在時刻を返す
+    if (isNaN(japanTime.getTime())) {
+      console.warn('getCurrentJapanTime: 日本時間の取得に失敗、現在時刻を返します');
+      return now;
+    }
+    
+    return japanTime;
+  } catch (error) {
+    console.error('getCurrentJapanTime エラー:', error);
+    return new Date(); // エラーの場合は現在時刻を返す
+  }
 };
 
 /**
@@ -64,14 +80,73 @@ export const formatJapanTimeOnly = (date) => {
 
 /**
  * 有効期限チェック（日本時間基準）
- * @param {Date|string} expiryTime - 有効期限（バックエンドから日本時間形式で返される）
+ * @param {Date|string} expiryTime - 有効期限（バックエンドから日本時間の文字列で返される）
  * @returns {boolean} 有効かどうか
  */
 export const isExpired = (expiryTime) => {
-  if (!expiryTime) return true;
-  const now = getCurrentJapanTime();
-  const expiryDate = new Date(expiryTime);
-  return expiryDate <= now;
+  // 詳細なデバッグログ
+  console.log('isExpired 呼び出し:', {
+    expiryTime,
+    type: typeof expiryTime,
+    length: expiryTime ? expiryTime.length : 'N/A'
+  });
+  
+  if (!expiryTime) {
+    console.log('isExpired: 空値のため期限切れとして扱う');
+    return true;
+  }
+  
+  try {
+    // 無効な日付値のチェック
+    if (expiryTime === '0000-00-00 00:00:00' || 
+        expiryTime === '0000-00-00' || 
+        expiryTime === 'null' || 
+        expiryTime === 'undefined' ||
+        expiryTime === null ||
+        expiryTime === undefined ||
+        expiryTime === '' ||
+        expiryTime === 'NULL' ||
+        expiryTime === 'None') {
+      console.log('isExpired: 無効な日付値のため期限切れとして扱う:', expiryTime);
+      return true;
+    }
+    
+    // 文字列でない場合は文字列に変換
+    const expiryString = String(expiryTime).trim();
+    
+    // 空文字列のチェック
+    if (expiryString === '') {
+      console.log('isExpired: 空文字列のため期限切れとして扱う');
+      return true;
+    }
+    
+    // 日本時間として直接解釈（UTC変換なし）
+    const japanDate = new Date(expiryString);
+    
+    // 無効な日付かチェック
+    if (isNaN(japanDate.getTime())) {
+      console.warn('isExpired: 無効な日付値:', expiryString);
+      return true;
+    }
+    
+    const now = getCurrentJapanTime();
+    
+    // 日付比較のみでログ出力（toISOString()は使用しない）
+    console.log('isExpired チェック:', {
+      original: expiryTime,
+      expiryString,
+      japanDateValid: !isNaN(japanDate.getTime()),
+      nowValid: !isNaN(now.getTime()),
+      japanDateTimestamp: japanDate.getTime(),
+      nowTimestamp: now.getTime(),
+      isExpired: japanDate <= now
+    });
+    
+    return japanDate <= now;
+  } catch (error) {
+    console.error('isExpired エラー:', error, 'expiryTime:', expiryTime);
+    return true; // エラーの場合は期限切れとして扱う
+  }
 };
 
 /**

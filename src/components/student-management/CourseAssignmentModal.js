@@ -38,8 +38,22 @@ const CourseAssignmentModal = ({
 
   // 現在選択されている拠点IDを取得
   const getCurrentSatelliteId = () => {
+    // まずsessionStorageから取得（管理者ログイン時用）
+    const sessionSelectedSatellite = sessionStorage.getItem('selectedSatellite');
+    if (sessionSelectedSatellite) {
+      try {
+        const satelliteData = JSON.parse(sessionSelectedSatellite);
+        if (satelliteData.id) {
+          return satelliteData.id;
+        }
+      } catch (error) {
+        console.error('sessionStorageのselectedSatelliteパースエラー:', error);
+      }
+    }
+    
+    // sessionStorageにない場合はlocalStorageから取得
     const selectedSatellite = JSON.parse(localStorage.getItem('selectedSatellite') || '{}');
-    return selectedSatellite.id || currentInstructor.satellite_ids?.[0] || 1; // デフォルト値
+    return selectedSatellite.id || currentInstructor.satellite_ids?.[0] || currentInstructor.satellite_id || 1; // デフォルト値
   };
 
   // 学習コース管理機能のAPI関数
@@ -110,11 +124,11 @@ const CourseAssignmentModal = ({
         setSelectedStudents([]);
         setSelectedCourses([]);
         setCourseAssignmentNotes('');
-        onClose();
         if (onCoursesUpdated) {
           onCoursesUpdated();
         }
         alert(response.message);
+        onClose();
       } else {
         throw new Error(response.message || 'コースの一括割り当てに失敗しました');
       }
@@ -151,11 +165,11 @@ const CourseAssignmentModal = ({
         await fetchUserCourses();
         setSelectedStudents([]);
         setSelectedCourses([]);
-        onClose();
         if (onCoursesUpdated) {
           onCoursesUpdated();
         }
         alert(response.message);
+        onClose();
       } else {
         throw new Error(response.message || 'コースの一括削除に失敗しました');
       }
@@ -190,11 +204,11 @@ const CourseAssignmentModal = ({
         setSelectedStudents([]);
         setSelectedCurriculumPath('');
         setCourseAssignmentNotes('');
-        onClose();
         if (onCoursesUpdated) {
           onCoursesUpdated();
         }
         alert(response.message);
+        onClose();
       } else {
         throw new Error(response.message || 'カリキュラムパスの一括割り当てに失敗しました');
       }

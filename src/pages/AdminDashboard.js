@@ -31,7 +31,8 @@ const AdminDashboard = () => {
   const handlePasswordChange = async (currentPassword, newPassword) => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`/api/users/${currentUser.id}/change-password`, {
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${API_BASE_URL}/api/users/${currentUser.id}/change-password`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -67,6 +68,16 @@ const AdminDashboard = () => {
         <div className="text-gray-600 text-lg">認証中...</div>
       </div>
     );
+  }
+
+  // デバッグ情報を表示（開発環境のみ）
+  if (process.env.NODE_ENV === 'development') {
+    console.log('AdminDashboard Debug Info:', {
+      currentUser,
+      role: currentUser.role,
+      roleType: typeof currentUser.role,
+      isAuthenticated: !!currentUser
+    });
   }
 
   const navItems = [

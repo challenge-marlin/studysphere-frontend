@@ -8,7 +8,7 @@ import {
   bulkAssignCurriculumPathsToUsers
 } from '../../utils/api';
 
-const CourseManager = ({ students, onStudentsUpdate }) => {
+const CourseManager = ({ students, onStudentsUpdate, satelliteId }) => {
   const [availableCourses, setAvailableCourses] = useState([]);
   const [availableCurriculumPaths, setAvailableCurriculumPaths] = useState([]);
   const [selectedStudents, setSelectedStudents] = useState([]);
@@ -69,7 +69,11 @@ const CourseManager = ({ students, onStudentsUpdate }) => {
   // 利用者のコース情報を取得
   const fetchUserCourses = async () => {
     try {
-      const result = await getSatelliteUserCourses();
+      if (!satelliteId) {
+        console.warn('拠点IDが設定されていないため、コース情報の取得をスキップします');
+        return;
+      }
+      const result = await getSatelliteUserCourses(satelliteId);
       if (result.success) {
         // 利用者のコース情報を更新
         onStudentsUpdate(prevStudents => 
@@ -90,7 +94,11 @@ const CourseManager = ({ students, onStudentsUpdate }) => {
   // 利用可能なコースを取得
   const fetchSatelliteAvailableCourses = async () => {
     try {
-      const result = await getSatelliteAvailableCourses();
+      if (!satelliteId) {
+        console.warn('拠点IDが設定されていないため、利用可能コースの取得をスキップします');
+        return;
+      }
+      const result = await getSatelliteAvailableCourses(satelliteId);
       if (result.success) {
         setAvailableCourses(result.data);
       }
@@ -102,7 +110,11 @@ const CourseManager = ({ students, onStudentsUpdate }) => {
   // 利用可能なカリキュラムパスを取得
   const fetchAvailableCurriculumPaths = async () => {
     try {
-      const result = await getSatelliteAvailableCurriculumPaths();
+      if (!satelliteId) {
+        console.warn('拠点IDが設定されていないため、利用可能カリキュラムパスの取得をスキップします');
+        return;
+      }
+      const result = await getSatelliteAvailableCurriculumPaths(satelliteId);
       if (result.success) {
         setAvailableCurriculumPaths(result.data);
       }
@@ -189,7 +201,7 @@ const CourseManager = ({ students, onStudentsUpdate }) => {
     fetchSatelliteAvailableCourses();
     fetchAvailableCurriculumPaths();
     fetchUserCourses();
-  }, []);
+  }, [satelliteId]); // satelliteIdが変更されたときに再実行
 
   return {
     availableCourses,

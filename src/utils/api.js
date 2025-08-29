@@ -6,12 +6,13 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 let isAuthErrorHandling = false;
 
 /**
- * API呼び出しの共通関数
+ * API呼び出しの共通関数（再試行機能付き）
  * @param {string} endpoint - APIエンドポイント
  * @param {Object} options - fetchオプション
+ * @param {number} retryCount - 現在の再試行回数
  * @returns {Promise} - APIレスポンス
  */
-export const apiCall = async (endpoint, options = {}) => {
+export const apiCall = async (endpoint, options = {}, retryCount = 0) => {
   // 認証エラー処理中は新しいAPI呼び出しをブロック
   if (isAuthErrorHandling) {
     console.log('認証エラー処理中のため、API呼び出しをスキップします');
@@ -47,9 +48,18 @@ export const apiCall = async (endpoint, options = {}) => {
   };
 
   try {
-    console.log(`API呼び出し: ${config.method || 'GET'} ${url}`);
+    console.log(`API呼び出し: ${config.method || 'GET'} ${url}${retryCount > 0 ? ` (再試行 ${retryCount})` : ''}`);
     
-    const response = await fetch(url, config);
+    // タイムアウト設定を追加
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒タイムアウトに延長
+    
+    const response = await fetch(url, {
+      ...config,
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
     
     // 認証エラーの場合
     if (response.status === 401 || response.status === 403) {
@@ -62,7 +72,7 @@ export const apiCall = async (endpoint, options = {}) => {
       
       // 即座にリダイレクト処理を実行
       setTimeout(() => {
-        handleTokenInvalid(window.navigate || (() => window.location.href = '/'), '認証に失敗しました');
+        handleTokenInvalid(window.navigate || (() => window.location.href = '/studysphere/homepage'), '認証に失敗しました');
         isAuthErrorHandling = false;
       }, 100);
       
@@ -85,6 +95,24 @@ export const apiCall = async (endpoint, options = {}) => {
     // 認証エラーの場合は特別な処理
     if (error.message === 'Authentication failed') {
       throw error;
+    }
+    
+    // ネットワークエラーやタイムアウトの場合の再試行
+    if ((error.name === 'AbortError' || error.message.includes('Failed to fetch') || error.message.includes('ERR_EMPTY_RESPONSE')) && retryCount < 3) {
+      console.warn(`接続エラーが発生しました。${retryCount + 1}回目の再試行を実行します...`);
+      
+      // 指数バックオフで待機
+      const delay = Math.pow(2, retryCount) * 1000;
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+      // 再試行
+      return apiCall(endpoint, options, retryCount + 1);
+    }
+    
+    // ネットワークエラーやタイムアウトの場合（再試行上限に達した場合）
+    if (error.name === 'AbortError' || error.message.includes('Failed to fetch') || error.message.includes('ERR_EMPTY_RESPONSE')) {
+      console.error('バックエンドサーバーに接続できません。サーバーが起動しているか確認してください。');
+      throw new Error('バックエンドサーバーに接続できません。サーバーが起動しているか確認してください。');
     }
     
     // その他のエラーはそのまま投げる
@@ -215,7 +243,7 @@ export const apiDownloadBinary = async (endpoint, options = {}) => {
       
       // 即座にリダイレクト処理を実行
       setTimeout(() => {
-        handleTokenInvalid(window.navigate || (() => window.location.href = '/'), '認証に失敗しました');
+        handleTokenInvalid(window.navigate || (() => window.location.href = '/studysphere/homepage'), '認証に失敗しました');
         isAuthErrorHandling = false;
       }, 100);
       
@@ -315,6 +343,10 @@ export const getSatelliteInstructors = (satelliteId) => {
  * 拠点の利用者一覧を取得
  */
 export const getSatelliteUsers = (satelliteId) => {
+  if (!satelliteId || satelliteId === 'undefined') {
+    console.error('拠点IDが無効です:', satelliteId);
+    throw new Error('拠点IDが無効です');
+  }
   return apiGet(`/api/satellites/${satelliteId}/users`);
 };
 
@@ -406,6 +438,10 @@ export const bulkRemoveUserInstructors = (satelliteId) => {
  * 拠点内の利用者のコース関連付け一覧を取得
  */
 export const getSatelliteUserCourses = (satelliteId) => {
+  if (!satelliteId || satelliteId === 'undefined') {
+    console.error('拠点IDが無効です:', satelliteId);
+    throw new Error('拠点IDが無効です');
+  }
   return apiGet(`/api/user-courses/satellite/${satelliteId}/user-courses`);
 };
 
@@ -413,6 +449,10 @@ export const getSatelliteUserCourses = (satelliteId) => {
  * 拠点で利用可能なコース一覧を取得
  */
 export const getSatelliteAvailableCourses = (satelliteId) => {
+  if (!satelliteId || satelliteId === 'undefined') {
+    console.error('拠点IDが無効です:', satelliteId);
+    throw new Error('拠点IDが無効です');
+  }
   return apiGet(`/api/user-courses/satellite/${satelliteId}/available-courses`);
 };
 
@@ -551,5 +591,16 @@ export const verifyTemporaryPasswordAPI = async (loginCode, tempPassword) => {
 export const checkTempPasswordStatusAPI = async (loginCode) => {
   return apiCall(`/api/temp-passwords/status/${loginCode}`, {
     method: 'GET'
+  });
+};
+
+/**
+ * ログアウト時に一時パスワードを使用済みにマーク
+ * @param {number} userId - ユーザーID
+ * @returns {Promise} - マーク結果
+ */
+export const markTempPasswordAsUsedAPI = async (userId) => {
+  return apiCall(`/api/users/${userId}/mark-temp-password-used`, {
+    method: 'POST'
   });
 };

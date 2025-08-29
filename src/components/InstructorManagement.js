@@ -456,7 +456,7 @@ const InstructorManagement = () => {
       console.log('送信データ:', requestData);
       
       // 新しい指導者を追加するAPI呼び出し
-      const data = await apiPost('/api/users', requestData);
+      const data = await apiPost('/api/users/create', requestData);
       console.log('APIレスポンス:', data);
 
       // 管理者設定を処理
@@ -1114,8 +1114,10 @@ const InstructorManagement = () => {
               </tr>
             </thead>
             <tbody>
-              {getSortedInstructors().map(instructor => (
+              {getSortedInstructors().map((instructor, index) => (
                 <tr key={instructor.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200 ${
+                  index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                } ${
                   instructor.facilityLocationIds.length === 0 ? 'bg-yellow-50 hover:bg-yellow-100' : ''
                 }`}>
                                                        <td className="px-6 py-4">

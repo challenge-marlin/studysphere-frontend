@@ -12,6 +12,7 @@ const InstructorHeader = ({ user, onLocationChange }) => {
   const [currentSatellite, setCurrentSatellite] = useState(null);
   const [userSatellites, setUserSatellites] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [userInfoLoaded, setUserInfoLoaded] = useState(false);
   const { logout, updateAuthForSatellite } = useAuth();
 
   // セッションストレージから拠点情報を取得するuseEffect
@@ -65,10 +66,11 @@ const InstructorHeader = ({ user, onLocationChange }) => {
       10: 'マスターユーザ'
     };
     
-    const numericRoleId = parseInt(roleId, 10);
-    let roleName = roleMap[numericRoleId] || '指導員';
-    
-    const isManager = isCurrentSatelliteManager();
+         const numericRoleId = parseInt(roleId, 10);
+     let roleName = roleMap[numericRoleId] || '指導員';
+     
+     // 拠点情報が利用可能な場合のみ管理者判定を実行
+     const isManager = currentSatellite ? isCurrentSatelliteManager() : false;
     
     console.log('ロール名判定:', {
       roleId: roleId,
@@ -102,10 +104,10 @@ const InstructorHeader = ({ user, onLocationChange }) => {
       const decodedToken = decodeJWT(accessToken);
       console.log('JWTトークンデコード結果:', decodedToken);
       if (decodedToken && decodedToken.role) {
-        console.log('JWTトークンから取得したロール:', decodedToken.role);
-        
-        // 拠点管理者判定をチェック
-        const isManager = isCurrentSatelliteManager();
+                 console.log('JWTトークンから取得したロール:', decodedToken.role);
+         
+         // 拠点管理者判定をチェック（拠点情報が利用可能な場合のみ）
+         const isManager = currentSatellite ? isCurrentSatelliteManager() : false;
         if (decodedToken.role === 4 && isManager) {
           console.log('拠点管理者として判定されたため、ロールを5に更新します');
           // 拠点管理者の場合はロール5として扱う
@@ -208,8 +210,14 @@ const InstructorHeader = ({ user, onLocationChange }) => {
 
 
 
-  // ユーザー情報を取得
+  // ユーザー情報を取得（無限ループ防止版）
   const loadUserInfo = async () => {
+    // 既にローディング中の場合は重複実行を防ぐ
+    if (loading) {
+      console.log('loadUserInfo: 既にローディング中のためスキップ');
+      return;
+    }
+    
     setLoading(true);
     try {
       const result = await getUserInfo();
@@ -246,8 +254,6 @@ const InstructorHeader = ({ user, onLocationChange }) => {
           
           if (targetSatellite) {
             setCurrentSatellite(targetSatellite);
-            // 拠点設定後の再認証処理
-            await performSatelliteReauth(targetSatellite);
           }
         } else {
           // 通常のユーザー（ロール9未満）の処理
@@ -270,8 +276,6 @@ const InstructorHeader = ({ user, onLocationChange }) => {
           
           if (targetSatellite) {
             setCurrentSatellite(targetSatellite);
-            // 拠点設定後の再認証処理
-            await performSatelliteReauth(targetSatellite);
           }
         }
       }
@@ -282,148 +286,55 @@ const InstructorHeader = ({ user, onLocationChange }) => {
     }
   };
 
-  // 拠点再認証処理を分離
-  const performSatelliteReauth = async (satellite) => {
-    try {
-      console.log('拠点設定後の再認証API呼び出し開始...');
-      const reauthResult = await reauthenticateForSatellite(satellite.id);
-      console.log('拠点設定後の再認証結果:', reauthResult);
-      
-      if (reauthResult.success && reauthResult.data) {
-        // 新しいトークンを保存
-        const { access_token, refresh_token } = reauthResult.data;
-        
-        // ユーザー情報を更新
-        const updatedUser = {
-          ...user,
-          role: reauthResult.data.user.role,
-          company_id: reauthResult.data.user.company_id,
-          company_name: reauthResult.data.user.company_name,
-          satellite_id: reauthResult.data.user.satellite_id,
-          satellite_name: reauthResult.data.user.satellite_name
-        };
-        
-        // 認証コンテキストを更新
-        updateAuthForSatellite(updatedUser, access_token, refresh_token);
-        console.log('拠点設定後のユーザー情報:', updatedUser);
-      }
-    } catch (reauthError) {
-      console.error('拠点設定後の再認証エラー:', reauthError);
-    }
-  };
+  // 拠点再認証処理を分離（無限ループ防止のため削除）
+  // const performSatelliteReauth = async (satellite) => {
+  //   // 再認証処理は削除
+  // };
 
   useEffect(() => {
-    loadUserInfo();
-    // 初期化時にロール情報を更新
-    updateRoleInfo();
-  }, []); // 依存配列を空にして無限ループを防止
+    // 初期化時のみ実行（無限ループ防止）
+    if (!userInfoLoaded && !loading) {
+      loadUserInfo();
+      setUserInfoLoaded(true);
+    }
+  }, [userInfoLoaded, loading]); // フラグを使用して一度だけ実行
   
-  // 拠点情報の変更を監視するuseEffect
+  // 拠点情報の変更を監視するuseEffect（無限ループ防止）
   useEffect(() => {
     console.log('InstructorHeader: 拠点情報変更を監視');
     console.log('currentSatellite:', currentSatellite);
     
     if (currentSatellite && currentSatellite.id) {
-      // 拠点情報が変更された場合、セッションストレージを更新
-      const selectedSatelliteInfo = {
-        id: currentSatellite.id,
-        name: currentSatellite.name,
-        company_id: currentSatellite.company_id,
-        company_name: currentSatellite.company_name
-      };
-      sessionStorage.setItem('selectedSatellite', JSON.stringify(selectedSatelliteInfo));
-      console.log('InstructorHeader: 拠点情報変更によりセッションストレージを更新:', selectedSatelliteInfo);
-    }
-  }, [currentSatellite]);
-
-  // ロール情報を更新する関数
-  const updateRoleInfo = async () => {
-    try {
-      const result = await getUserInfo();
-      if (result.success && result.data) {
-        const { user: userInfo } = result.data;
-        console.log('ロール情報更新:', userInfo.role);
-        
-        // JWTトークンを更新
-        const accessToken = localStorage.getItem('accessToken');
-        if (accessToken) {
-          const decodedToken = decodeJWT(accessToken);
-          
-          // 拠点管理者判定をチェック
-          const isManager = isCurrentSatelliteManager();
-          const shouldUpdateRole = (decodedToken.role === 4 && isManager) || 
-                                  (decodedToken && decodedToken.role !== userInfo.role);
-          
-          if (shouldUpdateRole) {
-            console.log('JWTトークンのロールを更新:', decodedToken.role, '→', isManager ? 5 : userInfo.role);
-            
-            // 拠点管理者の場合は再認証を実行
-            if (decodedToken.role === 4 && isManager && currentSatellite) {
-              try {
-                console.log('拠点管理者として再認証を実行します');
-                const reauthResult = await reauthenticateForSatellite(currentSatellite.id);
-                if (reauthResult.success && reauthResult.data) {
-                  // 新しいトークンを保存
-                  const { access_token, refresh_token } = reauthResult.data;
-                  localStorage.setItem('accessToken', access_token);
-                  localStorage.setItem('refreshToken', refresh_token);
-                  
-                  // ユーザー情報を更新
-                  const updatedUser = {
-                    ...user,
-                    role: reauthResult.data.user.role,
-                    company_id: reauthResult.data.user.company_id,
-                    company_name: reauthResult.data.user.company_name,
-                    satellite_id: reauthResult.data.user.satellite_id,
-                    satellite_name: reauthResult.data.user.satellite_name
-                  };
-                  
-                  // 認証コンテキストを更新
-                  updateAuthForSatellite(updatedUser, access_token, refresh_token);
-                  console.log('拠点管理者としてトークンが更新されました');
-                  return;
-                }
-              } catch (reauthError) {
-                console.error('拠点管理者再認証エラー:', reauthError);
-              }
-            }
-            
-            // 通常のトークン更新処理
-            try {
-              const refreshResponse = await fetch(`${API_BASE_URL}/api/refresh`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  refresh_token: localStorage.getItem('refreshToken')
-                })
-              });
-              
-              if (refreshResponse.ok) {
-                const refreshData = await refreshResponse.json();
-                if (refreshData.success && refreshData.data) {
-                  // 新しいトークンを保存
-                  localStorage.setItem('accessToken', refreshData.data.access_token);
-                  localStorage.setItem('refreshToken', refreshData.data.refresh_token);
-                  console.log('トークンが更新されました');
-                }
-              }
-            } catch (refreshError) {
-              console.error('トークン更新エラー:', refreshError);
-            }
-            
-            // ローカルストレージのユーザー情報も更新
-            const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-            currentUser.role = isManager ? 5 : userInfo.role;
-            localStorage.setItem('currentUser', JSON.stringify(currentUser));
-          }
+      // セッションストレージの現在の値を取得
+      const storedSatellite = sessionStorage.getItem('selectedSatellite');
+      let storedSatelliteData = null;
+      
+      try {
+        if (storedSatellite) {
+          storedSatelliteData = JSON.parse(storedSatellite);
         }
+      } catch (error) {
+        console.error('セッションストレージの拠点情報パースエラー:', error);
       }
-    } catch (error) {
-      console.error('ロール情報更新エラー:', error);
+      
+      // 拠点情報が実際に変更された場合のみ更新（無限ループ防止）
+      if (!storedSatelliteData || storedSatelliteData.id !== currentSatellite.id) {
+        const selectedSatelliteInfo = {
+          id: currentSatellite.id,
+          name: currentSatellite.name,
+          company_id: currentSatellite.company_id,
+          company_name: currentSatellite.company_name
+        };
+        sessionStorage.setItem('selectedSatellite', JSON.stringify(selectedSatelliteInfo));
+        console.log('InstructorHeader: 拠点情報変更によりセッションストレージを更新:', selectedSatelliteInfo);
+      }
     }
-  };
+  }, [currentSatellite?.id]); // 拠点IDのみを依存配列に含める
+
+  // ロール情報を更新する関数（無限ループ防止のため削除）
+  // const updateRoleInfo = async () => {
+  //   // 関数全体を削除
+  // };
 
   const handleLogout = () => {
     if (window.confirm('ログアウトしますか？')) {
@@ -520,9 +431,9 @@ const InstructorHeader = ({ user, onLocationChange }) => {
     }
   };
 
-  // ユーザーのロール名を取得
-  const actualRoleId = getActualRoleId();
-  const userRoleName = getRoleName(actualRoleId);
+  // ユーザーのロール名を取得（拠点情報が利用可能になってから実行）
+  const actualRoleId = currentSatellite ? getActualRoleId() : user?.role || 4;
+  const userRoleName = currentSatellite ? getRoleName(actualRoleId) : '指導員';
   
   // 権限チェック
   const canSwitchCompany = actualRoleId >= 9;

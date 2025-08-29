@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import { getActualRoleId, getCurrentUserSatelliteId } from '../utils/locationUtils';
 import { apiGet, apiPost, apiPut, apiDelete, reauthenticateForSatellite, updateUser } from '../utils/api';
@@ -16,6 +16,10 @@ const LocationManagementForInstructor = ({ currentUser, onLocationChange }) => {
   // 権限チェック（ロール5以上のみアクセス可能）
   const actualRoleId = getActualRoleId(authUser);
   const hasPermission = actualRoleId >= 5;
+  
+  // 現在のユーザー情報をrefで保持（無限ループ防止）
+  const currentUserRef = useRef(currentUser);
+  currentUserRef.current = currentUser;
   
   const [locationInfo, setLocationInfo] = useState({
     id: null,
@@ -40,24 +44,24 @@ const LocationManagementForInstructor = ({ currentUser, onLocationChange }) => {
   const [formLoading, setFormLoading] = useState(false);
 
   // 拠点情報と統計を取得
-  const fetchLocationData = async () => {
-    let satelliteId = getCurrentUserSatelliteId(currentUser);
+  const fetchLocationData = useCallback(async () => {
+    let satelliteId = getCurrentUserSatelliteId(currentUserRef.current);
     
     // 拠点IDが見つからない場合の処理
     if (!satelliteId) {
       try {
         console.log('拠点IDが見つからないため、ユーザー情報を更新して再試行...');
         
-        // ユーザー情報を最新の状態に更新
-        const userInfoResponse = await apiGet('/api/user-info');
-        if (userInfoResponse && userInfoResponse.satellite_ids && userInfoResponse.satellite_ids.length > 0) {
-          satelliteId = userInfoResponse.satellite_ids[0];
-          console.log('更新されたユーザー情報から拠点IDを取得:', satelliteId);
+        // 管理者の場合、ログイン時選択した拠点を確認
+        if (currentUserRef.current && currentUserRef.current.role >= 9 && currentUserRef.current.satellite_id) {
+          satelliteId = currentUserRef.current.satellite_id;
+          console.log('管理者用: ログイン時選択拠点IDを使用:', satelliteId);
         } else {
-          // 管理者の場合、ログイン時選択した拠点を確認
-          if (currentUser && currentUser.role >= 9 && currentUser.satellite_id) {
-            satelliteId = currentUser.satellite_id;
-            console.log('管理者用: ログイン時選択拠点IDを使用:', satelliteId);
+          // ユーザー情報を最新の状態に更新（無限ループを防ぐため、条件付きで実行）
+          const userInfoResponse = await apiGet('/api/user-info');
+          if (userInfoResponse && userInfoResponse.satellite_ids && userInfoResponse.satellite_ids.length > 0) {
+            satelliteId = userInfoResponse.satellite_ids[0];
+            console.log('更新されたユーザー情報から拠点IDを取得:', satelliteId);
           } else {
             // 拠点一覧からユーザーの拠点を特定
             console.log('拠点IDが見つからないため、拠点一覧から特定を試行...');
@@ -96,50 +100,6 @@ const LocationManagementForInstructor = ({ currentUser, onLocationChange }) => {
           // 現在の拠点情報をselectedSatelliteに保存
           sessionStorage.setItem('selectedSatellite', JSON.stringify(satelliteData));
           console.log('selectedSatelliteを更新:', satelliteData);
-          
-          // 拠点変更時の再認証は、実際に拠点が変更された場合のみ実行
-          // 拠点管理タブをクリックしただけでは実行しない
-          const currentSelectedSatellite = sessionStorage.getItem('selectedSatellite');
-          if (currentSelectedSatellite) {
-            try {
-              const parsedCurrent = JSON.parse(currentSelectedSatellite);
-              if (parsedCurrent.id !== satelliteId) {
-                // 拠点が実際に変更された場合のみ再認証を実行
-                if (currentUser && currentUser.role >= 9) {
-                  try {
-                    console.log('拠点が変更されました。管理者用: 拠点変更時再認証API呼び出し開始...');
-                    const reauthResult = await reauthenticateForSatellite(satelliteId);
-                    console.log('拠点変更時再認証結果:', reauthResult);
-                    
-                    if (reauthResult.success && reauthResult.data) {
-                      // 新しいトークンを保存
-                      const { access_token, refresh_token } = reauthResult.data;
-                      
-                      // ユーザー情報を更新
-                      const updatedUser = {
-                        ...currentUser,
-                        role: reauthResult.data.user.role,
-                        company_id: reauthResult.data.user.company_id,
-                        company_name: reauthResult.data.user.company_name,
-                        satellite_id: reauthResult.data.user.satellite_id,
-                        satellite_name: reauthResult.data.user.satellite_name
-                      };
-                      
-                      // 認証コンテキストを更新
-                      updateAuthForSatellite(updatedUser, access_token, refresh_token);
-                      console.log('拠点変更後のユーザー情報:', updatedUser);
-                    }
-                  } catch (reauthError) {
-                    console.error('拠点変更時再認証エラー:', reauthError);
-                  }
-                }
-              } else {
-                console.log('拠点に変更がないため、再認証をスキップします。');
-              }
-            } catch (parseError) {
-              console.error('selectedSatelliteのパースエラー:', parseError);
-            }
-          }
         }
       } catch (error) {
         console.error('拠点情報の取得エラー（selectedSatellite更新用）:', error);
@@ -242,7 +202,7 @@ const LocationManagementForInstructor = ({ currentUser, onLocationChange }) => {
         instructorCount: statsData.stats?.instructor_count || 0,
         address: satelliteData.address || '未設定',
         phone: satelliteData.phone || '未設定',
-        manager: currentUser?.name || '未設定',
+        manager: currentUserRef.current?.name || '未設定',
         managers: managers,
         manager_ids: satelliteData.manager_ids || null
       };
@@ -264,7 +224,7 @@ const LocationManagementForInstructor = ({ currentUser, onLocationChange }) => {
       setLocationInfo(updatedLocationInfo);
       
       // 親コンポーネントに拠点情報の更新を通知（初回のみ）
-      if (onLocationChange && !locationInfo.id) {
+      if (onLocationChange) {
         onLocationChange({
           id: satelliteData.id,
           name: satelliteData.name,
@@ -279,17 +239,17 @@ const LocationManagementForInstructor = ({ currentUser, onLocationChange }) => {
       console.error('拠点情報取得エラー:', error);
       console.error('エラー詳細:', {
         satelliteId,
-        currentUser: currentUser?.id,
+        currentUser: currentUserRef.current?.id,
         errorMessage: error.message,
         errorStack: error.stack
       });
       setError(`拠点情報の取得に失敗しました: ${error.message}`);
     }
-  };
+  }, []);
 
   // 指導者一覧を取得
-  const fetchInstructors = async () => {
-    let satelliteId = getCurrentUserSatelliteId(currentUser);
+  const fetchInstructors = useCallback(async () => {
+    let satelliteId = getCurrentUserSatelliteId(currentUserRef.current);
     if (!satelliteId) {
       // 拠点IDが見つからない場合、拠点一覧から取得
       try {
@@ -329,24 +289,23 @@ const LocationManagementForInstructor = ({ currentUser, onLocationChange }) => {
       // 指導者一覧の取得に失敗しても拠点情報は表示する
       setInstructors([]);
     }
-  };
+  }, []);
 
-  // 初期データ読み込み
+  // 初期データ読み込みとユーザー情報変更時の再読み込み
   useEffect(() => {
     const loadData = async () => {
+      if (!currentUserRef.current) {
+        setError('ユーザー情報が取得できません');
+        setLoading(false);
+        return;
+      }
+      
+      console.log('データ読み込み開始 - 現在のユーザー:', currentUserRef.current);
+      
       setLoading(true);
       setError(null);
       
       try {
-        // 現在のユーザー情報を確認
-        console.log('コンポーネント初期化 - 現在のユーザー:', currentUser);
-        
-        if (!currentUser) {
-          setError('ユーザー情報が取得できません');
-          setLoading(false);
-          return;
-        }
-        
         // 拠点情報と指導者一覧を並行して取得
         await Promise.all([
           fetchLocationData(),
@@ -360,108 +319,13 @@ const LocationManagementForInstructor = ({ currentUser, onLocationChange }) => {
       }
     };
 
-    // 初回実行
+    // 初回実行またはユーザー情報が変更された場合のみ実行
     loadData();
-  }, []); // 空の依存配列で初回のみ実行
-
-  // ユーザー情報または選択中の拠点が変更された場合にデータを再読み込み
-  useEffect(() => {
-    const loadData = async () => {
-      if (!currentUser) return;
-      
-      console.log('ユーザー情報または拠点選択が変更されました - データを再読み込み');
-      
-      // 拠点情報が変更された場合、古いselectedSatellite情報をクリア
-      if (currentUser.satellite_ids && currentUser.satellite_ids.length > 0) {
-        const currentSatelliteId = currentUser.satellite_ids[0];
-        const selectedSatellite = sessionStorage.getItem('selectedSatellite');
-        
-        if (selectedSatellite) {
-          try {
-            const parsedSatellite = JSON.parse(selectedSatellite);
-            if (parsedSatellite.id !== currentSatelliteId) {
-              console.log('拠点情報が変更されました。古いselectedSatellite情報をクリアします。');
-              sessionStorage.removeItem('selectedSatellite');
-            }
-          } catch (error) {
-            console.error('selectedSatelliteのパースエラー:', error);
-            sessionStorage.removeItem('selectedSatellite');
-          }
-        }
-      }
-      
-      setLoading(true);
-      setError(null);
-      
-      try {
-        // 拠点情報と指導者一覧を並行して取得
-        await Promise.all([
-          fetchLocationData(),
-          fetchInstructors()
-        ]);
-      } catch (error) {
-        console.error('データ再読み込みエラー:', error);
-        setError(error.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    // 初回以外で実行（無限ループを防ぐため、前回の値と比較）
-    if (currentUser) {
-      loadData();
-    }
-  }, [currentUser?.id]); // ユーザーIDのみを依存配列に含める（satellite_idsは削除）
+  }, [currentUser?.id, currentUser?.satellite_id]);
 
   // localStorageの変更を監視（企業切り替えや拠点選択の変更を検知）
-  useEffect(() => {
-    const handleStorageChange = (e) => {
-      if (e.key === 'currentUser' || e.key === 'selectedSatellite') {
-        console.log('localStorageが変更されました:', e.key);
-        
-        // 無限ループを防ぐため、現在の状態と比較
-        const currentSatelliteId = getCurrentUserSatelliteId(currentUser);
-        const currentLocationId = locationInfo.id;
-        
-        // 拠点IDが実際に変更された場合のみ再読み込み
-        if (currentSatelliteId && currentSatelliteId !== currentLocationId) {
-          console.log('拠点IDが変更されました。データを再読み込みします。');
-          setTimeout(() => {
-            const loadData = async () => {
-              if (!currentUser) return;
-              
-              console.log('localStorage変更によりデータを再読み込み');
-              setLoading(true);
-              setError(null);
-              
-              try {
-                await Promise.all([
-                  fetchLocationData(),
-                  fetchInstructors()
-                ]);
-              } catch (error) {
-                console.error('localStorage変更後のデータ再読み込みエラー:', error);
-                setError(error.message);
-              } finally {
-                setLoading(false);
-              }
-            };
-            
-            loadData();
-          }, 100);
-        } else {
-          console.log('拠点IDに変更がないため、再読み込みをスキップします。');
-        }
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    
-    // クリーンアップ
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, [currentUser, locationInfo.id]); // locationInfo.idを依存配列に追加
+  // 無限ループを防ぐため、このuseEffectは削除
+  // 代わりに、ユーザー情報の変更はAuthContextで管理され、useEffectの依存配列で検知される
 
   // ユーザー情報を最新の状態に更新
   const updateUserInfo = async () => {
@@ -502,7 +366,7 @@ const LocationManagementForInstructor = ({ currentUser, onLocationChange }) => {
   const handleAddInstructor = async (instructorData) => {
     setFormLoading(true);
     try {
-      const satelliteId = getCurrentUserSatelliteId(currentUser);
+      const satelliteId = getCurrentUserSatelliteId(currentUserRef.current);
       const response = await apiPost(`/api/satellites/${satelliteId}/instructors`, instructorData);
       
       if (response.success) {
@@ -531,7 +395,7 @@ const LocationManagementForInstructor = ({ currentUser, onLocationChange }) => {
     }
 
     try {
-      const satelliteId = getCurrentUserSatelliteId(currentUser);
+      const satelliteId = getCurrentUserSatelliteId(currentUserRef.current);
       const response = await apiDelete(`/api/satellites/${satelliteId}/instructors/${instructorId}`);
       
       if (response.success) {
@@ -553,7 +417,7 @@ const LocationManagementForInstructor = ({ currentUser, onLocationChange }) => {
   // 管理者設定切り替え処理
   const handleToggleManager = async (instructorId, isManager) => {
     try {
-      const satelliteId = getCurrentUserSatelliteId(currentUser);
+      const satelliteId = getCurrentUserSatelliteId(currentUserRef.current);
       const response = await apiPut(`/api/satellites/${satelliteId}/instructors/${instructorId}/manager`, {
         is_manager: isManager
       });
@@ -578,7 +442,7 @@ const LocationManagementForInstructor = ({ currentUser, onLocationChange }) => {
   const handleUpdateLocation = async (locationData) => {
     setFormLoading(true);
     try {
-      const satelliteId = getCurrentUserSatelliteId(currentUser);
+      const satelliteId = getCurrentUserSatelliteId(currentUserRef.current);
       // 最大利用者数は管理者ダッシュボードでの操作のため除外
       const { maxStudents, ...updateData } = locationData;
       const response = await apiPut(`/api/satellites/${satelliteId}`, updateData);
@@ -604,7 +468,7 @@ const LocationManagementForInstructor = ({ currentUser, onLocationChange }) => {
   const handleUpdateManagerSettings = async (managerIds) => {
     setFormLoading(true);
     try {
-      const satelliteId = getCurrentUserSatelliteId(currentUser);
+      const satelliteId = getCurrentUserSatelliteId(currentUserRef.current);
       const response = await apiPut(`/api/satellites/${satelliteId}/managers`, {
         manager_ids: managerIds
       });

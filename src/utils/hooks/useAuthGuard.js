@@ -186,7 +186,7 @@ export const useInstructorGuard = () => {
     
     console.log('InstructorGuard: User authorized');
     console.log('User role:', currentUser.role, 'is authorized for instructor pages');
-  }, [isAuthenticated, isLoading, currentUser, navigate]);
+  }, [isAuthenticated, isLoading, currentUser?.id, navigate]); // currentUser.idのみを依存配列に含める
 
   return { isAuthenticated, isLoading, currentUser };
 };

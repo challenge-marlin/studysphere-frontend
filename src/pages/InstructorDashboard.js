@@ -78,11 +78,13 @@ const InstructorDashboard = () => {
       organization: 'スタディスフィア株式会社'
     };
     
-    // ローカルユーザー状態を設定
-    setLocalUser({
-      ...currentUser,
-      location: currentUser.location || initialLocation
-    });
+    // ローカルユーザー状態を設定（無限ループ防止のため条件を追加）
+    if (!localUser || localUser.id !== currentUser.id) {
+      setLocalUser({
+        ...currentUser,
+        location: currentUser.location || initialLocation
+      });
+    }
     
     // URLパラメータからタブを設定（初回のみ）
     if (!localUser) {
@@ -100,7 +102,7 @@ const InstructorDashboard = () => {
 
     // パスワード変更申請一覧を取得
     // fetchPasswordRequests(); // この関数は削除されたため、ここでは呼び出さない
-  }, [currentUser]); // locationを依存配列から削除
+  }, [currentUser?.id]); // currentUser.idのみを依存配列に含める
 
   // 専門分野を取得
   useEffect(() => {
@@ -370,9 +372,8 @@ const InstructorDashboard = () => {
     setLocalUser(updatedUser);
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
     
-    // ページをリロードして新しい拠点情報を反映
-    console.log('拠点変更によりページをリロードします');
-    window.location.reload();
+    // ページリロードを削除し、状態更新のみで対応
+    console.log('拠点変更により状態を更新しました');
   };
 
   const handleHomeSupportSuccess = (result) => {

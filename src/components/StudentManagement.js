@@ -175,6 +175,9 @@ const StudentManagementRefactored = ({ teacherId }) => {
       });
       
       if (response.success) {
+        console.log('=== フィルタリング前のデータ ===');
+        console.log('全ユーザーデータ:', response.data);
+        
         const studentUsers = response.data.filter(user => user.role === 1);
         
         console.log('=== 拠点利用者データ取得デバッグ ===');
@@ -182,21 +185,24 @@ const StudentManagementRefactored = ({ teacherId }) => {
         console.log('全ユーザー数:', response.data.length);
         console.log('利用者数:', studentUsers.length);
         
-                 // 各利用者のタグとコース情報を確認
-         studentUsers.forEach((student, index) => {
-           console.log(`利用者${index + 1} (${student.name}):`, {
-             id: student.id,
-             name: student.name,
-             tags: student.tags,
-             tagsType: typeof student.tags,
-             courses: student.courses,
-             coursesType: typeof student.courses,
-             temp_password: student.temp_password,
-             expires_at: student.expires_at,
-             instructor_name: student.instructor_name,
-             is_remote_user: student.is_remote_user
-           });
-         });
+        // 各利用者のタグとコース情報を確認
+        studentUsers.forEach((student, index) => {
+          console.log(`利用者${index + 1} (${student.name}):`, {
+            id: student.id,
+            name: student.name,
+            tags: student.tags,
+            tagsType: typeof student.tags,
+            courses: student.courses,
+            coursesType: typeof student.courses,
+            temp_password: student.temp_password,
+            expires_at: student.expires_at,
+            instructor_name: student.instructor_name,
+            is_remote_user: student.is_remote_user
+          });
+        });
+        
+        console.log('=== フィルタリング後の利用者データ ===');
+        console.log('studentUsers:', studentUsers);
         
         setStudents(studentUsers);
       } else {

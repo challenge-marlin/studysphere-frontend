@@ -9,6 +9,9 @@ const StudentTable = ({
   onDeleteStudent,
   onViewDailyReports
 }) => {
+  console.log('=== StudentTable レンダリング ===');
+  console.log('受け取ったstudents:', students);
+  console.log('students.length:', students.length);
   return (
     <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
       <div className="overflow-x-auto" style={{ minWidth: '1200px' }}>
@@ -57,12 +60,26 @@ const StudentTable = ({
                         // student.coursesからコース情報を取得（バックエンドから返される）
                         const displayCourses = student.courses || [];
                         
+                                                 console.log(`利用者 ${student.name} のコース情報:`, displayCourses);
+                         console.log(`利用者 ${student.name} の全データ:`, student);
+                        
                         return (
                           <>
                             {displayCourses.slice(0, 4).map((course, index) => {
                               const courseTitle = course.title || course.course_title || '';
+                              const courseCategory = course.category || '';
+                              const isCurriculumPath = courseCategory === 'カリキュラムパス';
+                              
                               return (
-                                <span key={index} className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full font-medium">
+                                <span 
+                                  key={index} 
+                                  className={`px-2 py-1 text-xs rounded-full font-medium ${
+                                    isCurriculumPath 
+                                      ? 'bg-blue-100 text-blue-700' 
+                                      : 'bg-orange-100 text-orange-700'
+                                  }`}
+                                  title={`${courseTitle} (${courseCategory})`}
+                                >
                                   {courseTitle && courseTitle.length > 12 ? courseTitle.substring(0, 12) + '...' : courseTitle}
                                 </span>
                               );

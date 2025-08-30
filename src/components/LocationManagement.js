@@ -987,7 +987,7 @@ const LocationManagement = () => {
     console.log('拠点詳細:', location);
   };
 
-  // 拠点の生徒データを取得（モック）
+  // 拠点の利用者データを取得（モック）
   const getStudentsByLocation = (locationId) => {
     // モックデータ
     return [
@@ -1413,10 +1413,10 @@ const LocationManagement = () => {
         
         {/* 必要な統計情報 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          {/* 生徒の総数に対する稼働率 */}
+          {/* 利用者の総数に対する稼働率 */}
           <div className="bg-white border-2 border-red-200 rounded-xl p-6 text-center transition-all duration-300 hover:border-red-400 hover:shadow-lg">
-            <h3 className="text-red-800 font-medium mb-2">生徒稼働率</h3>
-            <p className="text-3xl font-bold text-red-600">{totalStudents} / {totalMaxStudents}</p>
+            <h3 className="text-red-800 font-medium mb-2">利用者稼働率</h3>
+            <p className="text-3xl font-bold text-red-600">{totalStudents} / {totalMaxStudents}人</p>
             <div className="mt-2">
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
@@ -1563,7 +1563,7 @@ const LocationManagement = () => {
                 <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">組織名</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">住所</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">電話番号</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">生徒数</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">利用者数</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">有効期限</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">責任者</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">操作</th>
@@ -1583,7 +1583,20 @@ const LocationManagement = () => {
                   <td className="px-6 py-4 text-gray-600">{office.address || '-'}</td>
                   <td className="px-6 py-4 text-gray-600">{office.phone || '-'}</td>
                   <td className="px-6 py-4 text-gray-600">
-                    {office.current_users || 0} / {office.max_users || 0}
+                    <div className="flex flex-col">
+                      <div className="font-medium">
+                        {office.current_users || 0} / {office.max_users || 0}人
+                      </div>
+                      {office.utilization_rate !== undefined && office.utilization_rate !== null && (
+                        <div className={`text-xs mt-1 px-2 py-1 rounded ${
+                          office.utilization_rate >= 80 ? 'bg-red-100 text-red-700' :
+                          office.utilization_rate >= 60 ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-green-100 text-green-700'
+                        }`}>
+                          稼働率: {office.utilization_rate}%
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-gray-600">
                     {office.token_expiry_at ? (
@@ -2147,21 +2160,21 @@ const LocationManagement = () => {
                     </div>
                     <div className="form-row">
                       <div className="form-group">
-                        <label>最大生徒数 *</label>
+                        <label>最大利用者数 *</label>
                         <input
                           type="number"
                           value={editValues.maxStudents || ''}
                           onChange={(e) => setEditValues({ ...editValues, maxStudents: parseInt(e.target.value) || 0 })}
-                          placeholder="最大生徒数"
+                          placeholder="最大利用者数"
                         />
                       </div>
                       <div className="form-group">
-                        <label>現在の生徒数 *</label>
+                        <label>現在の利用者数 *</label>
                         <input
                           type="number"
                           value={editValues.studentCount || ''}
                           onChange={(e) => setEditValues({ ...editValues, studentCount: parseInt(e.target.value) || 0 })}
-                          placeholder="現在の生徒数"
+                          placeholder="現在の利用者数"
                         />
                       </div>
                     </div>
@@ -2238,25 +2251,25 @@ const LocationManagement = () => {
                     <span>{editingLocation.phone}</span>
                   </div>
                   <div className="info-item">
-                    <label>最大生徒数:</label>
+                    <label>最大利用者数:</label>
                     <span>{editingLocation.maxStudents}名</span>
                   </div>
                   <div className="info-item">
-                    <label>現在の生徒数:</label>
+                    <label>現在の利用者数:</label>
                     <span>{getStudentsByLocation(editingLocation.locationId).length}名</span>
                   </div>
                 </div>
               </div>
 
-              {/* 生徒一覧 */}
+              {/* 利用者一覧 */}
               <div className="detail-section">
-                <h4>👥 生徒一覧 ({getStudentsByLocation(editingLocation.locationId).length}名)</h4>
+                <h4>👥 利用者一覧 ({getStudentsByLocation(editingLocation.locationId).length}名)</h4>
                 {getStudentsByLocation(editingLocation.locationId).length > 0 ? (
                   <div className="students-table-container">
                     <table className="students-table">
                       <thead>
                         <tr>
-                          <th>生徒名</th>
+                          <th>利用者名</th>
                           <th>メールアドレス</th>
                           <th>コース</th>
                           <th>担当指導員</th>
@@ -2294,7 +2307,7 @@ const LocationManagement = () => {
                   </div>
                 ) : (
                   <div className="no-students">
-                    <p>この拠点には現在生徒が登録されていません。</p>
+                    <p>この拠点には現在利用者が登録されていません。</p>
                   </div>
                 )}
               </div>
@@ -2310,7 +2323,7 @@ const LocationManagement = () => {
                     </span>
                   </div>
                   <div className="stat-item">
-                    <span className="stat-label">アクティブ生徒:</span>
+                    <span className="stat-label">アクティブ利用者:</span>
                     <span className="stat-value">
                       {getStudentsByLocation(editingLocation.locationId).filter(s => s.status === 'active').length}名
                     </span>

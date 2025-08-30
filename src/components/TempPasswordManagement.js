@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { apiGet, apiPost } from '../utils/api';
 import { useAuth } from './contexts/AuthContext';
 
@@ -6,17 +6,37 @@ const TempPasswordManagement = () => {
     const { currentUser, isAuthenticated } = useAuth();
     const [users, setUsers] = useState([]);
     const [selectedUsers, setSelectedUsers] = useState([]);
-    const [instructors, setInstructors] = useState([]);
-    const [selectedInstructor, setSelectedInstructor] = useState('');
+    const [hierarchyData, setHierarchyData] = useState([]);
+    const [selectedCompanies, setSelectedCompanies] = useState([]);
+    const [selectedSatellites, setSelectedSatellites] = useState([]);
+    const [selectedInstructors, setSelectedInstructors] = useState([]);
     const [expiryTime, setExpiryTime] = useState('');
     const [announcementTitle, setAnnouncementTitle] = useState('');
     const [announcementMessage, setAnnouncementMessage] = useState('');
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
 
+    // 階層データを取得
+    const fetchHierarchyData = async () => {
+        if (!isAuthenticated || !currentUser) {
+            setMessage('ログインが必要です。');
+            return;
+        }
+        
+        try {
+            const response = await apiGet('/api/temp-passwords/hierarchy');
+            if (response.success) {
+                console.log('階層データ:', response.data);
+                setHierarchyData(response.data);
+            }
+        } catch (error) {
+            console.error('階層データ取得エラー:', error);
+            setMessage('階層データの取得に失敗しました');
+        }
+    };
+
     // 利用者一覧を取得
-    const fetchUsers = async () => {
-        // 認証状態を確認
+    const fetchUsers = useCallback(async () => {
         if (!isAuthenticated || !currentUser) {
             setMessage('ログインが必要です。');
             return;
@@ -25,12 +45,37 @@ const TempPasswordManagement = () => {
         try {
             setLoading(true);
             const params = new URLSearchParams();
-            if (selectedInstructor) {
-                params.append('selected_instructor_id', selectedInstructor);
+            
+            if (selectedCompanies.length > 0) {
+                selectedCompanies.forEach(companyId => {
+                    params.append('selected_companies', companyId);
+                });
             }
             
-            const response = await apiGet(`/api/temp-passwords/users?${params}`);
+            if (selectedSatellites.length > 0) {
+                selectedSatellites.forEach(satelliteId => {
+                    params.append('selected_satellites', satelliteId);
+                });
+            }
+            
+            if (selectedInstructors.length > 0) {
+                selectedInstructors.forEach(instructorId => {
+                    if (instructorId !== 'none') {
+                        params.append('selected_instructors', instructorId);
+                    } else {
+                        params.append('selected_instructors', 'none');
+                    }
+                });
+            }
+            
+            console.log('API呼び出しパラメータ:', params.toString());
+            const response = await apiGet(`/api/temp-passwords/users-by-hierarchy?${params}`);
             if (response.success) {
+                console.log('利用者データ:', response.data);
+                console.log('利用者データの詳細:');
+                response.data.forEach((user, index) => {
+                    console.log(`${index + 1}. ${user.name} - ${user.company_name}/${user.satellite_name} (instructor_id: ${user.instructor_id}, satellite_ids: ${JSON.stringify(user.satellite_ids)})`);
+                });
                 setUsers(response.data);
                 // 全選択状態でスタート
                 const allSelected = response.data.map(user => user.id);
@@ -42,30 +87,69 @@ const TempPasswordManagement = () => {
         } finally {
             setLoading(false);
         }
-    };
-
-    // 指導員一覧を取得
-    const fetchInstructors = async () => {
-        // 認証状態を確認
-        if (!isAuthenticated || !currentUser) {
-            setMessage('ログインが必要です。');
-            return;
-        }
-        
-        try {
-            const response = await apiGet('/api/temp-passwords/instructors');
-            if (response.success) {
-                setInstructors(response.data);
-            }
-        } catch (error) {
-            console.error('指導員一覧取得エラー:', error);
-        }
-    };
+    }, [isAuthenticated, currentUser, selectedCompanies, selectedSatellites, selectedInstructors]);
 
     useEffect(() => {
-        fetchInstructors();
-        fetchUsers();
-    }, [selectedInstructor]);
+        fetchHierarchyData();
+    }, []);
+
+    useEffect(() => {
+        if (hierarchyData.length > 0) {
+            fetchUsers();
+        }
+    }, [fetchUsers, hierarchyData.length]);
+
+    // 企業選択の切り替え
+    const toggleCompanySelection = (companyId) => {
+        setSelectedCompanies(prev => {
+            const newSelected = prev.includes(companyId) 
+                ? prev.filter(id => id !== companyId)
+                : [...prev, companyId];
+            
+            // 企業が選択解除された場合、関連する拠点と担当者も選択解除
+            if (prev.includes(companyId)) {
+                const company = hierarchyData.find(c => c.id === companyId);
+                if (company) {
+                    const companySatelliteIds = company.satellites.map(s => s.id);
+                    const companyInstructorIds = company.satellites.flatMap(s => s.instructors.map(i => i.id));
+                    
+                    setSelectedSatellites(prevSatellites => prevSatellites.filter(id => !companySatelliteIds.includes(id)));
+                    setSelectedInstructors(prevInstructors => prevInstructors.filter(id => !companyInstructorIds.includes(id)));
+                }
+            }
+            
+            return newSelected;
+        });
+    };
+
+    // 拠点選択の切り替え
+    const toggleSatelliteSelection = (satelliteId) => {
+        setSelectedSatellites(prev => {
+            const newSelected = prev.includes(satelliteId) 
+                ? prev.filter(id => id !== satelliteId)
+                : [...prev, satelliteId];
+            
+            // 拠点が選択解除された場合、関連する担当者も選択解除
+            if (prev.includes(satelliteId)) {
+                const satellite = hierarchyData.flatMap(c => c.satellites).find(s => s.id === satelliteId);
+                if (satellite) {
+                    const satelliteInstructorIds = satellite.instructors.map(i => i.id);
+                    setSelectedInstructors(prevInstructors => prevInstructors.filter(id => !satelliteInstructorIds.includes(id)));
+                }
+            }
+            
+            return newSelected;
+        });
+    };
+
+    // 担当者選択の切り替え
+    const toggleInstructorSelection = (instructorId) => {
+        setSelectedInstructors(prev => 
+            prev.includes(instructorId) 
+                ? prev.filter(id => id !== instructorId)
+                : [...prev, instructorId]
+        );
+    };
 
     // 利用者選択の切り替え
     const toggleUserSelection = (userId) => {
@@ -87,7 +171,6 @@ const TempPasswordManagement = () => {
 
     // 一時パスワード発行
     const issueTempPasswords = async () => {
-        // 認証状態を確認
         if (!isAuthenticated || !currentUser) {
             setMessage('ログインが必要です。');
             return;
@@ -130,15 +213,37 @@ const TempPasswordManagement = () => {
     // ユーザータイプに応じた表示名を取得
     const getUserTypeLabel = (userType) => {
         switch (userType) {
-            case 'my_user':
-                return '自分の担当利用者';
-            case 'no_instructor_no_temp':
-                return '担当なし・パスワード未発行';
+            case 'no_instructor':
+                return '担当なし';
             case 'selected_instructor':
-                return '選択指導員の担当利用者';
+                return '選択担当者の利用者';
+            case 'other_instructor':
+                return 'その他の担当者の利用者';
             default:
                 return 'その他';
         }
+    };
+
+    // 表示用の拠点リストを取得（企業選択に基づく）
+    const getVisibleSatellites = () => {
+        if (selectedCompanies.length === 0) {
+            return []; // 企業が選択されていない場合は拠点を表示しない
+        }
+        return hierarchyData
+            .filter(company => selectedCompanies.includes(company.id))
+            .flatMap(company => company.satellites);
+    };
+
+    // 表示用の担当者リストを取得（拠点選択に基づく）
+    const getVisibleInstructors = () => {
+        const visibleSatellites = getVisibleSatellites();
+        if (selectedSatellites.length === 0) {
+            return []; // 拠点が選択されていない場合は担当者を表示しない
+        }
+        return visibleSatellites
+            .filter(satellite => selectedSatellites.includes(satellite.id))
+            .flatMap(satellite => satellite.instructors)
+            .filter((instructor, index, self) => self.findIndex(i => i.id === instructor.id) === index); // 重複を除去
     };
 
     return (
@@ -151,24 +256,94 @@ const TempPasswordManagement = () => {
                 </div>
             )}
 
-            {/* 別担当者選択 */}
+            {/* 階層選択 */}
             <div className="bg-white p-6 rounded-lg shadow mb-6">
-                <h2 className="text-lg font-semibold mb-4">別担当者選択（オプション）</h2>
-                <select
-                    value={selectedInstructor}
-                    onChange={(e) => setSelectedInstructor(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                    <option value="">選択してください</option>
-                    {instructors.map(instructor => (
-                        <option key={instructor.id} value={instructor.id}>
-                            {instructor.name}
-                        </option>
-                    ))}
-                </select>
-                <p className="text-sm text-gray-600 mt-2">
-                    選択すると、その指導員のパスワード未発行担当利用者もリストに追加されます
-                </p>
+                <h2 className="text-lg font-semibold mb-4">担当者選択</h2>
+                
+                {/* 企業選択 */}
+                <div className="mb-6">
+                    <h3 className="text-md font-medium mb-3 text-gray-700">企業選択</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {hierarchyData.map(company => (
+                            <label key={company.id} className="flex items-center p-3 border rounded hover:bg-gray-50 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedCompanies.includes(company.id)}
+                                    onChange={() => toggleCompanySelection(company.id)}
+                                    className="mr-3"
+                                />
+                                <span className="font-medium">{company.name}</span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+
+                {/* 拠点選択 */}
+                <div className="mb-6">
+                    <h3 className="text-md font-medium mb-3 text-gray-700">拠点選択</h3>
+                    {selectedCompanies.length === 0 ? (
+                        <p className="text-gray-500 italic">企業を選択してください</p>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {getVisibleSatellites().map(satellite => (
+                                <label key={satellite.id} className="flex items-center p-3 border rounded hover:bg-gray-50 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedSatellites.includes(satellite.id)}
+                                        onChange={() => toggleSatelliteSelection(satellite.id)}
+                                        className="mr-3"
+                                    />
+                                    <div>
+                                        <span className="font-medium">{satellite.name}</span>
+                                        <div className="text-sm text-gray-500">
+                                            {hierarchyData.find(c => c.id === satellite.company_id)?.name}
+                                        </div>
+                                    </div>
+                                </label>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* 担当者選択 */}
+                <div className="mb-6">
+                    <h3 className="text-md font-medium mb-3 text-gray-700">担当者選択（複数選択可能）</h3>
+                    {selectedSatellites.length === 0 ? (
+                        <p className="text-gray-500 italic">拠点を選択してください</p>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {/* 「なし」オプション */}
+                            <label className="flex items-center p-3 border rounded hover:bg-gray-50 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedInstructors.includes('none')}
+                                    onChange={() => toggleInstructorSelection('none')}
+                                    className="mr-3"
+                                />
+                                <span className="font-medium text-gray-600">担当なし</span>
+                            </label>
+                            
+                            {/* 担当者オプション */}
+                            {getVisibleInstructors().map(instructor => (
+                                <label key={instructor.id} className="flex items-center p-3 border rounded hover:bg-gray-50 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedInstructors.includes(instructor.id)}
+                                        onChange={() => toggleInstructorSelection(instructor.id)}
+                                        className="mr-3"
+                                    />
+                                    <div>
+                                        <span className="font-medium">{instructor.name}</span>
+                                        <div className="text-sm text-gray-500">
+                                            {hierarchyData.find(c => c.id === instructor.company_id)?.name} / 
+                                            {hierarchyData.find(c => c.id === instructor.company_id)?.satellites.find(s => s.id === instructor.satellite_id)?.name}
+                                        </div>
+                                    </div>
+                                </label>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* 利用者選択 */}
@@ -214,19 +389,19 @@ const TempPasswordManagement = () => {
             <div className="bg-white p-6 rounded-lg shadow mb-6">
                 <h2 className="text-lg font-semibold mb-4">有効期限設定（オプション）</h2>
                 <div className="flex items-center space-x-4">
-                                            <input
-                            type="text"
-                            value={expiryTime}
-                            onChange={(e) => setExpiryTime(e.target.value)}
-                            placeholder="HH:DD（例：23:59）"
-                            pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$"
-                            className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                        <span className="text-gray-600">まで有効</span>
+                    <input
+                        type="text"
+                        value={expiryTime}
+                        onChange={(e) => setExpiryTime(e.target.value)}
+                        placeholder="HH:DD（例：23:59）"
+                        pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$"
+                        className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <span className="text-gray-600">まで有効</span>
                 </div>
-                                    <p className="text-sm text-gray-600 mt-2">
-                        指定なしの場合は日本時間23:59まで有効です（HH:DD形式で入力してください）
-                    </p>
+                <p className="text-sm text-gray-600 mt-2">
+                    指定なしの場合は日本時間23:59まで有効です（HH:DD形式で入力してください）
+                </p>
             </div>
 
             {/* アナウンスメッセージ */}

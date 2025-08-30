@@ -191,7 +191,7 @@ export const useInstructorGuard = () => {
   return { isAuthenticated, isLoading, currentUser };
 };
 
-// 生徒専用ページ用のガード
+// 利用者専用ページ用のガード
 export const useStudentGuard = () => {
   const { isAuthenticated, isLoading, currentUser } = useAuth();
   const navigate = useNavigate();

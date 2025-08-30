@@ -79,7 +79,7 @@ const StudentLogin = () => {
     checkTempPasswordStatus();
   }, [loginCode]);
 
-  // 認証済みユーザーが生徒ログインページにアクセスした場合のリダイレクト
+  // 認証済みユーザーが利用者ログインページにアクセスした場合のリダイレクト
   useEffect(() => {
     if (isAuthenticated && currentUser) {
       switch (currentUser.role) {
@@ -93,7 +93,7 @@ const StudentLogin = () => {
           navigate('/student/dashboard');
           break;
         default:
-          // デフォルトは生徒ログインページに留まる
+          // デフォルトは利用者ログインページに留まる
           break;
       }
     }

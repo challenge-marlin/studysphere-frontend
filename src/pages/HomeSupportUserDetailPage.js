@@ -15,7 +15,7 @@ const HomeSupportUserDetailPage = () => {
     monthly: []
   });
 
-  // 生徒データを取得
+  // 利用者データを取得
   useEffect(() => {
     const mockStudents = [
       { 
@@ -97,7 +97,7 @@ const HomeSupportUserDetailPage = () => {
   if (!student) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center">
-        <div className="text-indigo-600 text-xl font-semibold">生徒情報を読み込み中...</div>
+        <div className="text-indigo-600 text-xl font-semibold">利用者情報を読み込み中...</div>
       </div>
     );
   }
@@ -238,7 +238,7 @@ const HomeSupportUserDetailPage = () => {
       {/* メインコンテンツ */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* 左カラム: 生徒情報 */}
+          {/* 左カラム: 利用者情報 */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
               <div className="text-center mb-6">

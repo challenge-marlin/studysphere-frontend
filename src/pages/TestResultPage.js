@@ -55,7 +55,7 @@ const TestResultPage = () => {
 
       // 各問題の結果を生成
       testData.questions.forEach(question => {
-        const userAnswer = answers[question.id] || "生徒の回答";
+        const userAnswer = answers[question.id] || "利用者の回答";
         const correctAnswer = sampleAnswers[question.id];
         const feedback = sampleFeedback[question.id];
         const isCorrect = false; // モックアップなので全て不正解

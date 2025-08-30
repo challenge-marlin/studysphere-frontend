@@ -20,7 +20,7 @@ const DailyRecordsPage = () => {
     healthStatus: ''
   });
 
-  // 生徒データを取得
+  // 利用者データを取得
   useEffect(() => {
     const fetchStudent = () => {
       const mockStudents = [
@@ -46,7 +46,7 @@ const DailyRecordsPage = () => {
       if (foundStudent) {
         setStudent(foundStudent);
       } else {
-        alert('生徒が見つかりません。');
+        alert('利用者が見つかりません。');
         navigate('/instructor/dashboard');
       }
     };

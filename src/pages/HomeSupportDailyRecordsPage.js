@@ -14,9 +14,9 @@ const HomeSupportDailyRecordsPage = () => {
   const [studentPhotos, setStudentPhotos] = useState({});
   const [photoLoading, setPhotoLoading] = useState({});
 
-  // 生徒データを取得
+  // 利用者データを取得
   useEffect(() => {
-    // 生徒データの取得（現在は空配列）
+    // 利用者データの取得（現在は空配列）
     setStudents([]);
     setFilteredStudents([]);
     setAvailableTags([]);
@@ -28,7 +28,7 @@ const HomeSupportDailyRecordsPage = () => {
     const initialInstructorRecords = {};
 
     students.forEach(student => {
-      // 生徒の事前入力データ（朝の時点での入力）
+      // 利用者の事前入力データ（朝の時点での入力）
       initialDailyInputs[student.id] = {
         date: selectedDate,
         temperature: '36.2',
@@ -104,7 +104,7 @@ const HomeSupportDailyRecordsPage = () => {
     }));
   };
 
-  // 生徒検索
+  // 利用者検索
   const filterStudents = (searchTerm) => {
     setSearchTerm(searchTerm);
     applyFilters(searchTerm, selectedTags);
@@ -147,7 +147,7 @@ const HomeSupportDailyRecordsPage = () => {
     setSelectedDate(newDate);
   };
 
-  // 生徒写真取得
+  // 利用者写真取得
   const fetchStudentPhotos = async (studentId, date) => {
     setPhotoLoading(prev => ({ ...prev, [studentId]: true }));
     
@@ -213,7 +213,7 @@ const HomeSupportDailyRecordsPage = () => {
               <h3 className="text-lg font-bold text-gray-800 mb-4">🔍 検索</h3>
               <input
                 type="text"
-                placeholder="生徒名、メール、コースで検索..."
+                placeholder="利用者名、メール、コースで検索..."
                 value={searchTerm}
                 onChange={(e) => filterStudents(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
@@ -271,7 +271,7 @@ const HomeSupportDailyRecordsPage = () => {
             </div>
           </div>
 
-          {/* 右カラム: 生徒記録一覧 */}
+          {/* 右カラム: 利用者記録一覧 */}
           <div className="lg:col-span-3">
             <div className="space-y-6">
               {filteredStudents.map(student => {
@@ -280,7 +280,7 @@ const HomeSupportDailyRecordsPage = () => {
                 
                 return (
                   <div key={student.id} className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-                    {/* 生徒情報ヘッダー */}
+                    {/* 利用者情報ヘッダー */}
                     <div className="flex items-start justify-between mb-6">
                       <div className="flex items-start gap-4">
                         <div className="w-16 h-16 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold text-xl">
@@ -316,10 +316,10 @@ const HomeSupportDailyRecordsPage = () => {
                       ))}
                     </div>
 
-                    {/* 生徒事前入力情報 */}
+                    {/* 利用者事前入力情報 */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                       <div className="bg-gray-50 rounded-xl p-4">
-                        <h4 className="font-semibold text-gray-800 mb-3">👤 生徒事前入力</h4>
+                        <h4 className="font-semibold text-gray-800 mb-3">👤 利用者事前入力</h4>
                         <div className="space-y-3 text-sm">
                           <div>
                             <span className="font-medium text-gray-700">体温:</span>

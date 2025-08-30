@@ -519,16 +519,16 @@ const InstructorDashboard = () => {
           {activeTab === 'learning-preview' && (
             <div className="p-8 bg-white rounded-lg shadow-lg text-center text-gray-600">
               <h2 className="text-2xl font-bold text-gray-800 mb-4">🎓 学習画面プレビュー</h2>
-              <p className="mb-6">生徒が実際に見る学習画面のプレビューです。</p>
+              <p className="mb-6">利用者が実際に見る学習画面のプレビューです。</p>
               <div className="text-left max-w-2xl mx-auto p-6 bg-gray-50 rounded-lg border-l-4 border-indigo-500">
                 <p className="mb-4"><strong>📝 実装予定:</strong></p>
                 <ul className="list-disc pl-6 space-y-2">
-                  <li>生徒ダッシュボードのプレビュー</li>
+                  <li>利用者ダッシュボードのプレビュー</li>
                   <li>コース一覧・学習画面の確認</li>
                   <li>進捗管理・課題提出画面の確認</li>
-                  <li>生徒の視点での操作確認</li>
+                  <li>利用者の視点での操作確認</li>
                 </ul>
-                <p className="mt-4 text-gray-600">生徒画面のモックアップが完成次第、ここに統合予定です。</p>
+                <p className="mt-4 text-gray-600">利用者画面のモックアップが完成次第、ここに統合予定です。</p>
               </div>
             </div>
           )}

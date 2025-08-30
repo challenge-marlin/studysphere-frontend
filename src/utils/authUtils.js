@@ -269,7 +269,7 @@ export const handleTokenInvalid = (navigate, reason = 'トークンが無効に�
   // 現在のパスを取得
   const currentPath = window.location.pathname;
   
-  // ログインページまたは生徒ログインページの場合はアラートを表示しない
+  // ログインページまたは利用者ログインページの場合はアラートを表示しない
   const isLoginPage = currentPath === '/homepage' || currentPath.startsWith('/student/login') || currentPath.startsWith('/login');
   
   // ロールに応じてナビゲーション先を決定

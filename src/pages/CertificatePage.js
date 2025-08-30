@@ -152,7 +152,7 @@ const CertificatePage = () => {
                     <span className="text-gray-800">{certificateData.studentName}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-700">生徒ID</span>
+                    <span className="font-semibold text-gray-700">利用者ID</span>
                     <span className="text-gray-800">{certificateData.studentId}</span>
                   </div>
                   <div className="flex justify-between items-center">

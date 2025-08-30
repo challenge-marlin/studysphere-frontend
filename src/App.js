@@ -52,13 +52,13 @@ function App() {
             <Route path="/instructor/dashboard" element={<InstructorDashboard />} />
             {/* 互換性のため古いパスも残す */}
             <Route path="/teacher/dashboard" element={<InstructorDashboard />} />
-            {/* 生徒用ログイン（トークンベース） */}
+            {/* 利用者用ログイン（トークンベース） */}
             <Route path="/student/login/:token" element={<StudentLogin />} />
-            {/* 生徒用ログイン（パラメータなし） */}
+            {/* 利用者用ログイン（パラメータなし） */}
             <Route path="/student-login/" element={<StudentLogin />} />
             {/* 自動ログインページ（アプリからの自動ログイン用） */}
             <Route path="/auto-login/" element={<AutoLoginPage />} />
-            {/* 生徒用ダッシュボード */}
+            {/* 利用者用ダッシュボード */}
             <Route path="/student/dashboard" element={<StudentDashboard />} />
             {/* 学習画面 */}
             <Route path="/student/learning" element={<LearningPage />} />

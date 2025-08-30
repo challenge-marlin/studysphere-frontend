@@ -234,7 +234,7 @@ const DailyReportTab = ({ student, reports = [], onSave, onEdit, onDelete, onDow
         </div>
 
         <div className="space-y-6">
-          {/* 生徒基本情報 */}
+          {/* 利用者基本情報 */}
           {student && (
             <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
               <div className="flex items-start justify-between">

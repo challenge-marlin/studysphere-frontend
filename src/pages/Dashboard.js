@@ -12,7 +12,7 @@ const Dashboard = () => {
       const userData = JSON.parse(user);
       setCurrentUser(userData);
       
-      // 生徒の受講コースを取得（モックデータ）
+      // 利用者の受講コースを取得（モックデータ）
       const mockEnrolledCourses = [
         {
           id: 'course001',

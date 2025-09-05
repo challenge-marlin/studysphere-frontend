@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import SanitizedInput from '../SanitizedInput';
 import { useAuth } from '../contexts/AuthContext';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
 
 const StudentAdder = ({ onStudentAdded, instructors }) => {
   const { currentUser } = useAuth();

@@ -14,7 +14,7 @@ import StudentTable from './student-management/StudentTable';
 import TodayActiveModal from './student-management/TodayActiveModal';
 import DailyReportManagement from './DailyReportManagement';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
 
 const StudentManagementRefactored = ({ teacherId }) => {
   const { currentUser, isAuthenticated } = useAuth();

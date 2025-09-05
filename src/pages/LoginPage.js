@@ -6,6 +6,9 @@ import SanitizedInput from '../components/SanitizedInput';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 import { addOperationLog } from '../utils/operationLogManager';
 
+// API設定
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
+
 const LoginPage = () => {
   const [credentials, setCredentials] = useState({ id: '', password: '' });
   const [error, setError] = useState('');
@@ -86,7 +89,6 @@ const LoginPage = () => {
   // 管理者ログインAPI呼び出し
   const adminLoginAPI = async (username, password) => {
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       console.log('LoginPage: 管理者ログインAPI呼び出し開始');
       console.log('LoginPage: リクエストデータ', { username, password: password ? '***' : 'なし' });
       
@@ -136,7 +138,6 @@ const LoginPage = () => {
   // 企業・拠点情報取得API
   const getUserCompaniesAPI = async (username) => {
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       console.log('=== getUserCompaniesAPI Debug ===');
       console.log('Username:', username);
       console.log('API URL:', `${API_BASE_URL}/api/user-companies/${username}`);
@@ -168,7 +169,6 @@ const LoginPage = () => {
   // 指導員ログインAPI
   const instructorLoginAPI = async (username, password, companyId, satelliteId) => {
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       const response = await fetch(`${API_BASE_URL}/api/instructor-login`, {
         method: 'POST',
         headers: {

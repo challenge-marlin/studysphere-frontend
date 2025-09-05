@@ -31,7 +31,7 @@ const AdminDashboard = () => {
   const handlePasswordChange = async (currentPassword, newPassword) => {
     try {
       const token = localStorage.getItem('accessToken');
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
       const response = await fetch(`${API_BASE_URL}/api/users/${currentUser.id}/change-password`, {
         method: 'POST',
         headers: {

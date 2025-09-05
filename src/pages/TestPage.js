@@ -8,107 +8,114 @@ const TestPage = () => {
   const [testData, setTestData] = useState(null);
   const [answers, setAnswers] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [lessonData, setLessonData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // URLパラメータからレッスン番号を取得
   useEffect(() => {
     const lessonParam = searchParams.get('lesson');
     if (lessonParam) {
       const lessonNumber = parseInt(lessonParam);
-      if (lessonNumber >= 1 && lessonNumber <= 6) {
+      if (lessonNumber >= 1) {
         setCurrentLesson(lessonNumber);
       }
     }
   }, [searchParams]);
 
-  // レッスンデータ
-  const lessonData = {
-    1: {
-      title: "第1回　Windows11の基本操作とソフトウェアの活用",
-      description: "コンピュータの基本構造とWindows 11の操作方法を学びます"
-    },
-    2: {
-      title: "第2回　インターネットの基礎と安全な利用",
-      description: "インターネットの仕組みと安全な利用方法を学びます"
-    },
-    3: {
-      title: "第3回　AIの仕組みや基本用語を学ぶ",
-      description: "AIの基本概念と用語について理解を深めます"
-    },
-    4: {
-      title: "第4回　AIの活用例と実践体験",
-      description: "実際のAI活用事例を体験します"
-    },
-    5: {
-      title: "第5回　簡単なプログラミングとAIアシスタント活用",
-      description: "プログラミングの基礎とAIアシスタントの活用方法を学びます"
-    },
-    6: {
-      title: "第6回　AIの活用例と実践体験",
-      description: "総合的なAI活用の実践演習を行います"
-    }
-  };
-
-  // サンプルテストデータ（AIが生成した問題）
-  const sampleTestData = {
-    title: `記述式理解度テスト\nカリキュラム1・第${currentLesson}回・第2章`,
-    questions: [
-      {
-        id: 1,
-        question: "ニューラルネットワークの基本的な構造について説明してください。",
-        placeholder: "ニューラルネットワークの構造について説明してください..."
-      },
-      {
-        id: 2,
-        question: "活性化関数の役割とその種類について説明してください。",
-        placeholder: "活性化関数の役割や種類について説明してください..."
-      },
-      {
-        id: 3,
-        question: "誤差逆伝播法（バックプロパゲーション）とは何か、説明してください。",
-        placeholder: "誤差逆伝播法について説明してください..."
-      },
-      {
-        id: 4,
-        question: "過学習（オーバーフィッティング）とは何か、またそれを防ぐ方法について説明してください。",
-        placeholder: "過学習の定義と防止策について説明してください..."
-      },
-      {
-        id: 5,
-        question: "畳み込みニューラルネットワーク（CNN）の基本的な仕組みについて説明してください。",
-        placeholder: "CNNの基本的な仕組みについて説明してください..."
-      },
-      {
-        id: 6,
-        question: "自然言語処理における「ベクトル化」とは何か、説明してください。",
-        placeholder: "ベクトル化について説明してください..."
-      },
-      {
-        id: 7,
-        question: "トランスフォーマー技術の特徴とその応用例について説明してください。",
-        placeholder: "トランスフォーマー技術の特徴や応用例について説明してください..."
-      },
-      {
-        id: 8,
-        question: "ディープラーニングが従来の機械学習技術と比べて優れている点を説明してください。",
-        placeholder: "ディープラーニングの特徴や利点について具体的に説明してください..."
-      },
-      {
-        id: 9,
-        question: "AIの画像認識技術が応用されている具体例を3つ挙げて説明してください。",
-        placeholder: "画像認識技術の具体例を3つ挙げて説明してください..."
-      },
-      {
-        id: 10,
-        question: "AIと人間が協力し合うことで生まれる価値や可能性について、あなたの考えを述べてください。",
-        placeholder: "AIと人間の協力についての考えを述べてください..."
-      }
-    ]
-  };
-
-  // テストデータを設定
+  // レッスンデータをAPIから取得
   useEffect(() => {
-    setTestData(sampleTestData);
+    const fetchLessonData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const lessonId = currentLesson;
+        
+        const response = await fetch(`/api/learning/lesson/${lessonId}/content`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('レッスンデータの取得に失敗しました');
+        }
+
+        const data = await response.json();
+        if (data.success) {
+          setLessonData(data.data);
+          // テストデータを生成（実際のシステムでは、テスト問題もDBから取得する）
+          generateTestData(data.data);
+        } else {
+          throw new Error(data.message || 'レッスンデータの取得に失敗しました');
+        }
+      } catch (error) {
+        console.error('レッスンデータ取得エラー:', error);
+        setError(error.message);
+        // フォールバック: モックデータを使用
+        setLessonData({
+          title: `第${currentLesson}回　学習内容`,
+          description: 'レッスンの説明が読み込めませんでした。'
+        });
+        generateMockTestData();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (currentLesson) {
+      fetchLessonData();
+    }
   }, [currentLesson]);
+
+  // テストデータを生成（実際のシステムでは、テスト問題もDBから取得する）
+  const generateTestData = (lesson) => {
+    const mockTestData = {
+      title: `${lesson.title} - 理解度テスト`,
+      description: `${lesson.description}についての理解度を確認するテストです。`,
+      questions: [
+        {
+          id: 1,
+          question: `${lesson.title}の主要なポイントについて説明してください。`,
+          placeholder: "学習した内容の要点をまとめて説明してください..."
+        },
+        {
+          id: 2,
+          question: "このレッスンで学んだ内容を実際の業務にどのように活かせますか？",
+          placeholder: "具体的な活用方法や応用例について説明してください..."
+        },
+        {
+          id: 3,
+          question: "学習中に疑問に思った点や、さらに深く学びたい内容はありますか？",
+          placeholder: "疑問点や興味のある内容について述べてください..."
+        }
+      ]
+    };
+    setTestData(mockTestData);
+  };
+
+  // モックテストデータ（フォールバック用）
+  const generateMockTestData = () => {
+    const mockTestData = {
+      title: `第${currentLesson}回　理解度テスト`,
+      description: "学習内容についての理解度を確認するテストです。",
+      questions: [
+        {
+          id: 1,
+          question: "このレッスンで学んだ内容の要点を説明してください。",
+          placeholder: "学習した内容の要点をまとめて説明してください..."
+        },
+        {
+          id: 2,
+          question: "学習した内容を実際にどのように活用できますか？",
+          placeholder: "具体的な活用方法について説明してください..."
+        }
+      ]
+    };
+    setTestData(mockTestData);
+  };
 
   // 回答の更新
   const handleAnswerChange = (questionId, value) => {
@@ -119,31 +126,91 @@ const TestPage = () => {
   };
 
   // テスト提出
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setIsSubmitting(true);
     
-    // モックアップなので、少し待ってから結果画面に遷移
-    setTimeout(() => {
-      navigate('/student/test-result', {
-        state: {
-          lessonNumber: currentLesson,
-          lessonTitle: lessonData[currentLesson].title,
+    try {
+      const userId = localStorage.getItem('userId') || '1';
+      const lessonId = currentLesson;
+      
+      // テスト結果を提出
+      const response = await fetch('/api/learning/test/submit', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: parseInt(userId),
+          lessonId: parseInt(lessonId),
           answers: answers,
-          testData: testData
-        }
+          score: 0, // 現在は採点機能なし
+          totalQuestions: testData.questions.length
+        })
       });
-    }, 1500);
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // テスト結果画面に遷移
+          navigate('/student/test-result', {
+            state: {
+              lessonNumber: currentLesson,
+              lessonTitle: lessonData?.title || `第${currentLesson}回`,
+              answers: answers,
+              testData: testData
+            }
+          });
+        } else {
+          throw new Error(data.message || 'テスト結果の提出に失敗しました');
+        }
+      } else {
+        throw new Error('テスト結果の提出に失敗しました');
+      }
+    } catch (error) {
+      console.error('テスト提出エラー:', error);
+      alert('テストの提出に失敗しました: ' + error.message);
+      setIsSubmitting(false);
+    }
   };
 
   // 回答済みの問題数を計算
   const answeredCount = Object.keys(answers).filter(key => answers[key] && answers[key].trim() !== '').length;
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">テストデータを読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-600 text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">エラーが発生しました</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700"
+          >
+            再読み込み
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!testData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-700 text-lg">テストを準備中...</p>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600">テストデータが見つかりません</p>
         </div>
       </div>
     );
@@ -165,7 +232,7 @@ const TestPage = () => {
               <div>
                 <h1 className="text-2xl font-bold">学習効果テスト</h1>
                 <span className="text-blue-100 text-sm">
-                  {lessonData[currentLesson].title} - {lessonData[currentLesson].description}
+                  {lessonData?.title} - {lessonData?.description}
                 </span>
               </div>
             </div>

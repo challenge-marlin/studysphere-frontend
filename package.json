@@ -2,7 +2,7 @@
   "name": "react-study-sphere-mockup",
   "version": "0.1.0",
   "private": true,
-  "proxy": "http://localhost:5000",
+  "proxy": "http://localhost:5050",
   "homepage": "/studysphere",
   "dependencies": {
     "@testing-library/jest-dom": "^5.16.4",

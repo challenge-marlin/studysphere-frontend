@@ -41,37 +41,37 @@ const AdvancedLearningPage = () => {
     1: {
       title: "第1回　Windows11の基本操作とソフトウェアの活用",
       videoUrl: "https://www.youtube.com/watch?v=j4yNkF1w6L8",
-      textFile: "/reactStudySphereMockup/doc/text-samples/lesson1.md",
+      textFile: "/doc/text-samples/lesson1.md",
       description: "コンピュータの基本構造とWindows 11の操作方法を学びます"
     },
     2: {
       title: "第2回　インターネットの基礎と安全な利用",
       videoUrl: "https://www.youtube.com/watch?v=AtDQST1SQ5A",
-      textFile: "/reactStudySphereMockup/doc/text-samples/lesson1.md",
+      textFile: "/doc/text-samples/lesson1.md",
       description: "インターネットの仕組みと安全な利用方法を学びます"
     },
     3: {
       title: "第3回　AIの仕組みや基本用語を学ぶ",
       videoUrl: "https://www.youtube.com/watch?v=QkJCPOWwdwI",
-      textFile: "/reactStudySphereMockup/doc/text-samples/lesson1.md",
+      textFile: "/doc/text-samples/lesson1.md",
       description: "AIの基本概念と用語について理解を深めます"
     },
     4: {
       title: "第4回　AIの活用例と実践体験",
       videoUrl: "https://www.youtube.com/watch?v=75UHkx4WZh0",
-      textFile: "/reactStudySphereMockup/doc/text-samples/lesson1.md",
+      textFile: "/doc/text-samples/lesson1.md",
       description: "実際のAI活用事例を体験します"
     },
     5: {
       title: "第5回　簡単なプログラミングとAIアシスタント活用",
       videoUrl: "https://www.youtube.com/watch?v=vQqMk3gFZJ0",
-      textFile: "/reactStudySphereMockup/doc/text-samples/lesson1.md",
+      textFile: "/doc/text-samples/lesson1.md",
       description: "プログラミングの基礎とAIアシスタントの活用方法を学びます"
     },
     6: {
       title: "第6回　AIの活用例と実践体験",
       videoUrl: "",
-      textFile: "/reactStudySphereMockup/doc/text-samples/lesson1.md",
+      textFile: "/doc/text-samples/lesson1.md",
       description: "総合的なAI活用の実践演習を行います"
     }
   };

@@ -1,215 +1,171 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../components/contexts/AuthContext';
+import { fetchStudentCourses, fetchStudentLessons } from '../utils/studentApi';
+import CourseHeader from '../components/student/CourseHeader';
+import CourseSelector from '../components/student/CourseSelector';
+import LessonTable from '../components/student/LessonTable';
 
-const LessonList = () => {
+const LessonList = ({ selectedCourseId }) => {
   const navigate = useNavigate();
-  const [currentUser, setCurrentUser] = useState(null);
-  const [enrolledCourses, setEnrolledCourses] = useState([]);
+  const { currentUser } = useAuth();
+  const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState(null);
-  // const [lessonProgress, setLessonProgress] = useState({});
+  const [lessons, setLessons] = useState([]);
+  const [currentLesson, setCurrentLesson] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const user = localStorage.getItem('currentUser');
-    if (user) {
-      const userData = JSON.parse(user);
-      setCurrentUser(userData);
+  // コース一覧を取得
+  const loadCourses = async () => {
+    try {
+      setLoading(true);
+      setError(null);
       
-      // カリキュラム全体像.txtに基づくコース・レッスンデータ
-      const mockEnrolledCourses = [
-        {
-          id: 'course001',
-          title: 'オフィスソフトの操作・文書作成',
-          category: '選択科目',
-          progress: 75,
-          lessons: [
-            {
-              id: 'lesson001-1',
-              title: 'Microsoft Wordの特徴と文書作成',
-              description: '基本操作、文書の作成、保存方法。フォーマット設定、スタイルの適用、図形や画像の挿入',
-              duration: '120分',
-              order: 1,
-              status: 'completed',
-              testScore: 85,
-              hasAssignment: false
-            },
-            {
-              id: 'lesson001-2',
-              title: 'Microsoft Excelの特徴と表計算',
-              description: '基本操作、セルの入力、データの整形、数式の使用、基本的な関数の紹介',
-              duration: '120分',
-              order: 2,
-              status: 'completed',
-              testScore: 92,
-              hasAssignment: false
-            },
-            {
-              id: 'lesson001-3',
-              title: 'Microsoft Excelを使用したデータ分析',
-              description: '基本操作、セルの入力、データの整形、数式の使用、基本的な関数の紹介',
-              duration: '120分',
-              order: 3,
-              status: 'in-progress',
-              testScore: null,
-              hasAssignment: true
-            },
-            {
-              id: 'lesson001-4',
-              title: 'Microsoft PowerPointでのプレゼンテーション作成',
-              description: 'スライドの構成、デザインの基本、アニメーションやトランジションの追加',
-              duration: '120分',
-              order: 4,
-              status: 'not-started',
-              testScore: null,
-              hasAssignment: false
-            },
-            {
-              id: 'lesson001-5',
-              title: 'Wordでのレポート作成',
-              description: '文書の構成（見出し、段落、リスト）、実践課題: 簡単なレポートを作成',
-              duration: '120分',
-              order: 5,
-              status: 'not-started',
-              testScore: null,
-              hasAssignment: true
-            },
-            {
-              id: 'lesson001-6',
-              title: '実務での活用方法と応用技術',
-              description: '各ソフトの実務での具体的な活用事例の紹介、効率的な作業方法やショートカットキーの紹介',
-              duration: '120分',
-              order: 6,
-              status: 'not-started',
-              testScore: null,
-              hasAssignment: false
-            }
-          ]
-        },
-        {
-          id: 'course002',
-          title: 'ITリテラシー・AIの基本',
-          category: '必修科目',
-          progress: 50,
-          lessons: [
-            {
-              id: 'lesson002-1',
-              title: 'Windows11の基本操作',
-              description: 'ファイル操作、ショートカットキーの利用、ソフトウェアの使用方法（ブラウザ、Word、Excelの簡単操作）',
-              duration: '120分',
-              order: 1,
-              status: 'completed',
-              testScore: 88,
-              hasAssignment: false
-            },
-            {
-              id: 'lesson002-2',
-              title: 'インターネットの基礎',
-              description: 'インターネットの仕組みと安全な利用（セキュリティ、パスワード管理）、情報検索と信頼性の高い情報の見分け方',
-              duration: '120分',
-              order: 2,
-              status: 'completed',
-              testScore: 95,
-              hasAssignment: false
-            },
-            {
-              id: 'lesson002-3',
-              title: 'AIの基本概念',
-              description: 'AIの基本概念（AIとは何か、利用されている分野）',
-              duration: '120分',
-              order: 3,
-              status: 'in-progress',
-              testScore: null,
-              hasAssignment: false
-            },
-            {
-              id: 'lesson002-4',
-              title: 'AIの活用例',
-              description: 'AIの活用例（日常での利用例、Google検索や翻訳ツールの仕組み）、AIツールの体験',
-              duration: '120分',
-              order: 4,
-              status: 'not-started',
-              testScore: null,
-              hasAssignment: true
-            },
-            {
-              id: 'lesson002-5',
-              title: 'プログラミングの基本',
-              description: 'プログラミングの基本、ChatGPTなどのAIアシスタントの活用',
-              duration: '120分',
-              order: 5,
-              status: 'not-started',
-              testScore: null,
-              hasAssignment: false
-            },
-            {
-              id: 'lesson002-6',
-              title: 'AIを使用した簡単なLP作成',
-              description: 'AIを使用した簡単なLP作成、チャットボットの仕組みと作成',
-              duration: '120分',
-              order: 6,
-              status: 'not-started',
-              testScore: null,
-              hasAssignment: true
-            }
-          ]
+      const response = await fetchStudentCourses();
+      
+      if (response.success) {
+        setCourses(response.data);
+        
+        // selectedCourseIdが指定されている場合はそのコースを選択、そうでなければ最初のコースを選択
+        if (selectedCourseId && response.data.length > 0) {
+          const targetCourse = response.data.find(course => course.id === selectedCourseId);
+          if (targetCourse) {
+            setSelectedCourse(targetCourse);
+          } else {
+            // 指定されたコースが見つからない場合は最初のコースを選択
+            setSelectedCourse(response.data[0]);
+          }
+        } else if (response.data.length > 0) {
+          setSelectedCourse(response.data[0]);
         }
-        // 今後、他コース（SNS運用、LP制作等）もここに追加可能
-      ];
-      
-      setEnrolledCourses(mockEnrolledCourses);
-      if (mockEnrolledCourses.length > 0) {
-        setSelectedCourse(mockEnrolledCourses[0]);
+      } else {
+        setError('コース一覧の取得に失敗しました: ' + (response.message || ''));
       }
+    } catch (err) {
+      console.error('コース一覧取得エラー:', err);
+      
+      // 認証エラーの場合はログインページにリダイレクト
+      if (err.message.includes('認証') || err.message.includes('Authentication') || err.message.includes('401') || err.message.includes('認証情報が見つかりません')) {
+        console.log('認証エラーのため、ログインページにリダイレクトします');
+        // 複数のログインページパスを試行
+        try {
+          navigate('/student/login');
+        } catch (navError) {
+          console.error('ナビゲーションエラー:', navError);
+          // フォールバック: 直接URLを変更
+          window.location.href = '/student/login';
+        }
+        return;
+      }
+      
+      setError('コース一覧の取得中にエラーが発生しました: ' + err.message);
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  };
 
-  // レッスン進行状況の取得
-  const getLessonStatus = (lesson) => {
-    switch (lesson.status) {
-      case 'completed':
-        return { label: '完了', class: 'completed', icon: '✅' };
-      case 'in-progress':
-        return { label: '進行中', class: 'in-progress', icon: '🔄' };
-      case 'not-started':
-        return { label: '未開始', class: 'not-started', icon: '⏳' };
-      default:
-        return { label: '未開始', class: 'not-started', icon: '⏳' };
+  // レッスン一覧を取得
+  const loadLessons = async (courseId) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await fetchStudentLessons(courseId);
+      
+      if (response.success) {
+        setLessons(response.data);
+      } else {
+        setError('レッスン一覧の取得に失敗しました: ' + (response.message || ''));
+      }
+    } catch (err) {
+      console.error('レッスン一覧取得エラー:', err);
+      
+      // 認証エラーの場合はログインページにリダイレクト
+      if (err.message.includes('認証') || err.message.includes('Authentication') || err.message.includes('401')) {
+        console.log('認証エラーのため、ログインページにリダイレクトします');
+        navigate('/student/login');
+        return;
+      }
+      
+      setError('レッスン一覧の取得中にエラーが発生しました: ' + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // レッスン学習へのリンク
-  const handleStartLesson = (lesson) => {
-    // レッスン番号を取得（orderを使用）
-    const lessonNumber = lesson.order;
-    
-    // 学習画面に遷移（レッスン番号をパラメータとして渡す）
-    navigate(`/student/learning?lesson=${lessonNumber}`);
+  // 現在受講中レッスンを取得
+  const loadCurrentLesson = async (courseId) => {
+    try {
+      const response = await fetch(`http://localhost:5050/api/learning/current-lesson?courseId=${courseId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data.length > 0) {
+          setCurrentLesson(data.data[0]);
+        } else {
+          setCurrentLesson(null);
+        }
+      } else {
+        setCurrentLesson(null);
+      }
+    } catch (error) {
+      console.error('現在受講中レッスン取得エラー:', error);
+      setCurrentLesson(null);
+    }
   };
 
-  // 改善版レッスン学習へのリンク
-  const handleStartEnhancedLesson = (lesson) => {
-    // レッスン番号を取得（orderを使用）
-    const lessonNumber = lesson.order;
-    
-    // 改善版学習画面に遷移（レッスン番号をパラメータとして渡す）
-    navigate(`/student/enhanced-learning?lesson=${lessonNumber}`);
+  // コース選択時の処理
+  const handleCourseSelect = (course) => {
+    setSelectedCourse(course);
+    loadLessons(course.id);
+    loadCurrentLesson(course.id);
   };
 
-  // 高度なレッスン学習へのリンク
-  const handleStartAdvancedLesson = (lesson) => {
-    // レッスン番号を取得（orderを使用）
-    const lessonNumber = lesson.order;
-    
-    // 高度な学習画面に遷移（レッスン番号をパラメータとして渡す）
-    navigate(`/student/advanced-learning?lesson=${lessonNumber}`);
+  // レッスン学習へのリンク（改善版学習画面を使用）
+  const handleStartLesson = async (lesson) => {
+    try {
+      // 現在のレッスンを開始する前に、既存の進捗を確認・更新
+      const response = await fetch(`http://localhost:5050/api/learning/progress/lesson`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          lessonId: lesson.id,
+          status: 'in_progress',
+          testScore: null,
+          assignmentSubmitted: false
+        })
+      });
+
+      if (response.ok) {
+        // 進捗更新成功後、現在受講中レッスンを再読み込み
+        await loadCurrentLesson(lesson.course_id);
+        // 学習画面に遷移
+        navigate(`/student/enhanced-learning?course=${lesson.course_id}&lesson=${lesson.id}`);
+      } else {
+        console.error('進捗更新に失敗しました');
+        // 進捗更新に失敗しても学習画面には遷移
+        navigate(`/student/enhanced-learning?course=${lesson.course_id}&lesson=${lesson.id}`);
+      }
+    } catch (error) {
+      console.error('学習開始エラー:', error);
+      // エラーが発生しても学習画面には遷移
+      navigate(`/student/enhanced-learning?course=${lesson.course_id}&lesson=${lesson.id}`);
+    }
   };
 
   // テスト受験へのリンク
   const handleTakeTest = (lesson) => {
-    // レッスン番号を取得（orderを使用）
-    const lessonNumber = lesson.order;
-    
-    // テスト画面に遷移（レッスン番号をパラメータとして渡す）
-    navigate(`/student/test?lesson=${lessonNumber}`);
+    navigate(`/student/test?course=${lesson.course_id}&lesson=${lesson.id}`);
   };
 
   // 課題提出へのリンク
@@ -217,7 +173,53 @@ const LessonList = () => {
     alert(`${lesson.title}の課題提出機能は開発中です。`);
   };
 
+  // 初期データ読み込み
+  useEffect(() => {
+    console.log('=== LessonList 初期化 ===');
+    console.log('currentUser:', currentUser);
+    console.log('isAuthenticated:', currentUser ? '認証済み' : '未認証');
+    console.log('selectedCourseId:', selectedCourseId);
+    
+    // 利用者がログインしていない場合はログインページにリダイレクト
+    if (!currentUser) {
+      console.log('利用者がログインしていないため、ログインページにリダイレクトします');
+      // 複数のログインページパスを試行
+      try {
+        navigate('/student/login');
+      } catch (navError) {
+        console.error('ナビゲーションエラー:', navError);
+        // フォールバック: 直接URLを変更
+        window.location.href = '/student/login';
+      }
+      return;
+    }
+    
+    // 認証済みの場合はコース一覧を読み込み
+    console.log('認証済みユーザーです。コース一覧を読み込みます。');
+    loadCourses();
+  }, [currentUser, navigate, selectedCourseId]);
+
+  // 選択されたコースが変更されたときにレッスンを読み込み
+  useEffect(() => {
+    if (selectedCourse) {
+      loadLessons(selectedCourse.id);
+      loadCurrentLesson(selectedCourse.id);
+    }
+  }, [selectedCourse]);
+
+  // 利用者がログインしていない場合
   if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-blue-600 text-xl font-semibold mb-4">認証中...</div>
+          <div className="text-gray-600 text-sm">ログインページにリダイレクトしています</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading && courses.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex items-center justify-center">
         <div className="text-blue-600 text-xl font-semibold">Loading...</div>
@@ -227,145 +229,100 @@ const LessonList = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 p-6">
-      {/* コース名大見出し */}
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col gap-2 mb-6">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
-            {selectedCourse?.title || 'コース名不明'}
-          </h1>
-          <div className="flex items-center gap-3">
-            <span className={`px-4 py-2 rounded-full text-sm font-semibold ${
-              selectedCourse?.category === '必修科目'
-                ? 'bg-red-100 text-red-800'
-                : 'bg-blue-100 text-blue-800'
-            }`}>
-              {selectedCourse?.category || 'カテゴリ不明'}
-            </span>
-            <span className="text-gray-500 text-sm">{selectedCourse?.lessons?.length || 0}レッスン</span>
-          </div>
-        </div>
-      </div>
-
-      {/* コース切り替えタブ */}
-      <div className="mb-6">
-        <div className="flex flex-wrap gap-4">
-          {enrolledCourses.map(course => (
-            <button
-              key={course.id}
-              className={`px-6 py-3 rounded-t-lg font-semibold text-lg border-b-4 transition-all duration-200 focus:outline-none ${
-                selectedCourse?.id === course.id
-                  ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white border-blue-600 shadow-lg'
-                  : 'bg-gray-100 text-gray-700 border-transparent hover:bg-blue-50'
-              }`}
-              onClick={() => setSelectedCourse(course)}
-            >
-              {course.title}
-              <span className="ml-2 text-xs font-normal px-2 py-1 rounded-full bg-blue-100 text-blue-800">
-                {course.category}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* レッスン一覧テーブル */}
-      <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100 w-full overflow-x-auto">
-        {selectedCourse && (
-          <>
-            {/* ここでコース名は大見出しに移動したので、テーブル上部のコース名表示は省略 */}
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-blue-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-semibold text-blue-800">レッスン名</th>
-                    <th className="px-4 py-3 text-left font-semibold text-blue-800">説明</th>
-                    <th className="px-4 py-3 text-left font-semibold text-blue-800">所要時間</th>
-                    <th className="px-4 py-3 text-left font-semibold text-blue-800">進捗</th>
-                    <th className="px-4 py-3 text-left font-semibold text-blue-800">テスト</th>
-                    <th className="px-4 py-3 text-left font-semibold text-blue-800">課題</th>
-                    <th className="px-4 py-3 text-left font-semibold text-blue-800">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedCourse.lessons && selectedCourse.lessons.map((lesson, index) => {
-                    const status = getLessonStatus(lesson);
-                    return (
-                      <tr key={lesson.id} className="border-b border-gray-100 hover:bg-blue-50 transition-colors duration-200">
-                        <td className="px-4 py-3 font-semibold text-gray-800">{lesson.title}</td>
-                        <td className="px-4 py-3 text-gray-600">{lesson.description}</td>
-                        <td className="px-4 py-3 text-gray-500">{lesson.duration}</td>
-                        <td className="px-4 py-3">
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                            lesson.status === 'completed'
-                              ? 'bg-green-100 text-green-800'
-                              : lesson.status === 'in-progress'
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-gray-100 text-gray-600'
-                          }`}>
-                            {status.icon} {status.label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {lesson.testScore !== null ? (
-                            <span className="text-green-600 font-medium">{lesson.testScore}点</span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {lesson.hasAssignment ? (
-                            <span className="text-yellow-600 font-medium">あり</span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              className="px-3 py-1 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
-                              onClick={() => handleStartLesson(lesson)}
-                            >
-                              🎓 学習
-                            </button>
-                            <button
-                              className="px-3 py-1 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
-                              onClick={() => handleStartEnhancedLesson(lesson)}
-                            >
-                              🚀 改善
-                            </button>
-                            <button
-                              className="px-3 py-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
-                              onClick={() => handleStartAdvancedLesson(lesson)}
-                            >
-                              ⭐ 高度
-                            </button>
-                            {lesson.status === 'completed' && (
-                              <button
-                                className="px-3 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
-                                onClick={() => handleTakeTest(lesson)}
-                              >
-                                📝 テスト
-                              </button>
-                            )}
-                            {lesson.hasAssignment && (
-                              <button
-                                className="px-3 py-1 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
-                                onClick={() => handleSubmitAssignment(lesson)}
-                              >
-                                📋 課題
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+      {/* エラーメッセージ */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+          <div className="flex justify-between items-start">
+            <div>
+              <div className="font-semibold mb-2">エラーが発生しました</div>
+              <div>{error}</div>
             </div>
-          </>
-        )}
-      </div>
+            <button
+              onClick={() => setError(null)}
+              className="text-red-500 hover:text-red-700 text-xl"
+            >
+              ×
+            </button>
+          </div>
+          {error.includes('認証') && (
+            <button
+              onClick={() => navigate('/student/login')}
+              className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              ログインページに移動
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* コースヘッダー */}
+      <CourseHeader course={selectedCourse} />
+
+      {/* コース選択 */}
+      {courses.length > 0 && (
+        <CourseSelector
+          courses={courses}
+          selectedCourse={selectedCourse}
+          onCourseSelect={handleCourseSelect}
+        />
+      )}
+
+             {/* 現在受講中レッスン */}
+       {selectedCourse && currentLesson && (
+         <div className="mb-6 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-2xl shadow-lg p-6 border border-blue-200">
+           <h3 className="text-xl font-bold text-blue-800 mb-4">📚 現在受講中（最新更新）</h3>
+           <div className="bg-white rounded-xl p-4 shadow-md">
+             <div className="flex items-center justify-between">
+               <div>
+                 <h4 className="text-lg font-semibold text-gray-800 mb-2">{currentLesson.lesson_title}</h4>
+                 <p className="text-sm text-blue-600 font-medium mb-2">{currentLesson.course_title}</p>
+                 <p className="text-sm text-gray-600">開始日時: {new Date(currentLesson.started_at || currentLesson.created_at).toLocaleString('ja-JP')}</p>
+                 <p className="text-sm text-gray-600">最終更新: {new Date(currentLesson.updated_at).toLocaleString('ja-JP')}</p>
+                 <p className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full inline-block mt-1">
+                   ⏰ updated_at最新のin_progressレッスン
+                 </p>
+               </div>
+               <div className="flex gap-2">
+                 <button
+                   className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+                   onClick={() => handleStartLesson(currentLesson)}
+                 >
+                   🎓 続きから学習
+                 </button>
+               </div>
+             </div>
+           </div>
+         </div>
+       )}
+
+      {/* レッスン一覧 */}
+      {selectedCourse && (
+        <LessonTable
+          lessons={lessons}
+          onStartLesson={handleStartLesson}
+          onTakeTest={handleTakeTest}
+          onSubmitAssignment={handleSubmitAssignment}
+          currentLessonId={currentLesson?.lesson_id || currentLesson?.id}
+        />
+      )}
+
+      {/* コースが存在しない場合 */}
+      {courses.length === 0 && !loading && (
+        <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="text-gray-500 text-lg mb-4">
+            受講可能なコースがありません
+          </div>
+          <p className="text-gray-400 mb-4">
+            管理者にお問い合わせください
+          </p>
+          <button
+            onClick={() => navigate('/student/login')}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            ログインページに戻る
+          </button>
+        </div>
+      )}
     </div>
   );
 };

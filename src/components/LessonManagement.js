@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete, apiCall, apiDownloadBinary } from '../utils/api';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
 const LessonManagement = () => {
   const [lessons, setLessons] = useState([]);
@@ -76,7 +76,7 @@ const LessonManagement = () => {
       if (!accessToken) {
         console.log('LessonManagement: アクセストークンが存在しないため、テストエンドポイントを使用');
         // 認証なしのテストエンドポイントを使用
-        response = await fetch(`${API_BASE_URL}/api/test/courses`);
+        response = await fetch(`/api/test/courses`);
         const data = await response.json();
         response = data;
       } else {

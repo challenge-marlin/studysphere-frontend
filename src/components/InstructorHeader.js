@@ -4,7 +4,7 @@ import { logAdminAccountOperation } from '../utils/adminLogger';
 import { getUserInfo, reauthenticateForSatellite } from '../utils/api';
 import CompanySatelliteSwitchModal from './CompanySatelliteSwitchModal';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
 
 const InstructorHeader = ({ user, onLocationChange }) => {
   const [isSwitchModalOpen, setIsSwitchModalOpen] = useState(false);

@@ -111,9 +111,12 @@ const StudentLogin = () => {
     setError('');
 
     try {
+      console.log('StudentLogin: 一時パスワード認証を開始:', { loginCode, tempPassword: '***' });
       const result = await verifyTemporaryPasswordAPI(loginCode, tempPassword);
       
       if (result.success) {
+        console.log('StudentLogin: 認証成功');
+        
         // ログイン成功
         const userData = {
           id: result.data.userId,
@@ -122,7 +125,26 @@ const StudentLogin = () => {
           login_code: loginCode
         };
         
-        login(userData);
+        console.log('StudentLogin: ユーザーデータを保存:', userData);
+        
+        // JWTトークンがある場合は標準認証として処理
+        if (result.data.access_token && result.data.refresh_token) {
+          console.log('StudentLogin: JWTトークンを受信 - 標準認証として処理');
+          // JWTトークン認証の場合は、一時パスワード認証情報は保存しない
+          login(userData, result.data.access_token, result.data.refresh_token);
+        } else {
+          console.log('StudentLogin: JWTトークンなし - 一時パスワード認証として処理');
+          // 一時パスワード認証情報を保存（フォールバック）
+          localStorage.setItem('autoLoginCode', loginCode);
+          localStorage.setItem('tempPassword', tempPassword);
+          localStorage.setItem('loginCode', loginCode);
+          localStorage.setItem('temp_password', tempPassword);
+          localStorage.setItem('currentUser', JSON.stringify(userData));
+          if (result.data.expiresAt) {
+            localStorage.setItem('tempPasswordExpiry', result.data.expiresAt);
+          }
+          login(userData);
+        }
         navigate('/student/dashboard');
       } else {
         setError(result.message || 'ログインに失敗しました。');

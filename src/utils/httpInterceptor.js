@@ -36,10 +36,10 @@ export const setupFetchInterceptor = () => {
   window.fetch = async (url, options = {}) => {
     console.log('Fetchインターセプター: リクエスト開始', { url, method: options.method });
     
-    // 完全なURL（http://localhost:5000など）の場合は、インターセプトをスキップ
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      console.log('Fetchインターセプター: 完全なURLのため、インターセプトをスキップ');
-      return originalFetch(url, options);
+    // 完全なURLでもインターセプトを適用（認証ヘッダー追加のため）
+    const isFullUrl = url.startsWith('http://') || url.startsWith('https://');
+    if (isFullUrl) {
+      console.log('Fetchインターセプター: 完全なURLを検出、認証ヘッダーを追加します');
     }
     
     // ログインエンドポイントの場合は、認証エラー処理を完全にスキップ

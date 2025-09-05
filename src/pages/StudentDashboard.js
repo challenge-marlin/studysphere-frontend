@@ -3,18 +3,49 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStudentGuard } from '../utils/hooks/useAuthGuard';
 import { useAuth } from '../components/contexts/AuthContext';
 import { verifyTemporaryPasswordAPI } from '../utils/api';
+import { saveTempPasswordAuth } from '../utils/authUtils';
 import Dashboard from './Dashboard';
 import LessonList from './LessonList';
 import AnnouncementList from '../components/AnnouncementList';
+import LearningProgress from '../components/LearningProgress';
 
 const StudentDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [selectedCourseId, setSelectedCourseId] = useState(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { currentUser } = useStudentGuard();
   const { login, logout } = useAuth();
   const [isAutoLoggingIn, setIsAutoLoggingIn] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [userCourses, setUserCourses] = useState([]);
+
+  // 利用者のコース情報を取得
+  useEffect(() => {
+    const fetchUserCourses = async () => {
+      if (currentUser?.id) {
+        try {
+          const response = await fetch(`http://localhost:5050/api/learning/progress/${currentUser.id}`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+              setUserCourses(data.data);
+            }
+          }
+        } catch (error) {
+          console.error('コース情報取得エラー:', error);
+        }
+      }
+    };
+
+    fetchUserCourses();
+  }, [currentUser?.id]);
 
   // クエリパラメータからの自動認証処理
   useEffect(() => {
@@ -27,6 +58,55 @@ const StudentDashboard = () => {
       console.log('StudentDashboard: 現在のURL:', window.location.href);
       console.log('StudentDashboard: searchParams:', searchParams.toString());
       console.log('StudentDashboard: PUBLIC_URL:', process.env.PUBLIC_URL);
+
+      // 既存の一時パスワード認証情報を確認
+      const existingLoginCode = localStorage.getItem('loginCode');
+      const existingTempPassword = localStorage.getItem('tempPassword');
+      const existingCurrentUser = localStorage.getItem('currentUser');
+      
+      console.log('StudentDashboard: 既存の認証情報確認:', {
+        hasLoginCode: !!existingLoginCode,
+        hasTempPassword: !!existingTempPassword,
+        hasCurrentUser: !!existingCurrentUser
+      });
+
+      // 既存の一時パスワード認証情報がある場合は認証状態を復元
+      if (existingLoginCode && existingTempPassword && existingCurrentUser) {
+        try {
+          const userData = JSON.parse(existingCurrentUser);
+          console.log('StudentDashboard: 既存の認証情報から認証状態を復元:', userData);
+          
+          // 有効期限をチェック
+          const tempPasswordExpiry = localStorage.getItem('tempPasswordExpiry');
+          if (tempPasswordExpiry) {
+            const expiryDate = new Date(tempPasswordExpiry);
+            const now = new Date();
+            
+            if (expiryDate > now) {
+              console.log('StudentDashboard: 一時パスワード認証情報が有効です - 認証状態を復元');
+              login(userData);
+              return;
+            } else {
+              console.log('StudentDashboard: 一時パスワードの有効期限が切れています - 認証情報をクリア');
+              localStorage.removeItem('loginCode');
+              localStorage.removeItem('tempPassword');
+              localStorage.removeItem('tempPasswordExpiry');
+              localStorage.removeItem('currentUser');
+            }
+          } else {
+            console.log('StudentDashboard: 一時パスワード認証情報が有効です（有効期限なし）- 認証状態を復元');
+            login(userData);
+            return;
+          }
+        } catch (error) {
+          console.error('StudentDashboard: 既存の認証情報の復元に失敗:', error);
+          // 破損した認証情報をクリア
+          localStorage.removeItem('loginCode');
+          localStorage.removeItem('tempPassword');
+          localStorage.removeItem('tempPasswordExpiry');
+          localStorage.removeItem('currentUser');
+        }
+      }
 
       // クエリパラメータからトークンと一時パスワードを取得
       // 複数のパラメータ名に対応
@@ -93,6 +173,9 @@ const StudentDashboard = () => {
               instructorName: result.data.instructorName
             };
             
+            // 一時パスワード認証情報を保存（有効期限付き）
+            saveTempPasswordAuth(finalLoginCode, finalTempPassword, userData, result.data.expiresAt);
+            
             // 認証処理を実行（トークンなしでログイン）
             login(userData);
             
@@ -121,14 +204,59 @@ const StudentDashboard = () => {
           setIsAutoLoggingIn(false);
         }
       } else {
-        // 従来のlocalStorageからの自動ログイン処理
+        // localStorageからの自動ログイン処理
         const autoLoginCode = localStorage.getItem('autoLoginCode');
+        const tempPassword = localStorage.getItem('tempPassword') || localStorage.getItem('temp_password');
+        const currentUserStr = localStorage.getItem('currentUser');
+        
+        console.log('StudentDashboard: localStorage確認:', {
+          hasAutoLoginCode: !!autoLoginCode,
+          hasTempPassword: !!tempPassword,
+          hasCurrentUser: !!currentUserStr
+        });
+
+        // 認証情報が存在するがユーザー情報がない場合の復旧処理
+        if (autoLoginCode && tempPassword && !currentUserStr) {
+          console.log('StudentDashboard: 認証情報は存在するがユーザー情報が不足しています。復旧処理を開始');
+          setIsAutoLoggingIn(true);
+          
+          try {
+            const result = await verifyTemporaryPasswordAPI(autoLoginCode, tempPassword);
+            
+            if (result.success) {
+              console.log('StudentDashboard: 復旧認証成功');
+              
+              const userData = {
+                id: result.data.userId,
+                name: result.data.userName,
+                role: 'student',
+                login_code: autoLoginCode,
+                instructorName: result.data.instructorName
+              };
+              
+              login(userData);
+            } else {
+              console.error('StudentDashboard: 復旧認証失敗');
+              // 無効な認証情報をクリア
+              localStorage.removeItem('autoLoginCode');
+              localStorage.removeItem('tempPassword');
+              localStorage.removeItem('loginCode');
+              localStorage.removeItem('temp_password');
+              localStorage.removeItem('currentUser');
+            }
+          } catch (error) {
+            console.error('StudentDashboard: 復旧処理エラー:', error);
+          } finally {
+            setIsAutoLoggingIn(false);
+          }
+        }
+        
+        // 従来の自動ログイン処理（RemoteSupportからの自動ログイン）
         const autoLoginUser = localStorage.getItem('autoLoginUser');
         const autoLoginTarget = localStorage.getItem('autoLoginTarget');
 
         if (autoLoginCode && autoLoginUser && autoLoginTarget && !currentUser) {
-          console.log('StudentDashboard: 自動ログイン情報を検出:', { autoLoginCode, autoLoginUser, autoLoginTarget });
-          setIsAutoLoggingIn(true);
+          console.log('StudentDashboard: RemoteSupport自動ログイン情報を検出:', { autoLoginCode, autoLoginUser, autoLoginTarget });
           
           // 自動ログイン情報をクリア
           localStorage.removeItem('autoLoginCode');
@@ -136,10 +264,39 @@ const StudentDashboard = () => {
           localStorage.removeItem('autoLoginTarget');
           
           // 一時パスワードが設定されている場合は自動ログインを試行
-          // 注意: セキュリティ上の理由から、一時パスワードは自動入力せず、
-          // ユーザーに手動で入力してもらう必要があります
-          console.log('StudentDashboard: 自動ログインコードが検出されました。一時パスワードを入力してください。');
-          setIsAutoLoggingIn(false);
+          if (tempPassword) {
+            console.log('StudentDashboard: 一時パスワードが存在するため自動ログインを試行');
+            setIsAutoLoggingIn(true);
+            
+            try {
+              const result = await verifyTemporaryPasswordAPI(autoLoginCode, tempPassword);
+              
+              if (result.success) {
+                console.log('StudentDashboard: RemoteSupport自動ログイン成功');
+                
+                const userData = {
+                  id: result.data.userId,
+                  name: result.data.userName,
+                  role: 'student',
+                  login_code: autoLoginCode,
+                  instructorName: result.data.instructorName
+                };
+                
+                login(userData);
+              } else {
+                console.log('StudentDashboard: RemoteSupport自動ログイン失敗。手動入力が必要です');
+                setAuthError('一時パスワードを入力してください');
+              }
+            } catch (error) {
+              console.error('StudentDashboard: RemoteSupport自動ログインエラー:', error);
+              setAuthError('自動ログインに失敗しました');
+            } finally {
+              setIsAutoLoggingIn(false);
+            }
+          } else {
+            console.log('StudentDashboard: 一時パスワードが不足しています。手動入力が必要です');
+            setAuthError('一時パスワードを入力してください');
+          }
         }
       }
     };
@@ -152,10 +309,26 @@ const StudentDashboard = () => {
     if (window.confirm('ログアウトしますか？')) {
       console.log('ログアウト処理を開始');
       
+      // 認証情報をクリア
+      localStorage.removeItem('autoLoginCode');
+      localStorage.removeItem('tempPassword');
+      localStorage.removeItem('loginCode');
+      localStorage.removeItem('temp_password');
+      localStorage.removeItem('autoLoginUser');
+      localStorage.removeItem('autoLoginTarget');
+      
       // ログアウト処理を実行
       logout();
       
       console.log('ログアウト完了');
+    }
+  };
+
+  // タブ切り替えとコース選択の処理
+  const handleTabChange = (tab, courseId = null) => {
+    setActiveTab(tab);
+    if (courseId) {
+      setSelectedCourseId(courseId);
     }
   };
 
@@ -175,12 +348,20 @@ const StudentDashboard = () => {
             <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
               <div className="text-red-700 font-medium mb-2">認証エラー</div>
               <div className="text-red-600 text-sm">{authError}</div>
-              <button 
-                className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                onClick={() => navigate('/student/login')}
-              >
-                ログインページに戻る
-              </button>
+              <div className="mt-3 space-y-2">
+                <button 
+                  className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  onClick={() => navigate('/student-login')}
+                >
+                  ログインページへ
+                </button>
+                <button 
+                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  onClick={() => window.location.reload()}
+                >
+                  再試行
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -241,7 +422,7 @@ const StudentDashboard = () => {
                   ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-lg'
                   : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700'
               }`}
-              onClick={() => setActiveTab('dashboard')}
+              onClick={() => handleTabChange('dashboard')}
             >
               📊 ダッシュボード
             </button>
@@ -251,7 +432,7 @@ const StudentDashboard = () => {
                   ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-lg'
                   : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700'
               }`}
-              onClick={() => setActiveTab('lessons')}
+              onClick={() => handleTabChange('lessons')}
             >
               📚 レッスン一覧
             </button>
@@ -261,27 +442,145 @@ const StudentDashboard = () => {
                   ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-lg'
                   : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700'
               }`}
-              onClick={() => setActiveTab('announcements')}
+              onClick={() => handleTabChange('announcements')}
             >
               📢 お知らせ
             </button>
             <button 
+              className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                activeTab === 'learning'
+                  ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-lg'
+                  : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700'
+              }`}
+              onClick={() => handleTabChange('learning')}
+            >
+              🎓 学習進捗
+            </button>
+            <button 
               className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
-              onClick={() => navigate('/student/learning')}
+              onClick={async () => {
+                try {
+                  // 利用者のコース情報を再取得
+                  if (currentUser?.id) {
+                    const response = await fetch(`http://localhost:5050/api/learning/progress/${currentUser.id}`, {
+                      headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+                        'Content-Type': 'application/json'
+                      }
+                    });
+
+                    if (response.ok) {
+                      const data = await response.json();
+                      if (data.success && data.data.length > 0) {
+                        const firstCourse = data.data[0];
+                        if (firstCourse.lessons && firstCourse.lessons.length > 0) {
+                          const firstLesson = firstCourse.lessons[0];
+                          
+                          // 学習開始時に進捗を更新
+                          try {
+                            await fetch('http://localhost:5050/api/learning/progress/lesson', {
+                              method: 'PUT',
+                              headers: {
+                                'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+                                'Content-Type': 'application/json'
+                              },
+                              body: JSON.stringify({
+                                userId: parseInt(currentUser.id),
+                                lessonId: parseInt(firstLesson.id),
+                                status: 'in_progress',
+                                testScore: null,
+                                assignmentSubmitted: false
+                              })
+                            });
+                          } catch (error) {
+                            console.error('学習進捗更新エラー:', error);
+                          }
+                          
+                          navigate(`/student/enhanced-learning?course=${firstCourse.course_id}&lesson=${firstLesson.id}`);
+                          return;
+                        } else {
+                          // レッスンがない場合はコースのみ指定
+                          navigate(`/student/enhanced-learning?course=${firstCourse.course_id}`);
+                          return;
+                        }
+                      }
+                    }
+                  }
+                  
+                  // 学習データが存在しない場合は、新たに作成
+                  if (currentUser?.id) {
+                    try {
+                                         // 利用者とコースの関連付けを作成
+                   const createUserCourseResponse = await fetch('http://localhost:5050/api/learning/assign-course', {
+                     method: 'POST',
+                     headers: {
+                       'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+                       'Content-Type': 'application/json'
+                     },
+                     body: JSON.stringify({
+                       userId: parseInt(currentUser.id),
+                       courseId: 1 // デフォルトコース（ITリテラシー・AIの基本）
+                     })
+                   });
+
+                      if (createUserCourseResponse.ok) {
+                        const createData = await createUserCourseResponse.json();
+                        if (createData.success) {
+                                                     // 作成成功後、再度コース情報を取得して学習画面に遷移
+                           const retryResponse = await fetch(`http://localhost:5050/api/learning/progress/${currentUser.id}`, {
+                             headers: {
+                               'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+                               'Content-Type': 'application/json'
+                             }
+                           });
+
+                          if (retryResponse.ok) {
+                            const retryData = await retryResponse.json();
+                            if (retryData.success && retryData.data.length > 0) {
+                              const firstCourse = retryData.data[0];
+                              if (firstCourse.lessons && firstCourse.lessons.length > 0) {
+                                const firstLesson = firstCourse.lessons[0];
+                                
+                                                                 // 最初のレッスンを学習中に設定
+                                 await fetch('http://localhost:5050/api/learning/progress/lesson', {
+                                   method: 'PUT',
+                                   headers: {
+                                     'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+                                     'Content-Type': 'application/json'
+                                   },
+                                   body: JSON.stringify({
+                                     userId: parseInt(currentUser.id),
+                                     lessonId: parseInt(firstLesson.id),
+                                     status: 'in_progress',
+                                     testScore: null,
+                                     assignmentSubmitted: false
+                                   })
+                                 });
+                                
+                                navigate(`/student/enhanced-learning?course=${firstCourse.course_id}&lesson=${firstLesson.id}`);
+                                return;
+                              }
+                            }
+                          }
+                        }
+                      }
+                    } catch (createError) {
+                      console.error('学習データ作成エラー:', createError);
+                    }
+                  }
+                  
+                  // データ作成に失敗した場合は、学習進捗画面に遷移
+                  alert('学習データの作成に失敗しました。学習進捗画面でコースを確認してください。');
+                  handleTabChange('learning');
+                  
+                } catch (error) {
+                  console.error('学習開始エラー:', error);
+                  alert('学習開始に失敗しました。学習進捗画面でコースを確認してください。');
+                  handleTabChange('learning');
+                }
+              }}
             >
-              🎓 学習画面
-            </button>
-            <button 
-              className="px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
-              onClick={() => navigate('/student/enhanced-learning')}
-            >
-              🚀 改善版学習画面
-            </button>
-            <button 
-              className="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg font-medium hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
-              onClick={() => navigate('/student/advanced-learning')}
-            >
-              ⭐ 高度な学習画面
+              📖 学習開始
             </button>
           </div>
         </div>
@@ -292,17 +591,22 @@ const StudentDashboard = () => {
         <div className="bg-white rounded-2xl shadow-xl p-8 min-h-[600px]">
           {activeTab === 'dashboard' && (
             <div className="student-content">
-              <Dashboard />
+              <Dashboard onTabChange={handleTabChange} />
             </div>
           )}
           {activeTab === 'lessons' && (
             <div className="student-content">
-              <LessonList />
+              <LessonList selectedCourseId={selectedCourseId} />
             </div>
           )}
           {activeTab === 'announcements' && (
             <div className="student-content">
               <AnnouncementList />
+            </div>
+          )}
+          {activeTab === 'learning' && (
+            <div className="student-content">
+              <LearningProgress userId={currentUser?.id || '1'} />
             </div>
           )}
         </div>

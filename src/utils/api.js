@@ -1,6 +1,6 @@
 // API呼び出し用のユーティリティ関数
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
 
 // 認証エラー検出フラグ
 let isAuthErrorHandling = false;

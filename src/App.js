@@ -9,9 +9,7 @@ import InstructorDashboard from './pages/InstructorDashboard';
 import StudentLogin from './pages/StudentLogin';
 import StudentDashboard from './pages/StudentDashboard';
 import AutoLoginPage from './pages/AutoLoginPage';
-import LearningPage from './pages/LearningPage';
-import EnhancedLearningPage from './pages/EnhancedLearningPage';
-import AdvancedLearningPage from './pages/AdvancedLearningPage';
+import { EnhancedLearningPageRefactored } from './components/learning';
 import TestPage from './pages/TestPage';
 import TestResultPage from './pages/TestResultPage';
 import CertificatePage from './pages/CertificatePage';
@@ -56,16 +54,14 @@ function App() {
             <Route path="/student/login/:token" element={<StudentLogin />} />
             {/* 利用者用ログイン（パラメータなし） */}
             <Route path="/student-login/" element={<StudentLogin />} />
+            {/* 利用者用ログイン（シンプルパス） */}
+            <Route path="/student/login" element={<StudentLogin />} />
             {/* 自動ログインページ（アプリからの自動ログイン用） */}
             <Route path="/auto-login/" element={<AutoLoginPage />} />
             {/* 利用者用ダッシュボード */}
             <Route path="/student/dashboard" element={<StudentDashboard />} />
-            {/* 学習画面 */}
-            <Route path="/student/learning" element={<LearningPage />} />
-            {/* 改善版学習画面（提案版） */}
-            <Route path="/student/enhanced-learning" element={<EnhancedLearningPage />} />
-            {/* 高度な学習画面（第3案） */}
-            <Route path="/student/advanced-learning" element={<AdvancedLearningPage />} />
+            {/* 学習画面（リファクタリング版を使用） */}
+            <Route path="/student/enhanced-learning" element={<EnhancedLearningPageRefactored />} />
             {/* 学習効果テスト関連 */}
             <Route path="/student/test" element={<TestPage />} />
             <Route path="/student/test-result" element={<TestResultPage />} />

@@ -83,6 +83,12 @@ const AutoLoginPage = () => {
         if (result.success) {
           console.log('AutoLoginPage: 認証成功:', result.data);
           
+          // 認証情報をlocalStorageに保存
+          localStorage.setItem('autoLoginCode', finalLoginCode);
+          localStorage.setItem('tempPassword', finalTempPassword);
+          localStorage.setItem('loginCode', finalLoginCode);
+          localStorage.setItem('temp_password', finalTempPassword);
+          
           // ログイン成功
           const userData = {
             id: result.data.userId,
@@ -92,8 +98,18 @@ const AutoLoginPage = () => {
             instructorName: result.data.instructorName
           };
           
+          console.log('AutoLoginPage: ユーザーデータを保存:', userData);
+          
           // 認証処理を実行（トークンなしでログイン）
           login(userData);
+          
+          // 認証情報の保存確認
+          console.log('AutoLoginPage: 保存された認証情報確認:', {
+            autoLoginCode: localStorage.getItem('autoLoginCode'),
+            tempPassword: localStorage.getItem('tempPassword') ? '***' : 'なし',
+            loginCode: localStorage.getItem('loginCode'),
+            temp_password: localStorage.getItem('temp_password') ? '***' : 'なし'
+          });
           
           console.log('AutoLoginPage: 自動ログイン成功');
           

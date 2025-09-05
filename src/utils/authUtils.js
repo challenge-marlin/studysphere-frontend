@@ -1,3 +1,188 @@
+/**
+ * 認証情報管理ユーティリティ
+ */
+
+const AUTH_KEYS = {
+  LOGIN_CODE: 'loginCode',
+  TEMP_PASSWORD: 'tempPassword',
+  CURRENT_USER: 'currentUser',
+  ACCESS_TOKEN: 'accessToken',
+  REFRESH_TOKEN: 'refreshToken',
+  TEMP_PASSWORD_EXPIRY: 'tempPasswordExpiry'
+};
+
+/**
+ * 一時パスワード認証情報を保存
+ */
+export const saveTempPasswordAuth = (loginCode, tempPassword, userData = null, expiryDate = null) => {
+  try {
+    // 一時パスワード認証情報を保存
+    localStorage.setItem(AUTH_KEYS.LOGIN_CODE, loginCode);
+    localStorage.setItem(AUTH_KEYS.TEMP_PASSWORD, tempPassword);
+    
+    // ユーザー情報を保存
+    if (userData) {
+      localStorage.setItem(AUTH_KEYS.CURRENT_USER, JSON.stringify(userData));
+    }
+    
+    // 一時パスワードの有効期限を保存（指定がない場合は24時間後）
+    if (expiryDate) {
+      localStorage.setItem(AUTH_KEYS.TEMP_PASSWORD_EXPIRY, expiryDate);
+    } else {
+      const defaultExpiry = new Date();
+      defaultExpiry.setHours(defaultExpiry.getHours() + 24);
+      localStorage.setItem(AUTH_KEYS.TEMP_PASSWORD_EXPIRY, defaultExpiry.toISOString());
+    }
+    
+    console.log('一時パスワード認証情報を保存しました:', { 
+      loginCode: '***', 
+      tempPassword: '***',
+      expiry: expiryDate || '24時間後'
+    });
+  } catch (error) {
+    console.error('一時パスワード認証情報の保存に失敗しました:', error);
+  }
+};
+
+/**
+ * 一時パスワード認証情報を取得
+ */
+export const getTempPasswordAuth = () => {
+  try {
+    const loginCode = localStorage.getItem(AUTH_KEYS.LOGIN_CODE);
+    const tempPassword = localStorage.getItem(AUTH_KEYS.TEMP_PASSWORD);
+    const currentUserStr = localStorage.getItem(AUTH_KEYS.CURRENT_USER);
+    const tempPasswordExpiry = localStorage.getItem(AUTH_KEYS.TEMP_PASSWORD_EXPIRY);
+    
+    // 一時パスワード認証情報が存在しない場合
+    if (!loginCode || !tempPassword) {
+      return null;
+    }
+    
+    // 一時パスワードの期限切れの場合
+    if (tempPasswordExpiry && new Date(tempPasswordExpiry) < new Date()) {
+      console.log('一時パスワードの有効期限が切れています');
+      clearTempPasswordAuth();
+      return null;
+    }
+    
+    let currentUser = null;
+    if (currentUserStr) {
+      try {
+        currentUser = JSON.parse(currentUserStr);
+      } catch (e) {
+        console.error('currentUserのパースに失敗:', e);
+      }
+    }
+    
+    return {
+      loginCode,
+      tempPassword,
+      currentUser
+    };
+  } catch (error) {
+    console.error('一時パスワード認証情報の取得に失敗しました:', error);
+    return null;
+  }
+};
+
+/**
+ * 一時パスワード認証情報をクリア
+ */
+export const clearTempPasswordAuth = () => {
+  try {
+    localStorage.removeItem(AUTH_KEYS.LOGIN_CODE);
+    localStorage.removeItem(AUTH_KEYS.TEMP_PASSWORD);
+    localStorage.removeItem(AUTH_KEYS.CURRENT_USER);
+    localStorage.removeItem(AUTH_KEYS.TEMP_PASSWORD_EXPIRY);
+    console.log('一時パスワード認証情報をクリアしました');
+  } catch (error) {
+    console.error('一時パスワード認証情報のクリアに失敗しました:', error);
+  }
+};
+
+/**
+ * 一時パスワード認証が有効かチェック
+ */
+export const isTempPasswordAuthValid = () => {
+  const authInfo = getTempPasswordAuth();
+  return authInfo !== null;
+};
+
+/**
+ * ユーザー情報を更新
+ */
+export const updateUserInfo = (userData) => {
+  try {
+    if (userData) {
+      localStorage.setItem(AUTH_KEYS.CURRENT_USER, JSON.stringify(userData));
+      console.log('ユーザー情報を更新しました');
+    }
+  } catch (error) {
+    console.error('ユーザー情報の更新に失敗しました:', error);
+  }
+};
+
+/**
+ * アクセストークンが有効かチェック
+ */
+export const isAccessTokenValid = () => {
+  try {
+    const accessToken = localStorage.getItem(AUTH_KEYS.ACCESS_TOKEN);
+    if (!accessToken) return false;
+    
+    // JWTトークンの有効期限をチェック
+    try {
+      const payload = JSON.parse(atob(accessToken.split('.')[1]));
+      const currentTime = Math.floor(Date.now() / 1000);
+      return payload.exp > currentTime;
+    } catch (e) {
+      console.error('JWTトークンの解析に失敗:', e);
+      return false;
+    }
+  } catch (error) {
+    console.error('アクセストークンの確認に失敗しました:', error);
+    return false;
+  }
+};
+
+/**
+ * アクセストークンを取得
+ */
+export const getAccessToken = () => {
+  return localStorage.getItem(AUTH_KEYS.ACCESS_TOKEN);
+};
+
+/**
+ * アクセストークンを保存
+ */
+export const saveAccessToken = (accessToken, refreshToken = null) => {
+  try {
+    if (accessToken) {
+      localStorage.setItem(AUTH_KEYS.ACCESS_TOKEN, accessToken);
+    }
+    if (refreshToken) {
+      localStorage.setItem(AUTH_KEYS.REFRESH_TOKEN, refreshToken);
+    }
+    console.log('アクセストークンを保存しました');
+  } catch (error) {
+    console.error('アクセストークンの保存に失敗しました:', error);
+  }
+};
+
+/**
+ * アクセストークンをクリア
+ */
+export const clearAccessToken = () => {
+  try {
+    localStorage.removeItem(AUTH_KEYS.ACCESS_TOKEN);
+    localStorage.removeItem(AUTH_KEYS.REFRESH_TOKEN);
+    console.log('アクセストークンをクリアしました');
+  } catch (error) {
+    console.error('アクセストークンのクリアに失敗しました:', error);
+  }
+};
+
 // JWT認証用ユーティリティ関数
 
 // JWTペイロードを安全にデコードする関数
@@ -141,7 +326,16 @@ export const clearStoredTokens = () => {
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('refreshTokenCreated');
-  console.log('トークンと関連データをクリアしました');
+  
+  // 一時パスワード認証関連の情報もクリア
+  localStorage.removeItem('autoLoginCode');
+  localStorage.removeItem('tempPassword');
+  localStorage.removeItem('loginCode');
+  localStorage.removeItem('temp_password');
+  localStorage.removeItem('code');
+  localStorage.removeItem('password');
+  
+  console.log('トークンと一時パスワード認証データをクリアしました');
 };
 
 // トークン更新APIを呼び出し
@@ -149,7 +343,7 @@ export const refreshTokenAPI = async (refreshToken) => {
   try {
     console.log('トークン更新API呼び出し開始:', { refreshToken: refreshToken ? '存在' : 'なし' });
     
-    const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+    const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
     const response = await fetch(`${API_BASE_URL}/api/refresh`, {
       method: 'POST',
       headers: {

@@ -37,7 +37,7 @@ const HomePage = () => {
             </p>
             <div className="flex justify-center space-x-4">
               <Link
-                to="/admin-instructor-login"
+                to="/student-login"
                 className="bg-white text-indigo-600 px-8 py-3 rounded-lg hover:bg-gray-100 transition-colors font-semibold text-lg"
               >
                 今すぐ始める

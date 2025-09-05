@@ -17,10 +17,10 @@ import { setGlobalNavigate, setupFetchInterceptor } from '../../utils/httpInterc
 import { addOperationLog } from '../../utils/operationLogManager';
 import { markTempPasswordAsUsedAPI } from '../../utils/api';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
 
 // 認証コンテキストの作成
-const AuthContext = createContext();
+export const AuthContext = createContext();
 
 // カスタムフック
 export const useAuth = () => {
@@ -81,16 +81,56 @@ export const AuthProvider = ({ children }) => {
         console.log('ユーザー情報:', { role: user.role, name: user.name });
         setCurrentUser(user);
 
-        // JWT認証の場合
+        // JWT認証または一時パスワード認証の確認
         const { accessToken, refreshToken } = getStoredTokens();
         console.log('保存されたトークン:', { 
           accessToken: accessToken ? '存在' : 'なし', 
           refreshToken: refreshToken ? '存在' : 'なし' 
         });
         
-        // トークンがない場合は認証されていないとして扱う
+        // 一時パスワード認証情報の確認
+        const loginCode = localStorage.getItem('loginCode');
+        const tempPassword = localStorage.getItem('tempPassword');
+        const tempPasswordExpiry = localStorage.getItem('tempPasswordExpiry');
+        
+        console.log('一時パスワード認証情報:', {
+          loginCode: loginCode ? '存在' : 'なし',
+          tempPassword: tempPassword ? '存在' : 'なし',
+          expiry: tempPasswordExpiry || 'なし'
+        });
+        
+        // JWTトークンがない場合、一時パスワード認証情報をチェック
         if (!accessToken || !refreshToken) {
-          console.log('トークンが見つかりません - 認証されていません');
+          if (loginCode && tempPassword) {
+            // 一時パスワード認証情報がある場合
+            if (tempPasswordExpiry) {
+              const expiryDate = new Date(tempPasswordExpiry);
+              const now = new Date();
+              
+              if (expiryDate > now) {
+                console.log('一時パスワード認証情報が有効です - 認証済みとして設定');
+                setIsAuthenticated(true);
+                setCurrentUser(user);
+                setIsLoading(false);
+                return;
+              } else {
+                console.log('一時パスワードの有効期限が切れています');
+                // 期限切れの認証情報をクリア
+                localStorage.removeItem('loginCode');
+                localStorage.removeItem('tempPassword');
+                localStorage.removeItem('tempPasswordExpiry');
+                localStorage.removeItem('currentUser');
+              }
+            } else {
+              console.log('一時パスワード認証情報が有効です（有効期限なし）- 認証済みとして設定');
+              setIsAuthenticated(true);
+              setCurrentUser(user);
+              setIsLoading(false);
+              return;
+            }
+          }
+          
+          console.log('有効な認証情報が見つかりません - 認証されていません');
           setIsAuthenticated(false);
           setCurrentUser(null);
           setIsLoading(false);
@@ -458,9 +498,8 @@ export const AuthProvider = ({ children }) => {
       });
     }
     
-    // 既存のデータをクリアしてから新しいデータを保存
+    // 既存のユーザーデータのみクリア（一時パスワード認証情報は保持）
     localStorage.removeItem('currentUser');
-    clearStoredTokens();
     
     // 管理者の場合、拠点情報をセッションストレージに保存
     if (userData.role >= 6 && userData.satellite_id) {
@@ -482,9 +521,10 @@ export const AuthProvider = ({ children }) => {
       storeTokens(accessToken, refreshToken);
       console.log('トークンをlocalStorageに保存完了');
     } else {
-      // トークンがない場合はクリア
-      clearStoredTokens();
-      console.log('トークンなし - モックログインとして処理');
+      // トークンがない場合は、アクセストークンのみクリア（一時パスワード認証情報は保持）
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      console.log('トークンなし - 一時パスワード認証として処理');
     }
     
     // 状態を同期的に更新

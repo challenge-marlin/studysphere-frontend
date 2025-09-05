@@ -4,7 +4,7 @@ import SanitizedTextarea from '../SanitizedTextarea';
 import { SANITIZE_OPTIONS } from '../../utils/sanitizeUtils';
 import { updateUser, upsertSupportPlan } from '../../utils/api';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
 
 const StudentEditor = ({ student, onUpdate, onClose, instructors }) => {
   const [editFormData, setEditFormData] = useState({

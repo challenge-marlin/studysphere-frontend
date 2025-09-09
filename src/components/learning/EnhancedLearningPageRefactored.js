@@ -42,8 +42,7 @@ const EnhancedLearningPageRefactored = () => {
   const {
     updateLearningProgress,
     handleStartLearning: progressHandleStartLearning,
-    handleTestCompleted: progressHandleTestCompleted,
-    handleAssignmentSubmitted
+    handleTestCompleted: progressHandleTestCompleted
   } = useLearningProgress();
 
   // currentLessonの状態変化を追跡
@@ -75,6 +74,42 @@ const EnhancedLearningPageRefactored = () => {
   }, [searchParams]); // searchParamsのみに依存
 
   // 学習開始時の進捗更新は削除（LessonList.jsのhandleStartLessonで実行されるため）
+
+  // アップロード済みファイルを取得
+  const fetchUploadedFiles = async (lessonId = null) => {
+    const targetLessonId = lessonId || currentLesson;
+    
+    try {
+      console.log(`📁 アップロード済みファイル取得開始: レッスンID ${targetLessonId}`);
+      
+      const response = await fetch(`http://localhost:5050/api/learning/lesson/${targetLessonId}/uploaded-files`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`📁 アップロード済みファイルデータ:`, data);
+        
+        if (data.success) {
+          setUploadedFiles(data.data);
+          console.log(`✅ アップロード済みファイル設定完了: ${data.data.length}件`);
+        } else {
+          console.error('アップロード済みファイル取得失敗:', data.message);
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('アップロード済みファイルAPIエラー:', {
+          status: response.status,
+          error: errorData.message
+        });
+      }
+    } catch (error) {
+      console.error('アップロード済みファイル取得エラー:', error);
+    }
+  };
 
   // 課題提出状況を確認
   const checkAssignmentStatus = async (lessonId = null) => {
@@ -222,9 +257,28 @@ const EnhancedLearningPageRefactored = () => {
         setLessonData(data.data);
         setTextLoading(false);
         
+        // レッスンデータにtextContentが含まれている場合は、textContentステートに設定
+        if (data.data.textContent) {
+          console.log('レッスンデータからtextContentを設定:', {
+            textContentLength: data.data.textContent.length,
+            fileType: data.data.file_type,
+            s3Key: data.data.s3_key
+          });
+          setTextContent(data.data.textContent);
+        } else {
+          console.log('レッスンデータにtextContentが含まれていません:', {
+            hasTextContent: !!data.data.textContent,
+            fileType: data.data.file_type,
+            s3Key: data.data.s3_key
+          });
+        }
+        
         // 課題提出状況を確認
         console.log(`🔍 課題提出状況確認開始: レッスンID ${targetLessonId}`);
         await checkAssignmentStatus(targetLessonId);
+        
+        // アップロード済みファイルを取得
+        await fetchUploadedFiles(targetLessonId);
         
         console.log('レッスンデータ取得成功:', data.data);
       } else {
@@ -717,8 +771,9 @@ const EnhancedLearningPageRefactored = () => {
     try {
       const formData = new FormData();
       formData.append('file', zipFiles[0]);
+      formData.append('lessonId', currentLesson);
 
-      const response = await fetch(`http://localhost:5050/api/learning/lesson/${currentLesson}/upload-assignment`, {
+      const response = await fetch(`http://localhost:5050/api/learning/upload-assignment`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
@@ -733,8 +788,6 @@ const EnhancedLearningPageRefactored = () => {
           const newFile = {
             id: Date.now() + Math.random(),
             name: data.data.fileName,
-            originalName: data.data.originalFileName,
-            size: data.data.fileSize,
             type: 'application/zip',
             uploadDate: new Date().toLocaleString(),
             status: 'uploaded',
@@ -749,12 +802,12 @@ const EnhancedLearningPageRefactored = () => {
           
           alert('成果物のアップロードが完了しました！');
           
-          // 提出物として提出完了の処理
-          handleAssignmentSubmitted(currentLesson, currentUser);
+          // 課題提出完了の処理（既にassignmentStatusが更新されているため、追加処理は不要）
           
-          // 課題提出状況を再確認
+          // 課題提出状況とアップロード済みファイルを再確認
           setTimeout(() => {
             checkAssignmentStatus();
+            fetchUploadedFiles();
           }, 500);
         } else {
           alert('アップロードに失敗しました: ' + data.message);
@@ -770,8 +823,44 @@ const EnhancedLearningPageRefactored = () => {
   };
 
   // ファイル削除処理
-  const handleFileDelete = (fileId) => {
-    setUploadedFiles(prev => prev.filter(file => file.id !== fileId));
+  const handleFileDelete = async (fileId) => {
+    try {
+      console.log(`🗑️ ファイル削除開始: ファイルID ${fileId}, レッスンID ${currentLesson}`);
+      
+      const response = await fetch(`http://localhost:5050/api/learning/lesson/${currentLesson}/uploaded-files/${fileId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('ファイル削除成功:', data);
+        
+        // フロントエンドの状態を更新
+        setUploadedFiles(prev => prev.filter(file => file.id !== fileId));
+        
+        // 課題提出状況がリセットされた場合は、課題提出状況を再取得
+        if (data.data && data.data.assignmentStatusReset) {
+          console.log('課題提出状況がリセットされました。再取得します。');
+          await checkAssignmentStatus(currentLesson);
+        }
+        
+        console.log('✅ ファイル削除完了');
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('ファイル削除APIエラー:', {
+          status: response.status,
+          error: errorData.message
+        });
+        alert('ファイルの削除に失敗しました: ' + (errorData.message || '不明なエラー'));
+      }
+    } catch (error) {
+      console.error('ファイル削除エラー:', error);
+      alert('ファイルの削除中にエラーが発生しました');
+    }
   };
 
   // テスト完了時の処理
@@ -923,7 +1012,10 @@ const EnhancedLearningPageRefactored = () => {
                isAIEnabled={
                  pdfProcessingStatus === 'completed' || 
                  (lessonData?.file_type === 'pdf' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key)) ||
-                 (lessonData?.file_type !== 'pdf' && lessonData?.textContent) // 通常のテキストファイルの場合
+                 (lessonData?.file_type === 'txt' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key)) ||
+                 (lessonData?.file_type === 'md' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key)) ||
+                 (lessonData?.file_type === 'application/rtf' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key)) ||
+                 (lessonData?.file_type !== 'pdf' && lessonData?.textContent) // フォールバック: 通常のテキストファイルの場合
                }
              />
 

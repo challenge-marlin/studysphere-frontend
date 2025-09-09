@@ -80,13 +80,49 @@ const LearningHeader = ({
               </span>
             )}
             
-            <button 
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all duration-200 hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={() => onTestNavigate(currentLesson)}
-              disabled={!isTestEnabled}
-            >
-              📝 学習効果テスト
-            </button>
+            {/* テストメニュー */}
+            <div className="relative group">
+              <button 
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all duration-200 hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!isTestEnabled}
+              >
+                📝 学習効果テスト ▼
+              </button>
+              
+              {/* ドロップダウンメニュー */}
+              {isTestEnabled && (
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                  <div className="py-2">
+                    <button
+                      onClick={() => {
+                        // セクションテストのキャッシュをクリア
+                        const sectionCacheKey = `test_data_${currentLesson}_${currentSection}`;
+                        sessionStorage.removeItem(sectionCacheKey);
+                        console.log('セクションテストのキャッシュをクリア:', sectionCacheKey);
+                        navigate(`/student/section-test?lesson=${currentLesson}&section=${currentSection}`);
+                      }}
+                      className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                    >
+                      <div className="font-medium">セクションまとめテスト</div>
+                      <div className="text-sm text-gray-500">10問</div>
+                    </button>
+                    <button
+                      onClick={() => {
+                        // レッスンテストのキャッシュをクリア
+                        const lessonCacheKey = `test_data_lesson_${currentLesson}`;
+                        sessionStorage.removeItem(lessonCacheKey);
+                        console.log('レッスンテストのキャッシュをクリア:', lessonCacheKey);
+                        navigate(`/student/lesson-test?lesson=${currentLesson}`);
+                      }}
+                      className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                    >
+                      <div className="font-medium">レッスンまとめテスト</div>
+                      <div className="text-sm text-gray-500">30問</div>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

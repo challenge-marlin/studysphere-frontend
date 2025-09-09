@@ -344,17 +344,50 @@ const LessonManagement = () => {
 
       if (response.success) {
         console.log('LessonManagement: レッスン作成成功');
+        
+        // テキストと動画の紐づけモーダルが開いている場合は、ファイル一覧を再取得
+        if (showTextVideoLinkModal && selectedLessonForLinks) {
+          console.log('レッスン作成後、テキストファイル一覧を再取得');
+          await fetchAvailableTextFiles(selectedLessonForLinks.id);
+        }
+        
         closeModals(); // closeModals関数を使用
-                  setError(null); // エラーをクリア
-          await fetchLessons(); // レッスンリストを再取得
-          // レッスン操作のログはバックエンド側で記録（重複防止のためフロント側では送信しない）
+        setError(null); // エラーをクリア
+        await fetchLessons(); // レッスンリストを再取得
+        // レッスン操作のログはバックエンド側で記録（重複防止のためフロント側では送信しない）
       } else {
         console.error('LessonManagement: レッスン作成失敗:', response.message);
         setError('レッスンの作成に失敗しました: ' + (response.message || ''));
       }
     } catch (err) {
       console.error('LessonManagement: レッスン作成エラー:', err);
-      setError('レッスンの作成中にエラーが発生しました: ' + err.message);
+      let errorMessage = 'レッスンの作成中にエラーが発生しました';
+      
+      // ファイルアップロードエラーの詳細処理
+      if (err.message.includes('許可されていないファイル形式')) {
+        errorMessage = 'ファイル形式が正しくありません。PDF、MD、TXT、RTFファイルのみアップロード可能です。';
+      } else if (err.message.includes('ファイルサイズが大きすぎます')) {
+        errorMessage = 'ファイルサイズが大きすぎます。50MB以下のファイルをアップロードしてください。';
+      } else if (err.message.includes('ファイルがアップロードされていません')) {
+        errorMessage = 'ファイルが選択されていません。ファイルを選択してから作成してください。';
+      } else if (err.message.includes('Authentication failed')) {
+        errorMessage = '認証に失敗しました。再度ログインしてください。';
+      } else if (err.message.includes('401')) {
+        errorMessage = '認証が必要です。再度ログインしてください。';
+      } else if (err.message.includes('403')) {
+        errorMessage = '管理者権限が必要です。';
+      } else if (err.message.includes('500')) {
+        // サーバーエラーの詳細を取得
+        if (err.response && err.response.data && err.response.data.message) {
+          errorMessage = `サーバーエラー: ${err.response.data.message}`;
+        } else {
+          errorMessage = 'サーバーエラーが発生しました。しばらく時間をおいて再度お試しください。';
+        }
+      } else {
+        errorMessage += ': ' + err.message;
+      }
+      
+      setError(errorMessage);
     }
   };
 
@@ -425,10 +458,17 @@ const LessonManagement = () => {
 
       if (response.success) {
         console.log('LessonManagement: レッスン更新成功');
+        
+        // テキストと動画の紐づけモーダルが開いている場合は、ファイル一覧を再取得
+        if (showTextVideoLinkModal && selectedLessonForLinks) {
+          console.log('レッスン更新後、テキストファイル一覧を再取得');
+          await fetchAvailableTextFiles(selectedLessonForLinks.id);
+        }
+        
         closeModals(); // closeModals関数を使用
-                  setError(null); // エラーをクリア
-          await fetchLessons(); // レッスンリストを再取得
-          // レッスン操作のログはバックエンド側で記録（重複防止のためフロント側では送信しない）
+        setError(null); // エラーをクリア
+        await fetchLessons(); // レッスンリストを再取得
+        // レッスン操作のログはバックエンド側で記録（重複防止のためフロント側では送信しない）
       } else {
         console.error('LessonManagement: レッスン更新失敗:', response.message);
         setError('レッスンの更新に失敗しました: ' + (response.message || ''));
@@ -437,7 +477,14 @@ const LessonManagement = () => {
       console.error('LessonManagement: レッスン更新エラー:', err);
       let errorMessage = 'レッスンの更新中にエラーが発生しました';
       
-      if (err.message.includes('Authentication failed')) {
+      // ファイルアップロードエラーの詳細処理
+      if (err.message.includes('許可されていないファイル形式')) {
+        errorMessage = 'ファイル形式が正しくありません。PDF、MD、TXT、RTFファイルのみアップロード可能です。';
+      } else if (err.message.includes('ファイルサイズが大きすぎます')) {
+        errorMessage = 'ファイルサイズが大きすぎます。50MB以下のファイルをアップロードしてください。';
+      } else if (err.message.includes('ファイルがアップロードされていません')) {
+        errorMessage = 'ファイルが選択されていません。ファイルを選択してから更新してください。';
+      } else if (err.message.includes('Authentication failed')) {
         errorMessage = '認証に失敗しました。再度ログインしてください。';
       } else if (err.message.includes('401')) {
         errorMessage = '認証が必要です。再度ログインしてください。';
@@ -446,7 +493,12 @@ const LessonManagement = () => {
       } else if (err.message.includes('404')) {
         errorMessage = 'レッスンが見つかりません。';
       } else if (err.message.includes('500')) {
-        errorMessage = 'サーバーエラーが発生しました。しばらく時間をおいて再度お試しください。';
+        // サーバーエラーの詳細を取得
+        if (err.response && err.response.data && err.response.data.message) {
+          errorMessage = `サーバーエラー: ${err.response.data.message}`;
+        } else {
+          errorMessage = 'サーバーエラーが発生しました。しばらく時間をおいて再度お試しください。';
+        }
       } else {
         errorMessage += ': ' + err.message;
       }
@@ -666,12 +718,20 @@ const LessonManagement = () => {
       console.log('fetchAvailableTextFiles: レスポンス取得成功', response);
       
       if (response.success) {
-        // PDFファイルのみをフィルタリング
-        const pdfFiles = response.data.filter(file => 
-          file.file_type === 'pdf' || file.file_name.toLowerCase().endsWith('.pdf')
-        );
-        console.log('fetchAvailableTextFiles: PDFファイル数', pdfFiles.length);
-        setAvailableTextFiles(pdfFiles);
+        // テキストファイル（PDF、MD、TXT、RTF）をフィルタリング
+        const textFiles = response.data.filter(file => {
+          const fileName = file.file_name.toLowerCase();
+          return file.file_type === 'pdf' || 
+                 file.file_type === 'text/plain' ||
+                 file.file_type === 'text/markdown' ||
+                 file.file_type === 'application/rtf' ||
+                 fileName.endsWith('.pdf') ||
+                 fileName.endsWith('.md') ||
+                 fileName.endsWith('.txt') ||
+                 fileName.endsWith('.rtf');
+        });
+        console.log('fetchAvailableTextFiles: テキストファイル数', textFiles.length);
+        setAvailableTextFiles(textFiles);
       } else {
         console.error('利用可能なテキストファイル取得失敗:', response.message);
         setError('テキストファイルの取得に失敗しました: ' + response.message);
@@ -926,8 +986,20 @@ const LessonManagement = () => {
 
         {/* エラーメッセージ */}
         {error && (
-          <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
-            {error}
+          <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg shadow-md">
+            <div className="flex items-center">
+              <svg className="w-5 h-5 mr-2 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              <span className="font-medium">エラーが発生しました</span>
+            </div>
+            <p className="mt-2 text-sm">{error}</p>
+            <button 
+              onClick={() => setError(null)}
+              className="mt-3 text-sm text-red-600 hover:text-red-800 underline"
+            >
+              エラーメッセージを閉じる
+            </button>
           </div>
         )}
 
@@ -1175,12 +1247,12 @@ const LessonManagement = () => {
                     
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        ファイル（PDF、MD、DOCX、PPTX）
+                        ファイル（PDF、MD、TXT、RTF）
                       </label>
                       <input
                         type="file"
                         onChange={handleFileChange}
-                        accept=".pdf,.md,.docx,.pptx"
+                        accept=".pdf,.md,.txt,.rtf"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
@@ -1426,7 +1498,7 @@ const LessonManagement = () => {
                           <input
                             type="file"
                             onChange={handleFileChange}
-                            accept=".pdf,.md,.docx,.pptx"
+                            accept=".pdf,.md,.txt,.rtf"
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                           <p className="text-xs text-gray-500 mt-1">

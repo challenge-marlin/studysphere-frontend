@@ -7,7 +7,6 @@ import { saveTempPasswordAuth } from '../utils/authUtils';
 import Dashboard from './Dashboard';
 import LessonList from './LessonList';
 import AnnouncementList from '../components/AnnouncementList';
-import LearningProgress from '../components/LearningProgress';
 
 const StudentDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -485,11 +484,6 @@ const StudentDashboard = () => {
           {activeTab === 'announcements' && (
             <div className="student-content">
               <AnnouncementList />
-            </div>
-          )}
-          {activeTab === 'learning' && (
-            <div className="student-content">
-              <LearningProgress userId={currentUser?.id || '1'} />
             </div>
           )}
         </div>

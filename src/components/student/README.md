@@ -26,7 +26,7 @@ studysphere-backend/
 ├── routes/studentRoutes.js          # 利用者向けAPIルート
 ├── scripts/studentController.js     # 利用者向けコントローラー
 ├── scripts/createUserLessonProgressTable.js  # テーブル作成スクリプト
-└── scripts/createTestStudentData.js # テストデータ作成スクリプト
+└── tools/createTestStudentData.js # テストデータ作成スクリプト
 ```
 
 ### 2. フロントエンド実装
@@ -65,7 +65,7 @@ create-user-lesson-progress-table.bat
 ```bash
 # バックエンドディレクトリで実行
 cd studysphere-backend/backend
-node scripts/createTestStudentData.js
+node tools/createTestStudentData.js
 ```
 
 ### 3. バックエンド起動

@@ -42,18 +42,12 @@ const FileUploadSection = ({
                 <p className="text-sm font-medium text-gray-800 truncate">
                   {file.name}
                 </p>
-                {file.originalName && file.originalName !== file.name && (
-                  <span className="text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded">
-                    元ファイル: {file.originalName}
-                  </span>
-                )}
               </div>
               <div className="flex items-center gap-4 text-xs text-gray-500">
-                <span>サイズ: {formatFileSize(file.size)}</span>
-                <span>アップロード: {formatDate(file.uploadDate)}</span>
+                <span>アップロード: {file.uploadDate}</span>
                 {file.s3Key && (
                   <span className="text-blue-600 font-mono text-xs bg-blue-50 px-2 py-1 rounded">
-                    S3保存済み
+                    ストレージ保存済
                   </span>
                 )}
               </div>

@@ -20,6 +20,31 @@ const isAuthRequiredEndpoint = (url) => {
     '/forgot-password'
   ];
   
+  // 静的リソースやHMRファイルを除外
+  const staticResourcePatterns = [
+    /\.hot-update\.json$/,
+    /\.hot-update\.js$/,
+    /\.hot-update\.css$/,
+    /\.js$/,
+    /\.css$/,
+    /\.png$/,
+    /\.jpg$/,
+    /\.jpeg$/,
+    /\.gif$/,
+    /\.svg$/,
+    /\.ico$/,
+    /\.woff$/,
+    /\.woff2$/,
+    /\.ttf$/,
+    /\.eot$/,
+    /\.map$/
+  ];
+  
+  // 静的リソースの場合は認証不要
+  if (staticResourcePatterns.some(pattern => pattern.test(url))) {
+    return false;
+  }
+  
   // URLに認証不要エンドポイントが含まれているかチェック
   return !authExcludedEndpoints.some(endpoint => url.includes(endpoint));
 };
@@ -34,11 +59,15 @@ export const setupFetchInterceptor = () => {
   const originalFetch = window.fetch;
   
   window.fetch = async (url, options = {}) => {
-    console.log('Fetchインターセプター: リクエスト開始', { url, method: options.method });
+    // 静的リソースの場合はログを出力しない
+    const isStaticResource = !isAuthRequiredEndpoint(url);
+    if (!isStaticResource) {
+      console.log('Fetchインターセプター: リクエスト開始', { url, method: options.method });
+    }
     
     // 完全なURLでもインターセプトを適用（認証ヘッダー追加のため）
     const isFullUrl = url.startsWith('http://') || url.startsWith('https://');
-    if (isFullUrl) {
+    if (isFullUrl && !isStaticResource) {
       console.log('Fetchインターセプター: 完全なURLを検出、認証ヘッダーを追加します');
     }
     
@@ -63,11 +92,13 @@ export const setupFetchInterceptor = () => {
           ...options.headers,
           'Authorization': `Bearer ${accessToken}`
         };
-        console.log('Fetchインターセプター: Authorizationヘッダーを追加', { 
-          hasToken: !!accessToken, 
-          tokenLength: accessToken ? accessToken.length : 0 
-        });
-      } else if (isAuthRequiredEndpoint(url) && !accessToken) {
+        if (!isStaticResource) {
+          console.log('Fetchインターセプター: Authorizationヘッダーを追加', { 
+            hasToken: !!accessToken, 
+            tokenLength: accessToken ? accessToken.length : 0 
+          });
+        }
+      } else if (isAuthRequiredEndpoint(url) && !accessToken && !isStaticResource) {
         console.warn('Fetchインターセプター: 認証が必要なエンドポイントですが、トークンがありません', { url });
       }
 

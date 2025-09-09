@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { getCurrentUserSatelliteId } from '../utils/locationUtils';
 import { getSatelliteUsers } from '../utils/api';
@@ -18,6 +19,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
 
 const StudentManagementRefactored = ({ teacherId }) => {
   const { currentUser, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   
   // 基本状態管理
   const [students, setStudents] = useState([]);
@@ -46,6 +48,11 @@ const StudentManagementRefactored = ({ teacherId }) => {
   // 日報管理モーダルの状態
   const [showDailyReportModal, setShowDailyReportModal] = useState(false);
   const [selectedStudentForReports, setSelectedStudentForReports] = useState(null);
+
+  // 合否確認機能
+  const handleViewTestResults = (student) => {
+    navigate(`/instructor/student-detail/${student.id}`);
+  };
 
 
 
@@ -635,8 +642,8 @@ const StudentManagementRefactored = ({ teacherId }) => {
             onEditStudent={openEditModal}
             onToggleStatus={toggleStudentStatus}
             onDeleteStudent={deleteStudent}
-            
             onViewDailyReports={openDailyReportModal}
+            onViewTestResults={handleViewTestResults}
           />
         </div>
 

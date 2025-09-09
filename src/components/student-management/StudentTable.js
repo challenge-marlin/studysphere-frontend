@@ -7,7 +7,8 @@ const StudentTable = ({
   onEditStudent,
   onToggleStatus,
   onDeleteStudent,
-  onViewDailyReports
+  onViewDailyReports,
+  onViewTestResults
 }) => {
   console.log('=== StudentTable レンダリング ===');
   console.log('受け取ったstudents:', students);
@@ -214,7 +215,7 @@ const StudentTable = ({
                     </button>
                     <button 
                       className="px-2 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 transition-all duration-200"
-                      onClick={() => {/* TODO: テスト合否確認機能を実装 */}}
+                      onClick={() => onViewTestResults(student)}
                       title="テストの合否確認"
                     >
                       📝 合否確認

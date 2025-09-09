@@ -80,9 +80,21 @@ export const apiCall = async (endpoint, options = {}, retryCount = 0) => {
     }
     
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`APIエラー (${response.status}):`, errorText);
-      throw new Error(`API呼び出しに失敗しました (${response.status}): ${errorText}`);
+      let errorData;
+      try {
+        const errorText = await response.text();
+        errorData = JSON.parse(errorText);
+      } catch (parseError) {
+        errorData = { message: await response.text() };
+      }
+      
+      console.error(`APIエラー (${response.status}):`, errorData);
+      
+      // エラーオブジェクトに詳細情報を追加
+      const error = new Error(errorData.message || `API呼び出しに失敗しました (${response.status})`);
+      error.status = response.status;
+      error.response = { data: errorData };
+      throw error;
     }
     
     const data = await response.json();

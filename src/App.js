@@ -11,12 +11,15 @@ import StudentDashboard from './pages/StudentDashboard';
 import AutoLoginPage from './pages/AutoLoginPage';
 import { EnhancedLearningPageRefactored } from './components/learning';
 import TestPage from './pages/TestPage';
+import SectionTestPage from './pages/SectionTestPage';
+import LessonTestPage from './pages/LessonTestPage';
 import TestResultPage from './pages/TestResultPage';
 import CertificatePage from './pages/CertificatePage';
 import HomeSupportUserDetailPage from './pages/HomeSupportUserDetailPage';
 import DailyRecordsPage from './pages/DailyRecordsPage';
 import HomeSupportDailyRecordsPage from './pages/HomeSupportDailyRecordsPage';
 import HomeSupportEvaluationsPage from './pages/HomeSupportEvaluationsPage';
+import InstructorStudentDetail from './pages/InstructorStudentDetail';
 import './App.css';
 
 // デバッグ用のテストコンポーネント
@@ -64,10 +67,14 @@ function App() {
             <Route path="/student/enhanced-learning" element={<EnhancedLearningPageRefactored />} />
             {/* 学習効果テスト関連 */}
             <Route path="/student/test" element={<TestPage />} />
+            <Route path="/student/section-test" element={<SectionTestPage />} />
+            <Route path="/student/lesson-test" element={<LessonTestPage />} />
             <Route path="/student/test-result" element={<TestResultPage />} />
             <Route path="/student/certificate" element={<CertificatePage />} />
             {/* 指導員用利用者詳細画面 */}
             <Route path="/instructor/student/:studentId" element={<HomeSupportUserDetailPage />} />
+            {/* 指導員用学生詳細画面（学習進捗・合否確認） */}
+            <Route path="/instructor/student-detail/:studentId" element={<InstructorStudentDetail />} />
             {/* 在宅支援：日々の記録ページ */}
             <Route path="/instructor/student/:studentId/daily-records" element={<DailyRecordsPage />} />
             {/* 在宅支援管理：日々の記録管理 */}

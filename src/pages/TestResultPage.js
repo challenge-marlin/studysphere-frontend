@@ -22,48 +22,139 @@ const TestResultPage = () => {
     3: "学習意欲が感じられます。疑問点を解決することで、より深い理解につながります。"
   };
 
+  // 動的フィードバック生成関数
+  const generateDynamicFeedback = async (question, userAnswerIndex, correctAnswerIndex) => {
+    try {
+      const userAnswer = question.options[userAnswerIndex];
+      const correctAnswer = question.options[correctAnswerIndex];
+      
+      const response = await fetch('http://localhost:5050/api/learning/generate-feedback', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          question: question.question,
+          userAnswer: userAnswer,
+          correctAnswer: correctAnswer,
+          allOptions: question.options
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          return result.feedback;
+        }
+      }
+    } catch (error) {
+      console.error('フィードバック生成エラー:', error);
+    }
+    
+    // フォールバック: より詳細なデフォルトフィードバック
+    const userAnswerText = question.options[userAnswerIndex];
+    const correctAnswerText = question.options[correctAnswerIndex];
+    
+    const fallbackFeedbacks = [
+      `残念ながら不正解でした。選択肢「${userAnswerText}」は正しくありません。正解は「${correctAnswerText}」です。\n\nこの問題では、学習内容の重要なポイントを理解することが求められています。正しい答えの理由を考えてみて、なぜ他の選択肢が間違っているのかも確認してみましょう。\n\n次回は必ず正解できるよう、学習内容を復習して理解を深めてください。頑張りましょう！`,
+      `間違えてしまいましたね。あなたの回答「${userAnswerText}」は正解ではありません。正しい答えは「${correctAnswerText}」です。\n\nこの問題を通じて、学習した内容の理解度を確認できました。間違いは学習の機会です。正解の理由をしっかりと理解し、関連する知識も一緒に復習してみてください。\n\n継続的な学習で必ずスキルアップできます。応援しています！`,
+      `正解ではありませんでした。選択肢「${userAnswerText}」ではなく、「${correctAnswerText}」が正解です。\n\nこの問題のポイントを再度確認してみてください。学習内容のどの部分が関連しているか、なぜその答えが正しいのかを考えてみましょう。\n\n間違いから学ぶことで、より深い理解が得られます。次回は正解できるよう、頑張ってください！`,
+      `不正解でした。あなたの選択「${userAnswerText}」は正しくありません。正解は「${correctAnswerText}」です。\n\nこの問題は学習内容の重要な概念を問うています。正しい答えの理由を理解し、なぜ他の選択肢が適切でないのかも考えてみてください。\n\n学習は継続が大切です。この経験を活かして、より確実な知識を身につけていきましょう。`
+    ];
+    
+    return fallbackFeedbacks[Math.floor(Math.random() * fallbackFeedbacks.length)];
+  };
+
   useEffect(() => {
-    if (location.state) {
-      const { lessonNumber, lessonTitle, answers, testData } = location.state;
+    const processTestResults = async () => {
+      if (location.state) {
+        const { 
+          testType, 
+          lessonId, 
+          sectionIndex, 
+          lessonTitle, 
+          sectionTitle, 
+          answers, 
+          testData, 
+          shuffledQuestions,
+          score, 
+          totalQuestions,
+          examResultId,
+          s3Key
+        } = location.state;
+      
+      // 正答数を計算（シャッフルされた問題データを使用）
+      const questionsToUse = shuffledQuestions && shuffledQuestions.length > 0 ? shuffledQuestions : testData.questions;
+      const correctAnswers = score || 0;
+      const total = totalQuestions || questionsToUse.length;
+      const percentage = Math.round((correctAnswers / total) * 100);
+      
+      // 合格判定（レッスンテスト: 30問中29問以上、セクションテスト: 10問中9問以上）
+      const passed = testType === 'lesson' 
+        ? correctAnswers >= 29  // レッスンテスト: 30問中29問以上
+        : correctAnswers >= (total - 1);  // セクションテスト: 全問正解または1問誤答まで
       
       // テスト結果データを生成
-      const mockResult = {
-        lessonNumber,
+      const result = {
+        testType,
+        lessonId,
+        sectionIndex,
         lessonTitle,
+        sectionTitle,
         testData,
         answers,
-        correctAnswers: 0,
-        totalQuestions: testData.questions.length,
-        score: 0,
-        grade: "もう少し理解度を深めて再試験を行って下さい",
-        gradeEmoji: "📘",
+        correctAnswers,
+        totalQuestions: total,
+        score: correctAnswers,
+        percentage,
+        passed,
+        grade: passed ? "合格" : "不合格",
+        gradeEmoji: passed ? "🎉" : "📘",
+        examResultId,
+        s3Key,
         results: []
       };
 
-      // 各問題の結果を生成
-      testData.questions.forEach(question => {
-        const userAnswer = answers[question.id] || "利用者の回答";
-        const correctAnswer = sampleAnswers[question.id] || "模範解答";
-        const feedback = sampleFeedback[question.id] || "フィードバック";
-        const isCorrect = false; // 現在は採点機能なし
+      // 各問題の結果を生成（シャッフルされた問題データを使用）
+      for (const question of questionsToUse) {
+        const userAnswerIndex = answers[question.id];
+        const userAnswer = userAnswerIndex !== undefined ? 
+          `${userAnswerIndex + 1}. ${question.options[userAnswerIndex]}` : 
+          "未回答";
+        const correctAnswer = `${question.correctAnswer + 1}. ${question.options[question.correctAnswer]}`;
+        const isCorrect = userAnswerIndex === question.correctAnswer;
+        
+        let feedback = "";
+        if (isCorrect) {
+          feedback = "正解です！よく理解できています。";
+        } else if (userAnswerIndex !== undefined) {
+          // 不正解の場合は動的フィードバックを生成
+          feedback = await generateDynamicFeedback(question, userAnswerIndex, question.correctAnswer);
+        } else {
+          feedback = "未回答です。学習内容を確認して再受験してください。";
+        }
 
-        mockResult.results.push({
+        result.results.push({
           questionId: question.id,
           question: question.question,
           userAnswer,
           correctAnswer,
           feedback,
           isCorrect,
-          score: 0
+          score: isCorrect ? 1 : 0
         });
-      });
+      }
 
-      setResultData(mockResult);
-      setLoading(false);
-    } else {
-      // データがない場合はダッシュボードに戻る
-      navigate('/student/dashboard');
-    }
+        setResultData(result);
+        setLoading(false);
+      } else {
+        // データがない場合はダッシュボードに戻る
+        navigate('/student/dashboard');
+      }
+    };
+
+    processTestResults();
   }, [location.state, navigate]);
 
   // テスト結果をDBに保存（必要に応じて）
@@ -71,8 +162,26 @@ const TestResultPage = () => {
     if (resultData) {
       const saveTestResult = async () => {
         try {
-          const userId = localStorage.getItem('userId') || '1';
-          const lessonId = resultData.lessonNumber;
+          const lessonId = resultData.lessonId || resultData.lessonNumber;
+          
+          // 既にexamResultIdが存在する場合は再提出をスキップ
+          if (resultData.examResultId) {
+            console.log('既にテスト結果が保存済みのため、再提出をスキップします:', resultData.examResultId);
+            return;
+          }
+          
+          // デバッグログ
+          console.log('TestResultPage再提出データ:', {
+            lessonId,
+            sectionIndex: resultData.sectionIndex,
+            hasAnswers: !!resultData.answers,
+            hasTestData: !!resultData.testData,
+            hasShuffledQuestions: !!resultData.shuffledQuestions,
+            answersCount: Object.keys(resultData.answers || {}).length,
+            testDataQuestions: resultData.testData?.questions?.length,
+            shuffledQuestionsLength: resultData.shuffledQuestions?.length,
+            examResultId: resultData.examResultId
+          });
           
           // テスト結果を保存（既にテスト提出時に保存済みの場合は不要）
           const response = await fetch('/api/learning/test/submit', {
@@ -82,9 +191,12 @@ const TestResultPage = () => {
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              userId: parseInt(userId),
               lessonId: parseInt(lessonId),
+              sectionIndex: resultData.sectionIndex || 0,
+              testType: 'section',
               answers: resultData.answers,
+              testData: resultData.testData,
+              shuffledQuestions: resultData.shuffledQuestions,
               score: resultData.score,
               totalQuestions: resultData.totalQuestions
             })
@@ -104,17 +216,36 @@ const TestResultPage = () => {
   }, [resultData]);
 
   const handleRetakeTest = () => {
-    navigate(`/student/test?lesson=${resultData.lessonNumber}`);
+    if (resultData.testType === 'section') {
+      // セクションテストのキャッシュをクリア
+      const sectionCacheKey = `test_data_${resultData.lessonId}_${resultData.sectionIndex}`;
+      sessionStorage.removeItem(sectionCacheKey);
+      console.log('再試験: セクションテストのキャッシュをクリア:', sectionCacheKey);
+      navigate(`/student/section-test?lesson=${resultData.lessonId}&section=${resultData.sectionIndex}`);
+    } else {
+      // レッスンテストのキャッシュをクリア
+      const lessonCacheKey = `test_data_lesson_${resultData.lessonId}`;
+      sessionStorage.removeItem(lessonCacheKey);
+      console.log('再試験: レッスンテストのキャッシュをクリア:', lessonCacheKey);
+      navigate(`/student/lesson-test?lesson=${resultData.lessonId}`);
+    }
   };
 
   const handleGoToCertificate = () => {
-    navigate('/student/certificate', {
-      state: {
-        lessonNumber: resultData.lessonNumber,
-        lessonTitle: resultData.lessonTitle,
-        score: resultData.score
-      }
-    });
+    if (resultData.passed) {
+      navigate('/student/certificate', {
+        state: {
+          lessonId: resultData.lessonId,
+          lessonTitle: resultData.lessonTitle,
+          sectionTitle: resultData.sectionTitle,
+          testType: resultData.testType,
+          score: resultData.score,
+          totalQuestions: resultData.totalQuestions
+        }
+      });
+    } else {
+      alert('合格していないため、修了証は発行できません。再受験してください。');
+    }
   };
 
   const handleBackToDashboard = () => {
@@ -181,7 +312,10 @@ const TestResultPage = () => {
               </button>
               <div>
                 <h1 className="text-2xl font-bold">テスト結果</h1>
-                <span className="text-blue-100 text-sm">{resultData.lessonTitle}</span>
+                <span className="text-blue-100 text-sm">
+                  {resultData.lessonTitle}
+                  {resultData.sectionTitle && ` - ${resultData.sectionTitle}`}
+                </span>
               </div>
             </div>
             <div className="text-right">
@@ -202,7 +336,8 @@ const TestResultPage = () => {
         <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-6">
-              出題範囲：カリキュラム1・第{resultData.lessonNumber}回・第2章
+              出題範囲：{resultData.lessonTitle}
+              {resultData.sectionTitle && ` - ${resultData.sectionTitle}`}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-blue-50 rounded-xl p-6">
@@ -221,6 +356,7 @@ const TestResultPage = () => {
               </div>
             </div>
           </div>
+
 
           {/* 問題別結果 */}
           <div>
@@ -286,18 +422,22 @@ const TestResultPage = () => {
 
         {/* アクションボタン */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <button
-            className="px-8 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
-            onClick={handleRetakeTest}
-          >
-            🔄 再試験を受ける
-          </button>
-          <button
-            className="px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
-            onClick={handleGoToCertificate}
-          >
-            🏆 修了証を確認
-          </button>
+          {!resultData.passed && (
+            <button
+              className="px-8 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
+              onClick={handleRetakeTest}
+            >
+              🔄 再受験する
+            </button>
+          )}
+          {resultData.passed && resultData.testType === 'lesson' && (
+            <button
+              className="px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
+              onClick={handleGoToCertificate}
+            >
+              🏆 修了証を確認
+            </button>
+          )}
           <button
             className="px-8 py-4 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-xl font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
             onClick={handleBackToDashboard}

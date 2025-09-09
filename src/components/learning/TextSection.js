@@ -21,65 +21,105 @@ const TextSection = ({
   // 処理済みのS3キーを記録（無限ループ防止）
   const processedS3KeyRef = useRef(null);
 
-  // PDFファイルの場合はテキスト抽出を試行
+  // テキストファイルの処理（PDF、TXT、MD、RTFすべてに対応）
   useEffect(() => {
     console.log('TextSection useEffect - 実行開始');
     console.log('TextSection - 受け取ったlessonData:', lessonData);
     console.log('TextSection - lessonData.file_type:', lessonData?.file_type);
     console.log('TextSection - lessonData.s3_key:', lessonData?.s3_key);
     console.log('TextSection - pdfTextContent:', pdfTextContent);
+    console.log('TextSection - textContent:', textContent);
+    
+    // レッスンデータが存在しない場合は処理をスキップ
+    if (!lessonData || !lessonData.s3_key) {
+      console.log('レッスンデータまたはS3キーが存在しません');
+      return;
+    }
     
     // S3キーの詳細なデバッグ情報
-    if (lessonData?.s3_key) {
-      console.log('S3キーの詳細:', {
-        s3_key: lessonData.s3_key,
-        keyType: typeof lessonData.s3_key,
-        keyLength: lessonData.s3_key.length,
-        isEmpty: lessonData.s3_key.trim() === '',
-        containsSpaces: lessonData.s3_key.includes(' '),
-        containsSpecialChars: /[<>:"|?*]/.test(lessonData.s3_key)
-      });
+    console.log('S3キーの詳細:', {
+      s3_key: lessonData.s3_key,
+      keyType: typeof lessonData.s3_key,
+      keyLength: lessonData.s3_key.length,
+      isEmpty: lessonData.s3_key.trim() === '',
+      containsSpaces: lessonData.s3_key.includes(' '),
+      containsSpecialChars: /[<>:"|?*]/.test(lessonData.s3_key)
+    });
+    
+    // セッションストレージの状態を確認
+    const hasStoredContext = SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key);
+    console.log('セッションストレージ状態:', {
+      hasStoredContext,
+      lessonId: lessonData.id,
+      s3Key: lessonData.s3_key
+    });
+    
+    // 既存のコンテキストがある場合は、親コンポーネントに完了状態を通知
+    if (hasStoredContext) {
+      const storedContext = SessionStorageManager.getContext(lessonData.id, lessonData.s3_key);
+      console.log('保存済みコンテキスト情報:', storedContext.metadata);
       
-      // セッションストレージの状態を確認
-      const hasStoredContext = SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key);
-      console.log('セッションストレージ状態:', {
-        hasStoredContext,
-        lessonId: lessonData.id,
+      if (onTextContentUpdate) {
+        console.log('既存コンテキストを親コンポーネントに通知:', { contextLength: storedContext.context.length });
+        onTextContentUpdate(storedContext.context);
+      }
+      
+      // 処理済みのS3キーを記録
+      processedS3KeyRef.current = lessonData.s3_key;
+      
+      return; // 既存のコンテキストがある場合は処理をスキップ
+    }
+    
+    console.log('TextSection useEffect - 条件チェック:', {
+      fileType: lessonData?.file_type,
+      s3Key: lessonData?.s3_key,
+      pdfTextContent: pdfTextContent,
+      textContent: textContent,
+      hasS3Key: !!lessonData?.s3_key,
+      shouldExtractPdf: lessonData?.file_type === 'pdf' && lessonData?.s3_key && !pdfTextContent,
+      shouldSaveText: (lessonData?.file_type === 'txt' || lessonData?.file_type === 'md' || lessonData?.file_type === 'application/rtf') && textContent
+    });
+    
+    // PDFファイルの場合はテキスト抽出を実行
+    if (lessonData?.file_type === 'pdf' && lessonData?.s3_key && !pdfTextContent) {
+      console.log('PDFテキスト抽出を開始します:', lessonData.s3_key);
+      extractPdfText(lessonData.s3_key);
+    }
+    // TXT、MD、RTFファイルの場合は既存のtextContentをセッションストレージに保存
+    else if ((lessonData?.file_type === 'txt' || lessonData?.file_type === 'md' || lessonData?.file_type === 'application/rtf') && textContent) {
+      console.log('テキストファイルのコンテキストをセッションストレージに保存:', {
+        fileType: lessonData.file_type,
+        textLength: textContent.length,
         s3Key: lessonData.s3_key
       });
       
-           if (hasStoredContext) {
-       const storedContext = SessionStorageManager.getContext(lessonData.id, lessonData.s3_key);
-       console.log('保存済みコンテキスト情報:', storedContext.metadata);
-       
-       // 既存のコンテキストがある場合は、親コンポーネントに完了状態を通知
-       if (onTextContentUpdate) {
-         console.log('既存コンテキストを親コンポーネントに通知:', { contextLength: storedContext.context.length });
-         onTextContentUpdate(storedContext.context);
-       }
-       
-       // 処理済みのS3キーを記録
-       processedS3KeyRef.current = lessonData.s3_key;
-       
-       return; // 既存のコンテキストがある場合は処理をスキップ
-     }
+      // セッションストレージにコンテキストを保存
+      const saveSuccess = SessionStorageManager.saveContext(
+        lessonData.id,
+        lessonData.s3_key,
+        textContent,
+        {
+          fileType: lessonData.file_type,
+          lessonTitle: lessonData.title,
+          processingTime: 0 // テキストファイルは即座に利用可能
+        }
+      );
+      
+      if (saveSuccess) {
+        console.log('テキストファイルのコンテキストをセッションストレージに保存完了');
+        // 親コンポーネントにテキスト内容を通知
+        if (onTextContentUpdate) {
+          onTextContentUpdate(textContent);
+        }
+        // 処理済みのS3キーを記録
+        processedS3KeyRef.current = lessonData.s3_key;
+      } else {
+        console.error('テキストファイルのコンテキスト保存に失敗');
+      }
+    } else {
+      console.log('テキスト処理の条件が満たされていません');
     }
-    
-         console.log('TextSection useEffect - 条件チェック:', {
-       fileType: lessonData?.file_type,
-       s3Key: lessonData?.s3_key,
-       pdfTextContent: pdfTextContent,
-       hasS3Key: !!lessonData?.s3_key,
-       shouldExtract: lessonData?.file_type === 'pdf' && lessonData?.s3_key && !pdfTextContent
-     });
-     
-     if (lessonData?.file_type === 'pdf' && lessonData?.s3_key && !pdfTextContent) {
-       console.log('PDFテキスト抽出を開始します:', lessonData.s3_key);
-       extractPdfText(lessonData.s3_key);
-     } else {
-       console.log('PDFテキスト抽出の条件が満たされていません');
-     }
-   }, [lessonData]); // pdfTextContentを依存配列から削除
+   }, [lessonData, textContent]); // textContentを依存配列に追加
 
   // コンポーネントのアンマウント時に処理をクリーンアップ
   useEffect(() => {
@@ -323,6 +363,19 @@ const TextSection = ({
     setPdfProcessingError(null);
   };
 
+  // RTFタグを除去してプレーンテキストに変換する関数
+  const stripRtfTags = (rtfText) => {
+    if (!rtfText) return '';
+    
+    // RTFタグを除去（基本的なRTFタグのみ）
+    return rtfText
+      .replace(/\\[a-z]+\d*\s?/g, '') // RTFコマンドを除去
+      .replace(/[{}]/g, '') // 中括弧を除去
+      .replace(/\\\s/g, ' ') // エスケープされたスペースを通常のスペースに
+      .replace(/\s+/g, ' ') // 連続するスペースを1つに
+      .trim();
+  };
+
   // 表示するテキスト内容を決定
   const displayTextContent = () => {
     if (lessonData?.file_type === 'pdf') {
@@ -334,6 +387,12 @@ const TextSection = ({
       }
       return pdfTextContent || 'PDFファイルの読み込み中...';
     }
+    
+    // RTFファイルの場合はタグを除去
+    if (lessonData?.file_type === 'application/rtf' || lessonData?.s3_key?.toLowerCase().endsWith('.rtf')) {
+      return stripRtfTags(textContent) || 'テキスト内容がありません';
+    }
+    
     return textContent || 'テキスト内容がありません';
   };
 
@@ -456,37 +515,68 @@ const TextSection = ({
           </div>
         ) : (
           <div className="prose prose-sm max-w-none">
-            <ReactMarkdown 
-              remarkPlugins={[remarkGfm]}
-              components={{
-                h1: ({node, ...props}) => <h1 id={`h1-${Date.now()}-${Math.random()}`} className="text-xl font-bold text-gray-800 mb-3" {...props} />,
-                h2: ({node, ...props}) => <h2 id={`h2-${Date.now()}-${Math.random()}`} className="text-lg font-semibold text-gray-700 mb-2" {...props} />,
-                h3: ({node, ...props}) => <h3 id={`h3-${Date.now()}-${Math.random()}`} className="text-base font-medium text-gray-600 mb-2" {...props} />,
-                p: ({node, ...props}) => <p className="text-gray-700 mb-2 leading-relaxed" {...props} />,
-                ul: ({node, ...props}) => <ul className="list-disc list-inside text-gray-700 mb-2 space-y-1" {...props} />,
-                ol: ({node, ...props}) => <ol className="list-decimal list-inside text-gray-700 mb-2 space-y-1" {...props} />,
-                li: ({node, ...props}) => <li className="text-gray-700" {...props} />,
-                strong: ({node, ...props}) => <strong className="font-semibold text-gray-800" {...props} />,
-                em: ({node, ...props}) => <em className="italic text-gray-600" {...props} />,
-                code: ({node, ...props}) => <code className="bg-gray-200 px-1 py-0.5 rounded text-sm font-mono" {...props} />,
-                blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-blue-300 pl-4 italic text-gray-600" {...props} />
-              }}
-            >
-              {textContent || 'テキスト内容がありません'}
-            </ReactMarkdown>
+            {/* MDファイルの場合はMarkdownとしてレンダリング */}
+            {lessonData?.file_type === 'md' || lessonData?.s3_key?.toLowerCase().endsWith('.md') ? (
+              <ReactMarkdown 
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  h1: ({node, ...props}) => <h1 id={`h1-${Date.now()}-${Math.random()}`} className="text-xl font-bold text-gray-800 mb-3" {...props} />,
+                  h2: ({node, ...props}) => <h2 id={`h2-${Date.now()}-${Math.random()}`} className="text-lg font-semibold text-gray-700 mb-2" {...props} />,
+                  h3: ({node, ...props}) => <h3 id={`h3-${Date.now()}-${Math.random()}`} className="text-base font-medium text-gray-600 mb-2" {...props} />,
+                  p: ({node, ...props}) => <p className="text-gray-700 mb-2 leading-relaxed" {...props} />,
+                  ul: ({node, ...props}) => <ul className="list-disc list-inside text-gray-700 mb-2 space-y-1" {...props} />,
+                  ol: ({node, ...props}) => <ol className="list-decimal list-inside text-gray-700 mb-2 space-y-1" {...props} />,
+                  li: ({node, ...props}) => <li className="text-gray-700" {...props} />,
+                  strong: ({node, ...props}) => <strong className="font-semibold text-gray-800" {...props} />,
+                  em: ({node, ...props}) => <em className="italic text-gray-600" {...props} />,
+                  code: ({node, ...props}) => <code className="bg-gray-200 px-1 py-0.5 rounded text-sm font-mono" {...props} />,
+                  blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-blue-300 pl-4 italic text-gray-600" {...props} />
+                }}
+              >
+                {displayTextContent()}
+              </ReactMarkdown>
+            ) : (
+              /* RTFファイルやその他のテキストファイルはプレーンテキストとして表示 */
+              <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
+                {displayTextContent()}
+              </div>
+            )}
           </div>
         )}
       </div>
 
       {/* テキスト情報 */}
-      <div className="mt-3 text-xs text-gray-500">
-        文字数: {getTextLength()}文字
-        {lessonData?.file_type === 'pdf' && pdfTextContent && (
-          <span className="ml-2 text-blue-600">
+      {(lessonData?.file_type === 'pdf' && pdfTextContent) || 
+       (lessonData?.file_type === 'txt' && textContent) ||
+       (lessonData?.file_type === 'md' && textContent) ||
+       (lessonData?.file_type === 'application/rtf' && textContent) ||
+       (lessonData?.file_type === 'text/plain' && textContent) ? (
+        <div className="mt-3 text-xs text-gray-500">
+          <span className="text-blue-600">
             ✓ AIアシスタントで利用可能
           </span>
-        )}
-      </div>
+          {lessonData?.file_type === 'txt' && (
+            <span className="ml-2 text-blue-600">
+              📄 テキスト形式
+            </span>
+          )}
+          {lessonData?.file_type === 'md' && (
+            <span className="ml-2 text-green-600">
+              📝 Markdown形式
+            </span>
+          )}
+          {lessonData?.file_type === 'application/rtf' && (
+            <span className="ml-2 text-orange-600">
+              📄 RTF形式
+            </span>
+          )}
+          {lessonData?.file_type === 'text/plain' && (
+            <span className="ml-2 text-gray-600">
+              📄 プレーンテキスト形式
+            </span>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 };

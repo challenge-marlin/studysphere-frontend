@@ -1,79 +1,93 @@
 import React, { useState, useEffect } from 'react';
+import { apiGet, apiPost } from '../utils/api';
+import { useAuth } from './contexts/AuthContext';
 
 const StudentVoiceCareView = ({ studentId, studentName }) => {
+  const { user } = useAuth();
   const [voiceMessages, setVoiceMessages] = useState([]);
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [replyMessage, setReplyMessage] = useState('');
   const [newPrivateMessage, setNewPrivateMessage] = useState('');
   const [showNewMessageModal, setShowNewMessageModal] = useState(false);
+  const [showInstructorSelection, setShowInstructorSelection] = useState(false);
+  const [instructors, setInstructors] = useState([]);
+  const [selectedInstructor, setSelectedInstructor] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingInstructors, setLoadingInstructors] = useState(false);
 
   useEffect(() => {
     // アナウンスメッセージと1対1メッセージを統合して取得
     loadVoiceMessages();
   }, [studentId]);
 
-  const loadVoiceMessages = () => {
-    // アナウンスメッセージの取得（モックデータ）
-    const announcements = [
-      {
-        id: 'announce_1',
-        type: 'announcement',
-        title: '明日の授業について',
-        message: '明日の授業は10:00開始です。資料の準備をお願いします。',
-        sentDate: '2024-01-15 14:30',
-        instructorName: '山田 指導員',
-        hasReplied: true,
-        myReply: '承知いたしました。',
-        replyDate: '2024-01-15 15:00'
-      },
-      {
-        id: 'announce_2',
-        type: 'announcement',
-        title: 'テスト範囲について',
-        message: '来週のテストの範囲について質問がある方は個別にご相談ください。',
-        sentDate: '2024-01-14 11:20',
-        instructorName: '田中 指導員',
-        hasReplied: false,
-        myReply: '',
-        replyDate: ''
+  const loadVoiceMessages = async () => {
+    try {
+      setLoading(true);
+      
+      // アナウンスメッセージと個人メッセージを並行して取得
+      const [announcementsResponse, conversationsResponse] = await Promise.all([
+        apiGet('/api/announcements/user?page=1&limit=10'),
+        apiGet('/api/messages/conversations')
+      ]);
+
+      const allMessages = [];
+
+      // アナウンスメッセージを処理
+      if (announcementsResponse.success && announcementsResponse.data.announcements) {
+        const announcements = announcementsResponse.data.announcements.map(announcement => ({
+          id: `announce_${announcement.id}`,
+          type: 'announcement',
+          title: announcement.title,
+          message: announcement.message,
+          sentDate: new Date(announcement.created_at).toLocaleString('ja-JP'),
+          instructorName: announcement.created_by_name || '指導員',
+          hasReplied: announcement.is_read,
+          myReply: '',
+          replyDate: announcement.read_at ? new Date(announcement.read_at).toLocaleString('ja-JP') : '',
+          canReply: true
+        }));
+        allMessages.push(...announcements);
       }
-    ];
 
-    // 1対1メッセージの取得（モックデータ）
-    const privateMessages = [
-      {
-        id: 'private_1',
-        type: 'private',
-        title: '学習進捗について',
-        message: '最近の学習進捗が良好ですね。この調子で頑張ってください！',
-        sentDate: '2024-01-15 10:30',
-        instructorName: '山田 指導員',
-        hasReplied: true,
-        myReply: 'ありがとうございます！頑張ります。',
-        replyDate: '2024-01-15 11:00',
-        canReply: false
-      },
-      {
-        id: 'private_2',
-        type: 'private',
-        title: '課題について',
-        message: '課題の提出期限を延長しました。無理をせず、丁寧に取り組んでください。',
-        sentDate: '2024-01-14 16:45',
-        instructorName: '田中 指導員',
-        hasReplied: false,
-        myReply: '',
-        replyDate: '',
-        canReply: true
+      // 個人メッセージを処理
+      if (conversationsResponse.success && conversationsResponse.data) {
+        for (const conversation of conversationsResponse.data) {
+          try {
+            const messagesResponse = await apiGet(`/api/messages/conversation/${conversation.other_user_id}`);
+            if (messagesResponse.success && messagesResponse.data) {
+              const latestMessage = messagesResponse.data[messagesResponse.data.length - 1];
+              if (latestMessage) {
+                allMessages.push({
+                  id: `private_${latestMessage.id}`,
+                  type: 'private',
+                  title: '個人メッセージ',
+                  message: latestMessage.message,
+                  sentDate: new Date(latestMessage.created_at).toLocaleString('ja-JP'),
+                  instructorName: latestMessage.sender_name,
+                  hasReplied: latestMessage.is_read,
+                  myReply: '',
+                  replyDate: latestMessage.read_at ? new Date(latestMessage.read_at).toLocaleString('ja-JP') : '',
+                  canReply: false
+                });
+              }
+            }
+          } catch (error) {
+            console.error('個人メッセージ取得エラー:', error);
+          }
+        }
       }
-    ];
 
-    // 送信日時順にソート（新しい順）
-    const allMessages = [...announcements, ...privateMessages].sort((a, b) => 
-      new Date(b.sentDate) - new Date(a.sentDate)
-    );
+      // 送信日時順にソート（新しい順）
+      allMessages.sort((a, b) => new Date(b.sentDate) - new Date(a.sentDate));
+      setVoiceMessages(allMessages);
 
-    setVoiceMessages(allMessages);
+    } catch (error) {
+      console.error('メッセージ取得エラー:', error);
+      setVoiceMessages([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const openMessageModal = (message) => {
@@ -81,44 +95,65 @@ const StudentVoiceCareView = ({ studentId, studentName }) => {
     setShowMessageModal(true);
   };
 
-  const sendReply = () => {
+  const sendReply = async () => {
     if (replyMessage.trim() && selectedMessage) {
-      const updatedMessages = voiceMessages.map(msg => {
-        if (msg.id === selectedMessage.id) {
-          return {
-            ...msg,
-            hasReplied: true,
-            myReply: replyMessage,
-            replyDate: new Date().toLocaleString('ja-JP'),
-            canReply: msg.type === 'announcement' // アナウンスは常に返信可能、1対1は1回のみ
-          };
+      try {
+        if (selectedMessage.type === 'announcement') {
+          // アナウンスの既読処理
+          await apiGet(`/api/announcements/user/${selectedMessage.id.replace('announce_', '')}/read`);
         }
-        return msg;
-      });
-      setVoiceMessages(updatedMessages);
-      setReplyMessage('');
-      setShowMessageModal(false);
+        
+        // メッセージ一覧を再読み込み
+        await loadVoiceMessages();
+        setReplyMessage('');
+        setShowMessageModal(false);
+      } catch (error) {
+        console.error('返信処理エラー:', error);
+      }
     }
   };
 
-  const sendNewPrivateMessage = () => {
-    if (newPrivateMessage.trim()) {
-      const newMsg = {
-        id: `private_${Date.now()}`,
-        type: 'private',
-        title: '利用者からのメッセージ',
-        message: newPrivateMessage,
-        sentDate: new Date().toLocaleString('ja-JP'),
-        instructorName: '送信先: 担当指導員',
-        hasReplied: false,
-        myReply: '',
-        replyDate: '',
-        canReply: false,
-        fromStudent: true
-      };
-      setVoiceMessages([newMsg, ...voiceMessages]);
-      setNewPrivateMessage('');
-      setShowNewMessageModal(false);
+  const loadInstructors = async () => {
+    try {
+      setLoadingInstructors(true);
+      const response = await apiGet('/api/messages/instructors');
+      if (response.success) {
+        setInstructors(response.data.instructors);
+        setSelectedInstructor(null);
+      } else {
+        alert('指導員リストの取得に失敗しました。');
+      }
+    } catch (error) {
+      console.error('指導員リスト取得エラー:', error);
+      alert('指導員リストの取得に失敗しました。');
+    } finally {
+      setLoadingInstructors(false);
+    }
+  };
+
+  const handleInstructorConsultation = () => {
+    setShowInstructorSelection(true);
+    loadInstructors();
+  };
+
+  const sendNewPrivateMessage = async () => {
+    if (newPrivateMessage.trim() && selectedInstructor) {
+      try {
+        await apiPost('/api/messages/send', {
+          receiver_id: selectedInstructor.id,
+          message: newPrivateMessage.trim()
+        });
+        
+        // メッセージ一覧を再読み込み
+        await loadVoiceMessages();
+        setNewPrivateMessage('');
+        setShowNewMessageModal(false);
+        setShowInstructorSelection(false);
+        setSelectedInstructor(null);
+      } catch (error) {
+        console.error('メッセージ送信エラー:', error);
+        alert('メッセージの送信に失敗しました。');
+      }
     }
   };
 
@@ -133,7 +168,7 @@ const StudentVoiceCareView = ({ studentId, studentName }) => {
         </div>
         <div className="flex gap-3">
           <button
-            onClick={() => setShowNewMessageModal(true)}
+            onClick={handleInstructorConsultation}
             className="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
           >
             ✉️ 指導員に相談
@@ -173,7 +208,11 @@ const StudentVoiceCareView = ({ studentId, studentName }) => {
 
       {/* メッセージ一覧 */}
       <div className="space-y-4 max-h-96 overflow-y-auto">
-        {voiceMessages.length > 0 ? (
+        {loading ? (
+          <div className="text-center py-8 text-gray-500">
+            <p>メッセージを読み込み中...</p>
+          </div>
+        ) : voiceMessages.length > 0 ? (
           voiceMessages.map(message => (
             <div key={message.id} className={`rounded-xl p-4 border transition-all duration-200 hover:shadow-md ${
               message.type === 'announcement' 
@@ -297,19 +336,123 @@ const StudentVoiceCareView = ({ studentId, studentName }) => {
         </div>
       )}
 
-      {/* 新規メッセージモーダル */}
-      {showNewMessageModal && (
+      {/* 指導員選択モーダル */}
+      {showInstructorSelection && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
+          <div className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
             <div className="flex justify-between items-start mb-4">
-              <h3 className="text-xl font-bold text-gray-800">指導員に相談</h3>
+              <h3 className="text-xl font-bold text-gray-800">指導員を選択してください</h3>
               <button
-                onClick={() => setShowNewMessageModal(false)}
+                onClick={() => {
+                  setShowInstructorSelection(false);
+                  setSelectedInstructor(null);
+                }}
                 className="text-gray-500 hover:text-gray-700 text-2xl"
               >
                 ×
               </button>
             </div>
+            
+            {loadingInstructors ? (
+              <div className="text-center py-8 text-gray-500">
+                <p>指導員リストを読み込み中...</p>
+              </div>
+            ) : (
+              <div className="space-y-3 mb-6">
+                {instructors.map(instructor => (
+                  <div
+                    key={instructor.id}
+                    onClick={() => setSelectedInstructor(instructor)}
+                    className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                      selectedInstructor?.id === instructor.id
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-3 h-3 rounded-full ${
+                          selectedInstructor?.id === instructor.id ? 'bg-blue-500' : 'bg-gray-300'
+                        }`}></div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-gray-800">{instructor.name}</span>
+                            {instructor.is_assigned && (
+                              <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full font-medium">
+                                🎯 担当指導員
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            {instructor.satellite_name && `${instructor.satellite_name} `}
+                            {instructor.company_name && `${instructor.company_name}`}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowInstructorSelection(false);
+                  setSelectedInstructor(null);
+                }}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => {
+                  if (selectedInstructor) {
+                    setShowInstructorSelection(false);
+                    setShowNewMessageModal(true);
+                  }
+                }}
+                disabled={!selectedInstructor}
+                className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white px-6 py-2 rounded-lg transition-colors"
+              >
+                選択して相談
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 新規メッセージモーダル */}
+      {showNewMessageModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-xl font-bold text-gray-800">
+                {selectedInstructor ? `${selectedInstructor.name} 指導員に相談` : '指導員に相談'}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowNewMessageModal(false);
+                  setSelectedInstructor(null);
+                }}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            {selectedInstructor && (
+              <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="text-sm text-blue-800">
+                  <strong>送信先:</strong> {selectedInstructor.name} 指導員
+                  {selectedInstructor.is_assigned && (
+                    <span className="ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                      🎯 担当指導員
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
             
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">相談内容:</label>
@@ -323,14 +466,17 @@ const StudentVoiceCareView = ({ studentId, studentName }) => {
             
             <div className="flex gap-3 justify-end">
               <button
-                onClick={() => setShowNewMessageModal(false)}
+                onClick={() => {
+                  setShowNewMessageModal(false);
+                  setSelectedInstructor(null);
+                }}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
               >
                 キャンセル
               </button>
               <button
                 onClick={sendNewPrivateMessage}
-                disabled={!newPrivateMessage.trim()}
+                disabled={!newPrivateMessage.trim() || !selectedInstructor}
                 className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white px-6 py-2 rounded-lg transition-colors"
               >
                 送信

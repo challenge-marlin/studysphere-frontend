@@ -12,6 +12,9 @@ import SanitizedInput from '../components/SanitizedInput';
 import SanitizedTextarea from '../components/SanitizedTextarea';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 import InstructorPasswordChangeModal from '../components/InstructorPasswordChangeModal';
+import PersonalMessageList from '../components/PersonalMessageList';
+import MessageSender from '../components/MessageSender';
+import AnnouncementCreator from '../components/AnnouncementCreator';
 
 import { 
   getInstructorSpecializations, 
@@ -498,7 +501,37 @@ const InstructorDashboard = () => {
             </div>
           )}
           
-          {activeTab === 'overview' && <VoiceCareSystem instructorId={localUser.id} />}
+          {activeTab === 'overview' && (
+            <div className="space-y-8">
+              {/* 声かけシステム */}
+              <VoiceCareSystem instructorId={localUser.id} />
+              
+              {/* メッセージ機能 */}
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <h2 className="text-2xl font-bold text-gray-800 mb-4">💬 メッセージ管理</h2>
+                <p className="text-gray-600 mb-6">利用者との1対1メッセージの送受信と管理ができます。</p>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-4">📤 メッセージ送信</h3>
+                    <MessageSender />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold mb-4">📥 メッセージ受信・会話</h3>
+                    <PersonalMessageList />
+                  </div>
+                </div>
+              </div>
+
+              {/* アナウンス機能 */}
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <h2 className="text-2xl font-bold text-gray-800 mb-4">📢 アナウンス管理</h2>
+                <p className="text-gray-600 mb-6">選択した利用者への一斉アナウンスメッセージを作成・送信できます。</p>
+                
+                <AnnouncementCreator />
+              </div>
+            </div>
+          )}
           {activeTab === 'students' && <StudentManagement instructorId={localUser.id} />}
 
           {activeTab === 'location' && <LocationManagementForInstructor currentUser={localUser} onLocationChange={handleLocationChange} />}

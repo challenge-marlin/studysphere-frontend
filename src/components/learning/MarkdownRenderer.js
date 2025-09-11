@@ -1,8 +1,70 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-const MarkdownRenderer = ({ content }) => {
+const MarkdownRenderer = ({ content, showToc = true }) => {
+  const [headings, setHeadings] = useState([]);
+  const [activeHeading, setActiveHeading] = useState('');
+
+  // 見出しを抽出する関数
+  const extractHeadings = (markdownContent) => {
+    const headingRegex = /^(#{1,6})\s+(.+?)(?:\s*\{#([^}]+)\})?\s*$/gm;
+    const extractedHeadings = [];
+    let match;
+
+    while ((match = headingRegex.exec(markdownContent)) !== null) {
+      const level = match[1].length;
+      const text = match[2].trim();
+      const customId = match[3];
+      const id = customId || generateId(text);
+      
+      extractedHeadings.push({
+        level,
+        text,
+        id,
+        customId: !!customId
+      });
+    }
+    
+    return extractedHeadings;
+  };
+
+  // アクティブな見出しを監視する
+  useEffect(() => {
+    if (!showToc || headings.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setActiveHeading(entry.target.id);
+          }
+        });
+      },
+      {
+        rootMargin: '-20% 0px -70% 0px',
+        threshold: 0
+      }
+    );
+
+    headings.forEach((heading) => {
+      const element = document.getElementById(heading.id);
+      if (element) {
+        observer.observe(element);
+      }
+    });
+
+    return () => observer.disconnect();
+  }, [headings, showToc]);
+
+  // コンテンツが変更されたときに見出しを抽出
+  useEffect(() => {
+    if (content) {
+      const extractedHeadings = extractHeadings(content);
+      setHeadings(extractedHeadings);
+    }
+  }, [content]);
+
   // 見出しのIDを生成する関数
   const generateId = (text) => {
     if (!text) return '';
@@ -50,43 +112,148 @@ const MarkdownRenderer = ({ content }) => {
       || 'section-' + Math.random().toString(36).substr(2, 9); // フォールバック
   };
 
+  // スムーススクロール関数
+  const scrollToHeading = (id) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+      });
+    }
+  };
+
+  // 目次コンポーネント
+  const TableOfContents = () => {
+    if (!showToc || headings.length === 0) return null;
+
+    return (
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+          </svg>
+          目次
+        </h3>
+        <nav className="space-y-1">
+          {headings.map((heading, index) => (
+            <button
+              key={index}
+              onClick={() => scrollToHeading(heading.id)}
+              className={`block w-full text-left px-3 py-2 rounded-md text-sm transition-colors duration-200 ${
+                activeHeading === heading.id
+                  ? 'bg-blue-100 text-blue-800 font-medium'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
+              }`}
+              style={{ paddingLeft: `${(heading.level - 1) * 16 + 12}px` }}
+            >
+              {heading.text}
+            </button>
+          ))}
+        </nav>
+      </div>
+    );
+  };
+
   return (
+    <div className="markdown-content">
+      <TableOfContents />
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
         h1: ({ children, ...props }) => {
           const id = generateId(children);
+          // {#id}部分を除去したテキストを表示
+          const displayText = Array.isArray(children) 
+            ? children.map(child => 
+                typeof child === 'string' 
+                  ? child.replace(/\s*\{#[^}]+\}\s*$/, '') 
+                  : child
+              )
+            : typeof children === 'string' 
+              ? children.replace(/\s*\{#[^}]+\}\s*$/, '') 
+              : children;
+          
           return (
             <h1 
               id={id} 
-              className="text-3xl font-bold text-gray-800 mt-8 mb-4 pb-2 border-b-2 border-blue-200 scroll-mt-20"
+              className="text-3xl font-bold text-gray-800 mt-8 mb-4 pb-2 border-b-2 border-blue-200 scroll-mt-20 group relative"
               {...props}
             >
-              {children}
+              {displayText}
+              <button
+                onClick={() => scrollToHeading(id)}
+                className="opacity-0 group-hover:opacity-100 ml-2 text-blue-500 hover:text-blue-700 transition-opacity duration-200"
+                title="この見出しへのリンクをコピー"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+              </button>
             </h1>
           );
         },
         h2: ({ children, ...props }) => {
           const id = generateId(children);
+          // {#id}部分を除去したテキストを表示
+          const displayText = Array.isArray(children) 
+            ? children.map(child => 
+                typeof child === 'string' 
+                  ? child.replace(/\s*\{#[^}]+\}\s*$/, '') 
+                  : child
+              )
+            : typeof children === 'string' 
+              ? children.replace(/\s*\{#[^}]+\}\s*$/, '') 
+              : children;
+          
           return (
             <h2 
               id={id} 
-              className="text-2xl font-bold text-gray-700 mt-6 mb-3 pb-1 border-b border-blue-100 scroll-mt-16"
+              className="text-2xl font-bold text-gray-700 mt-6 mb-3 pb-1 border-b border-blue-100 scroll-mt-16 group relative"
               {...props}
             >
-              {children}
+              {displayText}
+              <button
+                onClick={() => scrollToHeading(id)}
+                className="opacity-0 group-hover:opacity-100 ml-2 text-blue-500 hover:text-blue-700 transition-opacity duration-200"
+                title="この見出しへのリンクをコピー"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+              </button>
             </h2>
           );
         },
         h3: ({ children, ...props }) => {
           const id = generateId(children);
+          // {#id}部分を除去したテキストを表示
+          const displayText = Array.isArray(children) 
+            ? children.map(child => 
+                typeof child === 'string' 
+                  ? child.replace(/\s*\{#[^}]+\}\s*$/, '') 
+                  : child
+              )
+            : typeof children === 'string' 
+              ? children.replace(/\s*\{#[^}]+\}\s*$/, '') 
+              : children;
+          
           return (
             <h3 
               id={id} 
-              className="text-xl font-semibold text-gray-700 mt-4 mb-2 scroll-mt-12"
+              className="text-xl font-semibold text-gray-700 mt-4 mb-2 scroll-mt-12 group relative"
               {...props}
             >
-              {children}
+              {displayText}
+              <button
+                onClick={() => scrollToHeading(id)}
+                className="opacity-0 group-hover:opacity-100 ml-2 text-blue-500 hover:text-blue-700 transition-opacity duration-200"
+                title="この見出しへのリンクをコピー"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+              </button>
             </h3>
           );
         },
@@ -148,17 +315,33 @@ const MarkdownRenderer = ({ content }) => {
             {children}
           </td>
         ),
-        a: ({ children, href, ...props }) => (
-          <a 
-            href={href} 
-            className="text-blue-600 hover:text-blue-800 underline" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            {...props}
-          >
-            {children}
-          </a>
-        ),
+        a: ({ children, href, ...props }) => {
+          // ページ内アンカーリンクかどうかを判定
+          const isInternalAnchor = href && href.startsWith('#');
+          
+          return (
+            <a 
+              href={href} 
+              className="text-blue-600 hover:text-blue-800 underline" 
+              target={isInternalAnchor ? undefined : "_blank"}
+              rel={isInternalAnchor ? undefined : "noopener noreferrer"}
+              onClick={isInternalAnchor ? (e) => {
+                e.preventDefault();
+                const targetId = href.substring(1);
+                const element = document.getElementById(targetId);
+                if (element) {
+                  element.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                  });
+                }
+              } : undefined}
+              {...props}
+            >
+              {children}
+            </a>
+          );
+        },
         img: ({ src, alt, ...props }) => (
           <img 
             src={src} 
@@ -171,6 +354,7 @@ const MarkdownRenderer = ({ content }) => {
     >
       {content}
     </ReactMarkdown>
+    </div>
   );
 };
 

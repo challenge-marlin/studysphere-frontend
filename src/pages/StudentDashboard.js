@@ -6,6 +6,8 @@ import { verifyTemporaryPasswordAPI } from '../utils/api';
 import { saveTempPasswordAuth } from '../utils/authUtils';
 import Dashboard from './Dashboard';
 import LessonList from './LessonList';
+import CareerAssessment from '../components/CareerAssessment';
+import PersonalMessageList from '../components/PersonalMessageList';
 import AnnouncementList from '../components/AnnouncementList';
 
 const StudentDashboard = () => {
@@ -456,13 +458,13 @@ const StudentDashboard = () => {
             </button>
             <button 
               className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                activeTab === 'announcements'
+                activeTab === 'career-assessment'
                   ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-lg'
                   : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700'
               }`}
-              onClick={() => handleTabChange('announcements')}
+              onClick={() => handleTabChange('career-assessment')}
             >
-              📢 お知らせ
+              🎯 適職診断
             </button>
           </div>
         </div>
@@ -470,22 +472,11 @@ const StudentDashboard = () => {
 
       {/* メインコンテンツ */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-2xl shadow-xl p-8 min-h-[600px]">
-          {activeTab === 'dashboard' && (
-            <div className="student-content">
-              <Dashboard onTabChange={handleTabChange} />
-            </div>
-          )}
-          {activeTab === 'lessons' && (
-            <div className="student-content">
-              <LessonList selectedCourseId={selectedCourseId} />
-            </div>
-          )}
-          {activeTab === 'announcements' && (
-            <div className="student-content">
-              <AnnouncementList />
-            </div>
-          )}
+        <div className="space-y-8">
+          {/* ダッシュボード */}
+          <div className="bg-white rounded-2xl shadow-xl p-8">
+            <Dashboard onTabChange={handleTabChange} />
+          </div>
         </div>
       </main>
     </div>

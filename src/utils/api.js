@@ -616,3 +616,17 @@ export const markTempPasswordAsUsedAPI = async (userId) => {
     method: 'POST'
   });
 };
+
+/**
+ * 合格証明書データを取得
+ * @param {number} userId - ユーザーID
+ * @param {number} lessonId - レッスンID
+ * @param {number} examResultId - 試験結果ID（オプション）
+ * @returns {Promise} - 合格証明書データ
+ */
+export const getCertificateData = async (userId, lessonId, examResultId = null) => {
+  const endpoint = examResultId 
+    ? `/api/learning/certificate/${userId}/${lessonId}/${examResultId}`
+    : `/api/learning/certificate/${userId}/${lessonId}`;
+  return apiGet(endpoint);
+};

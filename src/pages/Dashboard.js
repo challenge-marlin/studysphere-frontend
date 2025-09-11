@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StudentVoiceCareView from '../components/StudentVoiceCareView';
-import { fetchStudentCourses, fetchStudentDashboard } from '../utils/studentApi';
+import CertificateList from '../components/CertificateList';
+import { fetchStudentCourses } from '../utils/studentApi';
 import { useAuth } from '../components/contexts/AuthContext';
 
 const Dashboard = ({ onTabChange }) => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [enrolledCourses, setEnrolledCourses] = useState([]);
-  const [lastLesson, setLastLesson] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -30,20 +30,6 @@ const Dashboard = ({ onTabChange }) => {
         if (coursesResponse.success) {
           setEnrolledCourses(coursesResponse.data);
         }
-        
-        // ダッシュボード情報を取得
-        const dashboardResponse = await fetchStudentDashboard();
-        if (dashboardResponse.success && dashboardResponse.data.last_lesson) {
-          const lastLessonData = dashboardResponse.data.last_lesson;
-          setLastLesson({
-            id: lastLessonData.lesson_id,
-            title: lastLessonData.lesson_title,
-            courseTitle: lastLessonData.course_title,
-            completedDate: lastLessonData.completed_at ? new Date(lastLessonData.completed_at).toLocaleString('ja-JP') : '',
-            score: lastLessonData.test_score || 0,
-            status: lastLessonData.status
-          });
-        }
       } catch (error) {
         console.error('ダッシュボードデータの取得に失敗しました:', error);
         setError('データの取得に失敗しました。ページを再読み込みしてください。');
@@ -55,11 +41,6 @@ const Dashboard = ({ onTabChange }) => {
     loadDashboardData();
   }, [currentUser]);
 
-  const handleViewLastLesson = () => {
-    if (lastLesson) {
-      alert(`最後に学習したレッスン「${lastLesson.title}」の詳細を表示します。\nコース: ${lastLesson.courseTitle}\n完了日時: ${lastLesson.completedDate}\nスコア: ${lastLesson.score}点`);
-    }
-  };
 
   const handleViewCourse = (courseId) => {
     // レッスン一覧のタブに移動し、特定のコースを選択状態にする
@@ -240,7 +221,7 @@ const Dashboard = ({ onTabChange }) => {
               ページを再読み込み
             </button>
             <button 
-              onClick={() => window.location.href = '/student/login'} 
+              onClick={() => window.location.href = '/student-login'} 
               className="px-6 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-all duration-200"
             >
               ログインページへ
@@ -339,39 +320,8 @@ const Dashboard = ({ onTabChange }) => {
             </div>
           </section>
 
-          {/* 最後に学習したもの */}
-          {lastLesson && (
-            <section className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-              <h3 className="text-xl font-bold text-gray-800 mb-6">📚 最後に学習したもの</h3>
-              <div className="border border-gray-200 rounded-xl p-4">
-                <div className="mb-4">
-                  <h4 className="font-semibold text-gray-800 mb-2">{lastLesson.title}</h4>
-                  <p className="text-sm text-blue-600 font-medium mb-2">{lastLesson.courseTitle}</p>
-                  <div className="space-y-1 text-sm text-gray-600 mb-3">
-                    <div>完了日時: {lastLesson.completedDate}</div>
-                    <div className="flex items-center gap-2">
-                      <span>スコア: {lastLesson.score || 0}点</span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        (lastLesson.score || 0) >= 80 
-                          ? 'bg-green-100 text-green-800' 
-                          : (lastLesson.score || 0) >= 60 
-                          ? 'bg-yellow-100 text-yellow-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {(lastLesson.score || 0) >= 80 ? '優秀' : (lastLesson.score || 0) >= 60 ? '合格' : '要復習'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <button 
-                  className="w-full px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
-                  onClick={handleViewLastLesson}
-                >
-                  📖 詳細を見る
-                </button>
-              </div>
-            </section>
-          )}
+          {/* 終了証の確認 */}
+          <CertificateList />
         </div>
       </div>
     </div>

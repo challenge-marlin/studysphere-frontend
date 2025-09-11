@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import MarkdownRenderer from './MarkdownRenderer';
 import { SessionStorageManager } from '../../utils/sessionStorage';
 
 const TextSection = ({
@@ -517,24 +518,10 @@ const TextSection = ({
           <div className="prose prose-sm max-w-none">
             {/* MDファイルの場合はMarkdownとしてレンダリング */}
             {lessonData?.file_type === 'md' || lessonData?.s3_key?.toLowerCase().endsWith('.md') ? (
-              <ReactMarkdown 
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  h1: ({node, ...props}) => <h1 id={`h1-${Date.now()}-${Math.random()}`} className="text-xl font-bold text-gray-800 mb-3" {...props} />,
-                  h2: ({node, ...props}) => <h2 id={`h2-${Date.now()}-${Math.random()}`} className="text-lg font-semibold text-gray-700 mb-2" {...props} />,
-                  h3: ({node, ...props}) => <h3 id={`h3-${Date.now()}-${Math.random()}`} className="text-base font-medium text-gray-600 mb-2" {...props} />,
-                  p: ({node, ...props}) => <p className="text-gray-700 mb-2 leading-relaxed" {...props} />,
-                  ul: ({node, ...props}) => <ul className="list-disc list-inside text-gray-700 mb-2 space-y-1" {...props} />,
-                  ol: ({node, ...props}) => <ol className="list-decimal list-inside text-gray-700 mb-2 space-y-1" {...props} />,
-                  li: ({node, ...props}) => <li className="text-gray-700" {...props} />,
-                  strong: ({node, ...props}) => <strong className="font-semibold text-gray-800" {...props} />,
-                  em: ({node, ...props}) => <em className="italic text-gray-600" {...props} />,
-                  code: ({node, ...props}) => <code className="bg-gray-200 px-1 py-0.5 rounded text-sm font-mono" {...props} />,
-                  blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-blue-300 pl-4 italic text-gray-600" {...props} />
-                }}
-              >
-                {displayTextContent()}
-              </ReactMarkdown>
+              <MarkdownRenderer 
+                content={displayTextContent()}
+                showToc={false}
+              />
             ) : (
               /* RTFファイルやその他のテキストファイルはプレーンテキストとして表示 */
               <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">

@@ -84,8 +84,8 @@ const TestResultPage = () => {
           s3Key
         } = location.state;
       
-      // 正答数を計算（シャッフルされた問題データを使用）
-      const questionsToUse = shuffledQuestions && shuffledQuestions.length > 0 ? shuffledQuestions : testData.questions;
+      // 正答数を計算（元の問題データを使用して結果表示の整合性を保つ）
+      const questionsToUse = testData.questions;
       const correctAnswers = score || 0;
       const total = totalQuestions || questionsToUse.length;
       const percentage = Math.round((correctAnswers / total) * 100);
@@ -116,7 +116,7 @@ const TestResultPage = () => {
         results: []
       };
 
-      // 各問題の結果を生成（シャッフルされた問題データを使用）
+      // 各問題の結果を生成（元の問題データを使用）
       for (const question of questionsToUse) {
         const userAnswerIndex = answers[question.id];
         const userAnswer = userAnswerIndex !== undefined ? 
@@ -136,7 +136,7 @@ const TestResultPage = () => {
         }
 
         result.results.push({
-          questionId: question.id,
+          questionId: result.results.length + 1, // 順序番号を使用
           question: question.question,
           userAnswer,
           correctAnswer,
@@ -233,14 +233,25 @@ const TestResultPage = () => {
 
   const handleGoToCertificate = () => {
     if (resultData.passed) {
+      // 現在のユーザーIDを取得
+      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      const userId = currentUser.user_id || currentUser.id;
+      
+      if (!userId) {
+        alert('ユーザー情報が取得できません。再度ログインしてください。');
+        return;
+      }
+
       navigate('/student/certificate', {
         state: {
+          userId: userId,
           lessonId: resultData.lessonId,
           lessonTitle: resultData.lessonTitle,
           sectionTitle: resultData.sectionTitle,
           testType: resultData.testType,
           score: resultData.score,
-          totalQuestions: resultData.totalQuestions
+          totalQuestions: resultData.totalQuestions,
+          examResultId: resultData.examResultId // 試験結果IDも渡す
         }
       });
     } else {
@@ -374,7 +385,7 @@ const TestResultPage = () => {
                   }`}
                   onClick={() => setCurrentQuestion(index)}
                 >
-                  Q{result.questionId}
+                  Q{index + 1}
                 </button>
               ))}
             </div>
@@ -384,7 +395,7 @@ const TestResultPage = () => {
                 <div>
                   <div className="flex items-start gap-4 mb-6">
                     <span className="flex-shrink-0 w-8 h-8 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
-                      {resultData.results[currentQuestion].questionId}
+                      {currentQuestion + 1}
                     </span>
                     <span className="text-lg font-medium text-gray-800 leading-relaxed">
                       {resultData.results[currentQuestion].question}

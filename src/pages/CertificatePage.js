@@ -1,44 +1,57 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { getCertificateData } from '../utils/api';
+import { printCertificate } from '../utils/certificatePrint';
 
 const CertificatePage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [certificateData, setCertificateData] = useState(null);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (location.state) {
-      const { lessonNumber, lessonTitle, score } = location.state;
-      
-      // モックアップ用の証明書データを生成
-      const mockCertificate = {
-        lessonNumber,
-        lessonTitle,
-        score,
-        studentName: "田中 太郎",
-        studentId: "STU001",
-        completionDate: new Date().toLocaleDateString('ja-JP', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        }),
-        certificateId: `CERT-${lessonNumber}-${Date.now()}`,
-        instructorName: "山田 指導員",
-        organization: "スタディスフィア東京校"
-      };
-      
-      setCertificateData(mockCertificate);
-    } else {
-      // データがない場合はダッシュボードに戻る
-      navigate('/student/dashboard');
-    }
+    const fetchCertificateData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        if (location.state) {
+          const { userId, lessonId, examResultId } = location.state;
+          
+          if (!userId || !lessonId) {
+            throw new Error('必要なパラメータが不足しています');
+          }
+
+          // APIから合格証明書データを取得
+          const response = await getCertificateData(userId, lessonId, examResultId);
+          
+          if (response.success) {
+            setCertificateData(response.data);
+          } else {
+            throw new Error(response.message || '合格証明書データの取得に失敗しました');
+          }
+        } else {
+          // データがない場合はダッシュボードに戻る
+          navigate('/student/dashboard');
+        }
+      } catch (error) {
+        console.error('合格証明書データ取得エラー:', error);
+        setError(error.message || '合格証明書データの取得に失敗しました');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCertificateData();
   }, [location.state, navigate]);
 
   const handlePrint = () => {
     setIsPrinting(true);
     setTimeout(() => {
-      window.print();
+      // A4サイズ1枚に最適化された印刷機能
+      printCertificate(certificateData);
       setIsPrinting(false);
     }, 100);
   };
@@ -51,12 +64,56 @@ const CertificatePage = () => {
     navigate(-1);
   };
 
-  if (!certificateData) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex items-center justify-center">
         <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-700 text-lg">証明書を準備中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow-xl p-8 text-center max-w-md">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-gray-800 mb-4">エラーが発生しました</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <div className="flex gap-3 justify-center">
+            <button 
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              onClick={() => navigate('/student/dashboard')}
+            >
+              ダッシュボードに戻る
+            </button>
+            <button 
+              className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              onClick={() => window.location.reload()}
+            >
+              再読み込み
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!certificateData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="text-gray-500 text-6xl mb-4">📄</div>
+          <h2 className="text-xl font-bold text-gray-800 mb-4">証明書データが見つかりません</h2>
+          <p className="text-gray-600 mb-6">合格証明書のデータを取得できませんでした。</p>
+          <button 
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            onClick={() => navigate('/student/dashboard')}
+          >
+            ダッシュボードに戻る
+          </button>
         </div>
       </div>
     );
@@ -116,14 +173,19 @@ const CertificatePage = () => {
             <div className="text-center mb-8">
               <div className="flex items-center justify-center gap-6 mb-6">
                 <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-cyan-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                  SS
+                  {certificateData.officeName ? certificateData.officeName.charAt(0) : 'S'}
                 </div>
                 <div className="text-left">
-                  <h2 className="text-2xl font-bold text-gray-800">スタディスフィア東京校</h2>
-                  <p className="text-gray-600">Study Sphere Tokyo Campus</p>
+                  <h2 className="text-2xl font-bold text-gray-800">{certificateData.officeName}</h2>
+                  <p className="text-gray-600">{certificateData.companyName}</p>
                   <p className="text-sm text-gray-500">
-                    〒100-0001 東京都千代田区千代田1-1-1<br />
-                    TEL: 03-1234-5678
+                    {certificateData.officeAddress || ''}
+                    {certificateData.officePhone && (
+                      <>
+                        <br />
+                        TEL: {certificateData.officePhone}
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
@@ -174,16 +236,24 @@ const CertificatePage = () => {
 
             {/* 署名部分 */}
             <div className="flex justify-between items-end mb-8">
-              <div className="text-center">
-                <div className="w-32 h-0.5 bg-gray-400 mb-2"></div>
-                <p className="font-semibold text-gray-800">{certificateData.instructorName}</p>
-                <p className="text-gray-600">指導員</p>
-              </div>
-              <div className="text-center">
-                <div className="w-32 h-0.5 bg-gray-400 mb-2"></div>
-                <p className="font-semibold text-gray-800">スタディスフィア東京校</p>
-                <p className="text-gray-600">代表者</p>
-              </div>
+              {certificateData.instructorName && (
+                <div className="text-center">
+                  <div className="w-32 h-0.5 bg-gray-400 mb-2"></div>
+                  <p className="font-semibold text-gray-800">{certificateData.instructorName}</p>
+                  <p className="text-gray-600">指導員</p>
+                </div>
+              )}
+              {certificateData.managerNames && certificateData.managerNames.length > 0 && (
+                <div className="text-center">
+                  <div className="w-32 h-0.5 bg-gray-400 mb-2"></div>
+                  <div className="font-semibold text-gray-800">
+                    {certificateData.managerNames.map((name, index) => (
+                      <div key={index}>{name}</div>
+                    ))}
+                  </div>
+                  <p className="text-gray-600">拠点管理者</p>
+                </div>
+              )}
             </div>
 
             {/* 証明書ID */}

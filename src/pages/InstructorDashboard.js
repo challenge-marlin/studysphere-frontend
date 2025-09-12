@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useInstructorGuard } from '../utils/hooks/useAuthGuard';
 import InstructorHeader from '../components/InstructorHeader';
-import VoiceCareSystem from '../components/VoiceCareSystem';
 import StudentManagement from '../components/StudentManagement';
 import LocationManagementForInstructor from '../components/LocationManagementForInstructor';
 import SatelliteManagement from '../components/SatelliteManagement';
@@ -15,13 +14,15 @@ import InstructorPasswordChangeModal from '../components/InstructorPasswordChang
 import PersonalMessageList from '../components/PersonalMessageList';
 import MessageSender from '../components/MessageSender';
 import AnnouncementCreator from '../components/AnnouncementCreator';
+import AnnouncementList from '../components/AnnouncementList';
 
 import { 
   getInstructorSpecializations, 
   addInstructorSpecialization, 
   updateInstructorSpecialization, 
   deleteInstructorSpecialization,
-  updateUser
+  updateUser,
+  apiGet
 } from '../utils/api';
 
 const InstructorDashboard = () => {
@@ -69,6 +70,8 @@ const InstructorDashboard = () => {
   const location = useLocation();
   const { currentUser, logout } = useInstructorGuard();
   const [localUser, setLocalUser] = useState(null);
+  const [messagePollingInterval, setMessagePollingInterval] = useState(null);
+  const [newMessageNotification, setNewMessageNotification] = useState(null);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -114,6 +117,22 @@ const InstructorDashboard = () => {
     }
   }, [currentUser, activeTab]);
 
+  // 声かけタブのアクティブ状態に応じて定期確認を制御
+  useEffect(() => {
+    if (activeTab === 'overview') {
+      // 声かけタブがアクティブな場合、定期確認を開始
+      startMessagePolling();
+    } else {
+      // 他のタブがアクティブな場合、定期確認を停止
+      stopMessagePolling();
+    }
+
+    // クリーンアップ関数
+    return () => {
+      stopMessagePolling();
+    };
+  }, [activeTab]);
+
   // 専門分野一覧を取得
   const loadSpecializations = async () => {
     try {
@@ -123,6 +142,49 @@ const InstructorDashboard = () => {
       }
     } catch (error) {
       console.error('専門分野の取得に失敗:', error);
+    }
+  };
+
+  // 新着メッセージ確認
+  const checkNewMessages = async () => {
+    try {
+      const response = await apiGet('/api/messages/unread-count');
+      if (response.success && response.data.unread_count > 0) {
+        // 新着メッセージがある場合の通知
+        setNewMessageNotification({
+          count: response.data.unread_count,
+          timestamp: new Date()
+        });
+        
+        // 3秒後に通知を自動で非表示
+        setTimeout(() => {
+          setNewMessageNotification(null);
+        }, 3000);
+      }
+    } catch (error) {
+      console.error('新着メッセージ確認エラー:', error);
+    }
+  };
+
+  // 定期確認の開始
+  const startMessagePolling = () => {
+    if (messagePollingInterval) {
+      clearInterval(messagePollingInterval);
+    }
+    
+    // 初回確認
+    checkNewMessages();
+    
+    // 5分間隔で定期確認
+    const interval = setInterval(checkNewMessages, 5 * 60 * 1000); // 5分 = 300,000ms
+    setMessagePollingInterval(interval);
+  };
+
+  // 定期確認の停止
+  const stopMessagePolling = () => {
+    if (messagePollingInterval) {
+      clearInterval(messagePollingInterval);
+      setMessagePollingInterval(null);
     }
   };
 
@@ -396,6 +458,14 @@ const InstructorDashboard = () => {
     };
   }, []);
 
+  // コンポーネントアンマウント時のクリーンアップ
+  useEffect(() => {
+    return () => {
+      // 定期確認を停止
+      stopMessagePolling();
+    };
+  }, []);
+
   if (!currentUser || !localUser) {
     return <div>Loading...</div>;
   }
@@ -483,6 +553,26 @@ const InstructorDashboard = () => {
         </aside>
 
         <main className="flex-1 p-8 overflow-y-auto bg-white">
+          {/* 新着メッセージ通知 */}
+          {newMessageNotification && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg animate-pulse">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <span className="text-blue-500 mr-2">📬</span>
+                  <span className="text-blue-700 font-medium">
+                    新着メッセージ {newMessageNotification.count}件があります
+                  </span>
+                </div>
+                <button
+                  onClick={() => setNewMessageNotification(null)}
+                  className="text-blue-500 hover:text-blue-700"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* 認証エラーメッセージ */}
           {authError && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -504,31 +594,69 @@ const InstructorDashboard = () => {
           {activeTab === 'overview' && (
             <div className="space-y-8">
               {/* 声かけシステム */}
-              <VoiceCareSystem instructorId={localUser.id} />
-              
-              {/* メッセージ機能 */}
-              <div className="bg-white rounded-lg shadow-lg p-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-4">💬 メッセージ管理</h2>
-                <p className="text-gray-600 mb-6">利用者との1対1メッセージの送受信と管理ができます。</p>
-                
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4">📤 メッセージ送信</h3>
-                    <MessageSender />
+              <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 p-6">
+                {/* ヘッダー部分 */}
+                <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-100">
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div className="flex-1">
+                      <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
+                        💬 声かけ・メッセージ管理
+                      </h2>
+                      <p className="text-lg text-gray-600">利用者とのコミュニケーションを管理できます</p>
+                    </div>
+                    <div className="flex gap-3">
+                      <a
+                        href="https://discord.gg/9N5wpBUmDQ"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2"
+                      >
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515a.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a14.09 14.09 0 0 0 1.226-1.994a.076.076 0 0 0-.041-.106a13.107 13.107 0 0 1-1.872-.892a.077.077 0 0 1-.008-.128a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127a12.299 12.299 0 0 1-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028a19.839 19.839 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.956-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.946 2.418-2.157 2.418z"/>
+                        </svg>
+                        Discord で相談
+                      </a>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4">📥 メッセージ受信・会話</h3>
-                    <PersonalMessageList />
+                  <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-blue-600 text-lg">💡</span>
+                      <h3 className="font-semibold text-blue-800">外部サポートについて</h3>
+                    </div>
+                    <p className="text-blue-700 text-sm">
+                      画面共有やAI以外の技術的な質問については、Discordサーバーで直接サポートを受けることができます。
+                    </p>
                   </div>
                 </div>
-              </div>
 
-              {/* アナウンス機能 */}
-              <div className="bg-white rounded-lg shadow-lg p-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-4">📢 アナウンス管理</h2>
-                <p className="text-gray-600 mb-6">選択した利用者への一斉アナウンスメッセージを作成・送信できます。</p>
-                
-                <AnnouncementCreator />
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* アナウンスメッセージ（左カラム） */}
+                  <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
+                    <h3 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent mb-4 flex items-center gap-2">
+                      📢 アナウンスメッセージ
+                    </h3>
+                    <AnnouncementCreator />
+                    <div className="mt-6 pt-6 border-t border-gray-200">
+                      <AnnouncementList />
+                    </div>
+                  </div>
+
+                  {/* 1対1メッセージ（右カラム） */}
+                  <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
+                    <h3 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-green-800 bg-clip-text text-transparent mb-4 flex items-center gap-2">
+                      💬 1対1メッセージ
+                    </h3>
+                    <MessageSender />
+                  </div>
+                </div>
+
+                {/* メッセージ一覧・会話表示 */}
+                <div className="mt-6 bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
+                  <h3 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent mb-4 flex items-center gap-2">
+                    📥 メッセージ受信・会話
+                  </h3>
+                  <PersonalMessageList />
+                </div>
               </div>
             </div>
           )}

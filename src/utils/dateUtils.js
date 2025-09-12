@@ -49,6 +49,29 @@ export const formatJapanTime = (date, options = {}) => {
 };
 
 /**
+ * データベースから取得したタイムスタンプを表示用にフォーマット
+ * （データベースは既に日本時間で保存されているが、UTC形式で送信されるため、9時間を引く）
+ * @param {Date|string} date - 日付
+ * @param {Object} options - オプション
+ * @returns {string} 表示用日付文字列
+ */
+export const formatDatabaseTime = (date, options = {}) => {
+  const defaultOptions = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  };
+  
+  const dateObj = new Date(date);
+  // データベースから取得したタイムスタンプは既に日本時間だが、UTC形式で送信されるため、9時間を引く
+  const japanTime = new Date(dateObj.getTime() - (9 * 60 * 60 * 1000));
+  return japanTime.toLocaleString('ja-JP', { ...defaultOptions, ...options });
+};
+
+/**
  * 日本時間での日付のみ文字列を取得
  * @param {Date|string} date - 日付
  * @returns {string} 日本時間での日付文字列（YYYY-MM-DD）

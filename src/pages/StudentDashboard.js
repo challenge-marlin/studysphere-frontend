@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStudentGuard } from '../utils/hooks/useAuthGuard';
 import { useAuth } from '../components/contexts/AuthContext';
-import { verifyTemporaryPasswordAPI } from '../utils/api';
+import { verifyTemporaryPasswordAPI, apiGet } from '../utils/api';
 import { saveTempPasswordAuth } from '../utils/authUtils';
 import Dashboard from './Dashboard';
 import LessonList from './LessonList';
@@ -20,6 +20,8 @@ const StudentDashboard = () => {
   const [isAutoLoggingIn, setIsAutoLoggingIn] = useState(false);
   const [authError, setAuthError] = useState('');
   const [userCourses, setUserCourses] = useState([]);
+  const [messagePollingInterval, setMessagePollingInterval] = useState(null);
+  const [newMessageNotification, setNewMessageNotification] = useState(null);
 
   // 利用者のコース情報を取得
   useEffect(() => {
@@ -47,6 +49,22 @@ const StudentDashboard = () => {
 
     fetchUserCourses();
   }, [currentUser?.id]);
+
+  // ダッシュボードタブのアクティブ状態に応じて定期確認を制御
+  useEffect(() => {
+    if (activeTab === 'dashboard') {
+      // ダッシュボードタブがアクティブな場合、定期確認を開始
+      startMessagePolling();
+    } else {
+      // 他のタブがアクティブな場合、定期確認を停止
+      stopMessagePolling();
+    }
+
+    // クリーンアップ関数
+    return () => {
+      stopMessagePolling();
+    };
+  }, [activeTab]);
 
   // クエリパラメータからの自動認証処理
   useEffect(() => {
@@ -311,6 +329,14 @@ const StudentDashboard = () => {
     handleAutoLogin();
   }, [currentUser, login, navigate, searchParams]);
 
+  // コンポーネントアンマウント時のクリーンアップ
+  useEffect(() => {
+    return () => {
+      // 定期確認を停止
+      stopMessagePolling();
+    };
+  }, []);
+
   const handleLogout = () => {
     // ログアウト確認ダイアログ
     if (window.confirm('ログアウトしますか？')) {
@@ -328,6 +354,49 @@ const StudentDashboard = () => {
       logout();
       
       console.log('ログアウト完了');
+    }
+  };
+
+  // 新着メッセージ確認
+  const checkNewMessages = async () => {
+    try {
+      const response = await apiGet('/api/messages/unread-count');
+      if (response.success && response.data.unread_count > 0) {
+        // 新着メッセージがある場合の通知
+        setNewMessageNotification({
+          count: response.data.unread_count,
+          timestamp: new Date()
+        });
+        
+        // 3秒後に通知を自動で非表示
+        setTimeout(() => {
+          setNewMessageNotification(null);
+        }, 3000);
+      }
+    } catch (error) {
+      console.error('新着メッセージ確認エラー:', error);
+    }
+  };
+
+  // 定期確認の開始
+  const startMessagePolling = () => {
+    if (messagePollingInterval) {
+      clearInterval(messagePollingInterval);
+    }
+    
+    // 初回確認
+    checkNewMessages();
+    
+    // 5分間隔で定期確認
+    const interval = setInterval(checkNewMessages, 5 * 60 * 1000); // 5分 = 300,000ms
+    setMessagePollingInterval(interval);
+  };
+
+  // 定期確認の停止
+  const stopMessagePolling = () => {
+    if (messagePollingInterval) {
+      clearInterval(messagePollingInterval);
+      setMessagePollingInterval(null);
     }
   };
 
@@ -472,6 +541,26 @@ const StudentDashboard = () => {
 
       {/* メインコンテンツ */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+        {/* 新着メッセージ通知 */}
+        {newMessageNotification && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg animate-pulse">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <span className="text-blue-500 mr-2">📬</span>
+                <span className="text-blue-700 font-medium">
+                  新着メッセージ {newMessageNotification.count}件があります
+                </span>
+              </div>
+              <button
+                onClick={() => setNewMessageNotification(null)}
+                className="text-blue-500 hover:text-blue-700"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-8">
           {/* ダッシュボード */}
           <div className="bg-white rounded-2xl shadow-xl p-8">

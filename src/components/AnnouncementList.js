@@ -1,72 +1,51 @@
 import React, { useState, useEffect } from 'react';
-import { apiGet, apiPut } from '../utils/api';
+import { apiGet } from '../utils/api';
 import { useAuth } from './contexts/AuthContext';
+import { formatDatabaseTime } from '../utils/dateUtils';
 
 const AnnouncementList = () => {
-    const { user } = useAuth();
+    const { currentUser: user } = useAuth();
     const [announcements, setAnnouncements] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-    const [unreadCount, setUnreadCount] = useState(0);
     const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
+    const [showDetailModal, setShowDetailModal] = useState(false);
 
     // アナウンス一覧を取得
-    const fetchAnnouncements = async (page = 1) => {
+    const fetchAnnouncements = async () => {
         try {
             setLoading(true);
-            const response = await apiGet(`/announcements/user?page=${page}&limit=10`);
-            if (response.success) {
-                setAnnouncements(response.data.announcements);
-                setTotalPages(response.data.pagination.total_pages);
-                setUnreadCount(response.data.pagination.unread_count);
+            const response = await apiGet('/api/announcements/admin');
+            if (response.success && response.data) {
+                // データが配列でない場合は空配列を設定
+                const announcementsData = Array.isArray(response.data.announcements) ? response.data.announcements : [];
+                setAnnouncements(announcementsData);
+            } else {
+                setAnnouncements([]);
             }
         } catch (error) {
             console.error('アナウンス一覧取得エラー:', error);
+            setAnnouncements([]);
         } finally {
             setLoading(false);
         }
     };
 
-    useEffect(() => {
-        fetchAnnouncements();
-    }, []);
-
-    // アナウンスを既読にする
-    const markAsRead = async (announcementId) => {
+    // アナウンス詳細を取得
+    const fetchAnnouncementDetail = async (announcementId) => {
         try {
-            await apiPut(`/announcements/user/${announcementId}/read`);
-            // アナウンス一覧を更新
-            fetchAnnouncements(currentPage);
+            const response = await apiGet(`/api/announcements/admin/${announcementId}`);
+            if (response.success) {
+                setSelectedAnnouncement(response.data);
+                setShowDetailModal(true);
+            }
         } catch (error) {
-            console.error('既読処理エラー:', error);
+            console.error('アナウンス詳細取得エラー:', error);
         }
     };
 
-    // 全アナウンスを既読にする
-    const markAllAsRead = async () => {
-        try {
-            await apiPut('/announcements/user/read-all');
-            // アナウンス一覧を更新
-            fetchAnnouncements(currentPage);
-        } catch (error) {
-            console.error('全既読処理エラー:', error);
-        }
-    };
-
-    // アナウンス詳細を表示
-    const showAnnouncementDetail = (announcement) => {
-        setSelectedAnnouncement(announcement);
-        // 未読の場合は既読にする
-        if (!announcement.is_read) {
-            markAsRead(announcement.id);
-        }
-    };
-
-    // 日時フォーマット
+    // 日時フォーマット（DBに保存されている時間をそのまま表示）
     const formatDateTime = (dateString) => {
-        const date = new Date(dateString);
-        return date.toLocaleString('ja-JP', {
+        return formatDatabaseTime(dateString, {
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',
@@ -75,110 +54,131 @@ const AnnouncementList = () => {
         });
     };
 
+    useEffect(() => {
+        fetchAnnouncements();
+    }, []);
+
     return (
-        <div className="max-w-4xl mx-auto p-6">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">お知らせ</h1>
-                {unreadCount > 0 && (
-                    <button
-                        onClick={markAllAsRead}
-                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                    >
-                        全て既読にする
-                    </button>
-                )}
+        <div className="space-y-4">
+            <div className="flex justify-between items-center">
+                <h4 className="text-lg font-semibold text-gray-800">送信済みアナウンス</h4>
+                <button
+                    onClick={fetchAnnouncements}
+                    className="px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm"
+                >
+                    更新
+                </button>
             </div>
 
             {loading ? (
-                <div className="text-center py-8">読み込み中...</div>
+                <div className="text-center text-gray-500 text-sm py-4">読み込み中...</div>
             ) : announcements.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                    お知らせはありません
+                <div className="text-center text-gray-500 text-sm py-4">
+                    送信済みのアナウンスはありません
                 </div>
             ) : (
-                <div className="space-y-4">
-                    {announcements.map(announcement => (
+                <div className="space-y-3 max-h-64 overflow-y-auto">
+                    {announcements.filter(announcement => announcement && announcement.id).map(announcement => (
                         <div
                             key={announcement.id}
-                            className={`bg-white p-4 rounded-lg shadow cursor-pointer transition-colors ${
-                                !announcement.is_read ? 'border-l-4 border-blue-500 bg-blue-50' : 'hover:bg-gray-50'
-                            }`}
-                            onClick={() => showAnnouncementDetail(announcement)}
+                            className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-4 border border-gray-200 hover:shadow-md transition-all duration-200"
                         >
-                            <div className="flex justify-between items-start">
-                                <div className="flex-1">
-                                    <h3 className="font-semibold text-lg mb-2">{announcement.title}</h3>
-                                    <p className="text-gray-600 text-sm mb-2">
-                                        {announcement.message.length > 100 
-                                            ? `${announcement.message.substring(0, 100)}...` 
-                                            : announcement.message
-                                        }
-                                    </p>
-                                    <div className="flex items-center text-xs text-gray-500 space-x-4">
-                                        <span>送信者: {announcement.created_by_name}</span>
-                                        <span>{formatDateTime(announcement.created_at)}</span>
-                                        {!announcement.is_read && (
-                                            <span className="bg-blue-500 text-white px-2 py-1 rounded-full text-xs">
-                                                未読
-                                            </span>
-                                        )}
-                                    </div>
+                            <div className="flex justify-between items-start mb-2">
+                                <h5 className="font-semibold text-gray-800 text-sm">
+                                    {announcement.title}
+                                </h5>
+                                <span className="text-xs text-gray-500">
+                                    {formatDateTime(announcement.created_at)}
+                                </span>
+                            </div>
+                            <p className="text-gray-700 text-sm mb-2 line-clamp-2">
+                                {announcement.message}
+                            </p>
+                            <div className="flex justify-between items-center">
+                                <div className="flex gap-4 text-xs text-gray-600">
+                                    <span>受信者: {announcement.recipient_count}名</span>
+                                    <span>既読: {announcement.read_count}名</span>
                                 </div>
+                                <button
+                                    onClick={() => fetchAnnouncementDetail(announcement.id)}
+                                    className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-3 py-1 rounded-lg font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 text-sm"
+                                >
+                                    詳細を見る
+                                </button>
                             </div>
                         </div>
                     ))}
                 </div>
             )}
 
-            {/* ページネーション */}
-            {totalPages > 1 && (
-                <div className="flex justify-center mt-6 space-x-2">
-                    <button
-                        onClick={() => {
-                            setCurrentPage(prev => Math.max(1, prev - 1));
-                            fetchAnnouncements(Math.max(1, currentPage - 1));
-                        }}
-                        disabled={currentPage === 1}
-                        className="px-3 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed"
-                    >
-                        前へ
-                    </button>
-                    <span className="px-3 py-2">
-                        {currentPage} / {totalPages}
-                    </span>
-                    <button
-                        onClick={() => {
-                            setCurrentPage(prev => Math.min(totalPages, prev + 1));
-                            fetchAnnouncements(Math.min(totalPages, currentPage + 1));
-                        }}
-                        disabled={currentPage === totalPages}
-                        className="px-3 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed"
-                    >
-                        次へ
-                    </button>
-                </div>
-            )}
-
             {/* アナウンス詳細モーダル */}
-            {selectedAnnouncement && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-                        <div className="p-6">
-                            <div className="flex justify-between items-start mb-4">
-                                <h2 className="text-xl font-bold">{selectedAnnouncement.title}</h2>
-                                <button
-                                    onClick={() => setSelectedAnnouncement(null)}
-                                    className="text-gray-500 hover:text-gray-700 text-2xl"
-                                >
-                                    ×
-                                </button>
-                            </div>
-                            <div className="prose max-w-none">
-                                <p className="whitespace-pre-wrap">{selectedAnnouncement.message}</p>
-                            </div>
-                            <div className="mt-4 pt-4 border-t text-sm text-gray-500">
-                                <p>送信者: {selectedAnnouncement.created_by_name}</p>
-                                <p>送信日時: {formatDateTime(selectedAnnouncement.created_at)}</p>
+            {showDetailModal && selectedAnnouncement && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+                        <div className="flex justify-between items-start mb-4">
+                            <h3 className="text-xl font-bold text-gray-800">アナウンス詳細</h3>
+                            <button
+                                onClick={() => setShowDetailModal(false)}
+                                className="text-gray-500 hover:text-gray-700 text-2xl"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        
+                        <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+                            <h4 className="font-semibold text-blue-800 mb-2">
+                                {selectedAnnouncement.announcement.title}
+                            </h4>
+                            <p className="text-gray-800 mb-2">
+                                {selectedAnnouncement.announcement.message}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                                送信日時: {formatDateTime(selectedAnnouncement.announcement.created_at)}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                                作成者: {selectedAnnouncement.announcement.created_by_name}
+                            </p>
+                        </div>
+
+                        <div className="mb-4">
+                            <h4 className="font-semibold text-gray-800 mb-2">
+                                受信者一覧 ({selectedAnnouncement.recipients.length}名)
+                            </h4>
+                            <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg">
+                                {selectedAnnouncement.recipients.filter(recipient => recipient && recipient.id).map(recipient => (
+                                    <div
+                                        key={recipient.id}
+                                        className="p-3 border-b border-gray-100 last:border-b-0"
+                                    >
+                                        <div className="flex justify-between items-center">
+                                            <div>
+                                                <p className="font-medium text-sm text-gray-800">
+                                                    {recipient.name}
+                                                </p>
+                                                <p className="text-xs text-gray-500">
+                                                    {recipient.company_name && `${recipient.company_name} | `}
+                                                    {recipient.satellite_name}
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <span
+                                                    className={`text-xs px-2 py-1 rounded ${
+                                                        recipient.is_read
+                                                            ? 'bg-green-100 text-green-600'
+                                                            : 'bg-orange-100 text-orange-600'
+                                                    }`}
+                                                >
+                                                    {recipient.is_read ? '既読' : '未読'}
+                                                </span>
+                                                {recipient.read_at && (
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        {formatDateTime(recipient.read_at)}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </div>

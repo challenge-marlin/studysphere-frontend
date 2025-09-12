@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost } from '../utils/api';
 import { useAuth } from './contexts/AuthContext';
+import { sanitizeInput } from '../utils/sanitizeUtils';
+import UserFilter from './UserFilter';
 
 const AnnouncementCreator = () => {
-    const { user } = useAuth();
+    const { currentUser: user } = useAuth();
     const [title, setTitle] = useState('');
     const [message, setMessage] = useState('');
     const [selectedUsers, setSelectedUsers] = useState([]);
@@ -11,30 +13,10 @@ const AnnouncementCreator = () => {
     const [loading, setLoading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [showUserSelector, setShowUserSelector] = useState(false);
-    const [filters, setFilters] = useState({
-        role: '',
-        satellite_id: '',
-        company_id: ''
-    });
 
-    // 利用者一覧を取得
-    const fetchUsers = async () => {
-        try {
-            setLoading(true);
-            const queryParams = new URLSearchParams();
-            if (filters.role) queryParams.append('role', filters.role);
-            if (filters.satellite_id) queryParams.append('satellite_id', filters.satellite_id);
-            if (filters.company_id) queryParams.append('company_id', filters.company_id);
-
-            const response = await apiGet(`/announcements/admin/users?${queryParams.toString()}`);
-            if (response.success) {
-                setAvailableUsers(response.data);
-            }
-        } catch (error) {
-            console.error('利用者一覧取得エラー:', error);
-        } finally {
-            setLoading(false);
-        }
+    // 利用者一覧を取得（高度なフィルター用）
+    const handleUsersLoad = (users) => {
+        setAvailableUsers(users);
     };
 
     // アナウンス送信
@@ -48,9 +30,9 @@ const AnnouncementCreator = () => {
 
         try {
             setSubmitting(true);
-            const response = await apiPost('/announcements/admin/create', {
-                title: title.trim(),
-                message: message.trim(),
+            const response = await apiPost('/api/announcements/admin/create', {
+                title: sanitizeInput(title.trim()),
+                message: sanitizeInput(message.trim()),
                 recipient_ids: selectedUsers.map(user => user.id)
             });
 
@@ -92,9 +74,10 @@ const AnnouncementCreator = () => {
         }
     };
 
-    useEffect(() => {
-        fetchUsers();
-    }, [filters]);
+    // フィルター変更ハンドラー
+    const handleFilterChange = (filters) => {
+        // フィルター変更時の処理はUserFilterコンポーネント内で自動処理される
+    };
 
     return (
         <div className="space-y-4">
@@ -171,45 +154,15 @@ const AnnouncementCreator = () => {
                     {showUserSelector && (
                         <div className="border border-gray-300 rounded-lg p-3">
                             {/* フィルター */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                                        ロール
-                                    </label>
-                                    <select
-                                        value={filters.role}
-                                        onChange={(e) => setFilters(prev => ({ ...prev, role: e.target.value }))}
-                                        className="w-full px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                                    >
-                                        <option value="">すべて</option>
-                                        <option value="1">利用者</option>
-                                        <option value="4">指導員</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                                        拠点
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={filters.satellite_id}
-                                        onChange={(e) => setFilters(prev => ({ ...prev, satellite_id: e.target.value }))}
-                                        className="w-full px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                                        placeholder="拠点ID"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                                        企業
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={filters.company_id}
-                                        onChange={(e) => setFilters(prev => ({ ...prev, company_id: e.target.value }))}
-                                        className="w-full px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                                        placeholder="企業ID"
-                                    />
-                                </div>
+                            <div className="mb-3 p-3 border border-gray-300 rounded-lg bg-gray-50">
+                                <UserFilter
+                                    onFilterChange={handleFilterChange}
+                                    onUsersLoad={handleUsersLoad}
+                                    apiEndpoint="/api/announcements/admin/users"
+                                    showInstructorFilter={user?.role === 4}
+                                    showTagFilter={true}
+                                    showNameFilter={true}
+                                />
                             </div>
 
                             {/* 全選択ボタン */}
@@ -239,24 +192,41 @@ const AnnouncementCreator = () => {
                                                 className={`p-2 cursor-pointer hover:bg-gray-50 text-sm ${
                                                     selectedUsers.some(selected => selected.id === user.id)
                                                         ? 'bg-blue-50'
+                                                        : user.is_my_assigned
+                                                        ? 'bg-green-50'
                                                         : ''
                                                 }`}
                                                 onClick={() => toggleUserSelection(user)}
                                             >
                                                 <div className="flex items-center justify-between">
-                                                    <div>
-                                                        <p className="font-medium">{user.name}</p>
+                                                    <div className="flex-1">
+                                                        <p className="font-medium">
+                                                            {user.name}
+                                                            {user.is_my_assigned && ' ★'}
+                                                        </p>
                                                         <p className="text-xs text-gray-500">
                                                             {user.role === 1 ? '利用者' : '指導員'} | 
                                                             {user.company_name && ` ${user.company_name}`}
                                                             {user.satellite_name && ` | ${user.satellite_name}`}
+                                                            {user.instructor_name && ` | 担当: ${user.instructor_name}`}
                                                         </p>
+                                                        {user.tags && (
+                                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                                {(typeof user.tags === 'string' ? user.tags.split(',') : user.tags)
+                                                                    .slice(0, 3)
+                                                                    .map((tag, index) => (
+                                                                    <span key={index} className="px-1 py-0.5 bg-gray-200 text-xs rounded">
+                                                                        {tag.trim()}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     <input
                                                         type="checkbox"
                                                         checked={selectedUsers.some(selected => selected.id === user.id)}
                                                         onChange={() => toggleUserSelection(user)}
-                                                        className="h-3 w-3 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                                        className="h-3 w-3 text-blue-600 focus:ring-blue-500 border-gray-300 rounded ml-2"
                                                     />
                                                 </div>
                                             </div>

@@ -1629,7 +1629,7 @@ const LocationManagement = () => {
                                 return '無効な日付';
                               }
                               
-                              return japanDate.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' });
+                              return japanDate.toLocaleDateString('ja-JP');
                             } catch (error) {
                               console.error('日付表示エラー:', error, 'token_expiry_at:', office.token_expiry_at);
                               return 'エラー';
@@ -2781,7 +2781,7 @@ const LocationManagement = () => {
                       type="button"
                       onClick={() => {
                         const now = new Date();
-                        const japanTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Tokyo"}));
+                        const japanTime = new Date(now);
                         const thirtyDaysLater = new Date(japanTime.getTime() + (30 * 24 * 60 * 60 * 1000));
                         setEditFormData({ 
                           ...editFormData, 
@@ -2796,7 +2796,7 @@ const LocationManagement = () => {
                       type="button"
                       onClick={() => {
                         const now = new Date();
-                        const japanTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Tokyo"}));
+                        const japanTime = new Date(now);
                         const ninetyDaysLater = new Date(japanTime.getTime() + (90 * 24 * 60 * 60 * 1000));
                         setEditFormData({ 
                           ...editFormData, 
@@ -2811,7 +2811,7 @@ const LocationManagement = () => {
                       type="button"
                       onClick={() => {
                         const now = new Date();
-                        const japanTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Tokyo"}));
+                        const japanTime = new Date(now);
                         const oneYearLater = new Date(japanTime.getTime() + (365 * 24 * 60 * 60 * 1000));
                         setEditFormData({ 
                           ...editFormData, 
@@ -2825,7 +2825,7 @@ const LocationManagement = () => {
                   </div>
                   {editFormData.token_expiry_at && (
                     <div className="text-xs text-gray-500">
-                      現在の設定: {new Date(editFormData.token_expiry_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
+                      現在の設定: {new Date(editFormData.token_expiry_at).toLocaleString('ja-JP')}
                     </div>
                   )}
                 </div>

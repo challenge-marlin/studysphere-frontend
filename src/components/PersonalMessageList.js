@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPut } from '../utils/api';
+import { formatDatabaseTime } from '../utils/dateUtils';
 import { useAuth } from './contexts/AuthContext';
+import { sanitizeInput } from '../utils/sanitizeUtils';
 
 const PersonalMessageList = () => {
-    const { user } = useAuth();
+    const { currentUser: user } = useAuth();
     const [conversations, setConversations] = useState([]);
     const [selectedConversation, setSelectedConversation] = useState(null);
     const [messages, setMessages] = useState([]);
@@ -15,12 +17,17 @@ const PersonalMessageList = () => {
     const fetchConversations = async () => {
         try {
             setLoading(true);
-            const response = await apiGet('/messages/conversations');
-            if (response.success) {
-                setConversations(response.data);
+            const response = await apiGet('/api/messages/conversations');
+            if (response.success && response.data) {
+                // データが配列でない場合は空配列を設定
+                const conversationsData = Array.isArray(response.data) ? response.data : [];
+                setConversations(conversationsData);
+            } else {
+                setConversations([]);
             }
         } catch (error) {
             console.error('会話一覧取得エラー:', error);
+            setConversations([]);
         } finally {
             setLoading(false);
         }
@@ -29,7 +36,7 @@ const PersonalMessageList = () => {
     // 未読メッセージ数を取得
     const fetchUnreadCount = async () => {
         try {
-            const response = await apiGet('/messages/unread-count');
+            const response = await apiGet('/api/messages/unread-count');
             if (response.success) {
                 setUnreadCount(response.data.unread_count);
             }
@@ -42,12 +49,17 @@ const PersonalMessageList = () => {
     const fetchMessages = async (otherUserId) => {
         try {
             setLoading(true);
-            const response = await apiGet(`/messages/conversation/${otherUserId}`);
-            if (response.success) {
-                setMessages(response.data);
+            const response = await apiGet(`/api/messages/conversation/${otherUserId}`);
+            if (response.success && response.data) {
+                // データが配列でない場合は空配列を設定
+                const messagesData = Array.isArray(response.data) ? response.data : [];
+                setMessages(messagesData);
+            } else {
+                setMessages([]);
             }
         } catch (error) {
             console.error('メッセージ履歴取得エラー:', error);
+            setMessages([]);
         } finally {
             setLoading(false);
         }
@@ -56,12 +68,12 @@ const PersonalMessageList = () => {
     // メッセージ送信
     const sendMessage = async (e) => {
         e.preventDefault();
-        if (!newMessage.trim() || !selectedConversation) return;
+        if (!newMessage.trim() || !selectedConversation || !user) return;
 
         try {
-            const response = await apiPost('/messages/send', {
+            const response = await apiPost('/api/messages/send', {
                 receiver_id: selectedConversation.other_user_id,
-                message: newMessage.trim()
+                message: sanitizeInput(newMessage.trim())
             });
 
             if (response.success) {
@@ -85,14 +97,15 @@ const PersonalMessageList = () => {
     };
 
     useEffect(() => {
-        fetchConversations();
-        fetchUnreadCount();
-    }, []);
+        if (user) {
+            fetchConversations();
+            fetchUnreadCount();
+        }
+    }, [user]);
 
-    // 日時フォーマット
+    // 日時フォーマット（DBに保存されている時間をそのまま表示）
     const formatDateTime = (dateString) => {
-        const date = new Date(dateString);
-        return date.toLocaleString('ja-JP', {
+        return formatDatabaseTime(dateString, {
             month: '2-digit',
             day: '2-digit',
             hour: '2-digit',
@@ -102,8 +115,7 @@ const PersonalMessageList = () => {
 
     // 日時フォーマット（詳細）
     const formatDateTimeDetail = (dateString) => {
-        const date = new Date(dateString);
-        return date.toLocaleString('ja-JP', {
+        return formatDatabaseTime(dateString, {
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',
@@ -111,6 +123,22 @@ const PersonalMessageList = () => {
             minute: '2-digit'
         });
     };
+
+    // デバッグ用ログ
+    console.log('PersonalMessageList - user object:', user);
+    console.log('PersonalMessageList - user type:', typeof user);
+    console.log('PersonalMessageList - user keys:', user ? Object.keys(user) : 'user is null/undefined');
+
+    // userが存在しない場合はローディング表示
+    if (!user) {
+        return (
+            <div className="space-y-4">
+                <div className="text-center text-gray-500 text-sm py-4">
+                    ユーザー情報を読み込み中...
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-4">
@@ -135,7 +163,7 @@ const PersonalMessageList = () => {
                                     メッセージはありません
                                 </div>
                             ) : (
-                                conversations.map(conversation => (
+                                conversations.filter(conversation => conversation && conversation.other_user_id).map(conversation => (
                                     <div
                                         key={conversation.other_user_id}
                                         className={`p-3 rounded-lg cursor-pointer transition-colors ${
@@ -193,16 +221,16 @@ const PersonalMessageList = () => {
                                         メッセージがありません
                                     </div>
                                 ) : (
-                                    messages.map(message => (
+                                    messages.filter(message => message && message.id).map(message => (
                                         <div
                                             key={message.id}
                                             className={`flex ${
-                                                message.sender_id === user.id ? 'justify-end' : 'justify-start'
+                                                message.sender_id === user?.id ? 'justify-end' : 'justify-start'
                                             }`}
                                         >
                                             <div
                                                 className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
-                                                    message.sender_id === user.id
+                                                    message.sender_id === user?.id
                                                         ? 'bg-blue-500 text-white'
                                                         : 'bg-white text-gray-800 border'
                                                 }`}
@@ -210,7 +238,7 @@ const PersonalMessageList = () => {
                                                 <p>{message.message}</p>
                                                 <p
                                                     className={`text-xs mt-1 ${
-                                                        message.sender_id === user.id
+                                                        message.sender_id === user?.id
                                                             ? 'text-blue-100'
                                                             : 'text-gray-500'
                                                     }`}

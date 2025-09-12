@@ -8,11 +8,23 @@
  */
 export const getCurrentJapanTime = () => {
   try {
+    // 現在時刻を日本時間として取得
     const now = new Date();
     
-    // 日本時間のオフセット（UTC+9）を適用
-    const japanOffset = 9 * 60 * 60 * 1000; // 9時間をミリ秒で
-    const japanTime = new Date(now.getTime() + japanOffset);
+    // 日本時間の時刻を取得するために、日本時間の文字列から新しいDateオブジェクトを作成
+    const japanTimeString = now.toLocaleString('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    
+    // 日本時間の文字列をDateオブジェクトに変換
+    const japanTime = new Date(japanTimeString.replace(/\//g, '-'));
     
     // 無効な日付の場合は現在時刻を返す
     if (isNaN(japanTime.getTime())) {

@@ -1,6 +1,32 @@
 import React from 'react';
 import { isExpired } from '../../utils/dateUtils';
 
+// 一時パスワードの有効期限を日本時間の読みやすい形式に変換
+const formatTempPasswordExpiry = (expiryTime) => {
+  if (!expiryTime) return '';
+  
+  try {
+    // ISO形式の文字列をDateオブジェクトに変換
+    const date = new Date(expiryTime);
+    
+    // 日本時間（UTC+9）に変換するため、9時間を減算
+    const japanTime = new Date(date.getTime() - (9 * 60 * 60 * 1000));
+    
+    // 日本時間でフォーマット
+    return japanTime.toLocaleString('ja-JP', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  } catch (error) {
+    console.error('一時パスワード有効期限のフォーマットエラー:', error);
+    return expiryTime; // エラーの場合は元の値を返す
+  }
+};
+
 const StudentTable = ({
   students,
   onIssueTemporaryPassword,
@@ -168,7 +194,7 @@ const StudentTable = ({
                             </span>
                             {student.expires_at && (
                               <span className="text-gray-400">
-                                ({student.expires_at})
+                                ({formatTempPasswordExpiry(student.expires_at)})
                               </span>
                             )}
                           </div>
@@ -179,7 +205,10 @@ const StudentTable = ({
                         <div className="text-gray-400 mb-1">未発行</div>
                         <button 
                           className="px-2 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs rounded font-medium hover:from-blue-600 hover:to-blue-700 transition-all duration-200"
-                          onClick={() => onIssueTemporaryPassword(student.id)}
+                          onClick={() => {
+                            console.log(`一時パスワード発行ボタンクリック: ユーザー${student.id} (${student.name})`);
+                            onIssueTemporaryPassword(student.id);
+                          }}
                           title="一時パスワードを発行"
                         >
                           発行

@@ -31,36 +31,68 @@ const TempPasswordManager = ({ students, onStudentsUpdate }) => {
   // 一時パスワード発行
   const issueTemporaryPassword = async (userId) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/users/${userId}/issue-temp-password`, {
+      const url = `${API_BASE_URL}/api/users/${userId}/issue-temp-password`;
+      console.log('=== 一時パスワード発行リクエスト ===');
+      console.log('URL:', url);
+      console.log('userId:', userId);
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         }
       });
+      
+      console.log('=== レスポンス情報 ===');
+      console.log('response.status:', response.status);
+      console.log('response.ok:', response.ok);
+      console.log('response.headers:', Object.fromEntries(response.headers.entries()));
 
-      const result = await response.json();
+      // レスポンスのテキストを取得してからJSON解析
+      const responseText = await response.text();
+      console.log('response.text():', responseText);
+      
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('JSON解析エラー:', parseError);
+        console.error('解析できなかったテキスト:', responseText);
+        alert('サーバーからの応答の解析に失敗しました');
+        return;
+      }
       
       console.log('=== フロントエンド一時パスワード発行デバッグ ===');
+      console.log('response.status:', response.status);
       console.log('result:', result);
+      console.log('result.success:', result.success);
+      console.log('result.data:', result.data);
+      
+      // エラーレスポンスの場合は早期リターン
+      if (!result.success || !result.data) {
+        console.error('APIレスポンスエラー:', result);
+        alert(`一時パスワード発行に失敗しました: ${result.message || '不明なエラー'}`);
+        return;
+      }
+      
       console.log('result.data.expiresAt:', result.data.expiresAt);
       
       // 即座にローカル状態を更新
-      onStudentsUpdate(prevStudents => 
-        prevStudents.map(student => 
+      onStudentsUpdate(prevStudents => {
+        const updatedStudents = prevStudents.map(student => 
           student.id === userId 
             ? { 
                 ...student, 
                 temp_password: result.data.tempPassword,
-                expires_at: result.data.expires_at || result.data.expiresAt
+                expires_at: result.data.expires_at || result.data.expiresAt,
+                is_used: 0
               }
             : student
-        )
-      );
-      
-      // 更新後の学生データを確認
-      const updatedStudent = students.find(s => s.id === userId);
-      console.log('更新後の学生データ:', updatedStudent);
-      console.log('更新後のexpires_at:', updatedStudent?.expires_at);
+        );
+        console.log('=== ローカル状態更新完了 ===');
+        console.log('更新された学生:', updatedStudents.find(s => s.id === userId));
+        return updatedStudents;
+      });
       
       if (result.success) {
         // 成功メッセージを表示
@@ -70,7 +102,18 @@ const TempPasswordManager = ({ students, onStudentsUpdate }) => {
       }
     } catch (error) {
       console.error('一時パスワード発行エラー:', error);
-      alert('一時パスワード発行に失敗しました');
+      console.error('エラーの詳細:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      
+      // より詳細なエラーメッセージを表示
+      let errorMessage = '一時パスワード発行に失敗しました';
+      if (error.message) {
+        errorMessage += `\n詳細: ${error.message}`;
+      }
+      alert(errorMessage);
     }
   };
 

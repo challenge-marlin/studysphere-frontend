@@ -437,6 +437,11 @@ const InstructorDashboard = () => {
     setLocalUser(updatedUser);
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
     
+    // 拠点切り替えイベントを発火
+    window.dispatchEvent(new CustomEvent('satelliteChanged', {
+      detail: { newLocation }
+    }));
+    
     // ページリロードを削除し、状態更新のみで対応
     console.log('拠点変更により状態を更新しました');
   };

@@ -6,20 +6,18 @@ const formatTempPasswordExpiry = (expiryTime) => {
   if (!expiryTime) return '';
   
   try {
-    // ISO形式の文字列をDateオブジェクトに変換
+    // データベースから取得した時刻をDateオブジェクトに変換
     const date = new Date(expiryTime);
     
-    // 日本時間（UTC+9）に変換するため、9時間を減算
-    const japanTime = new Date(date.getTime() - (9 * 60 * 60 * 1000));
-    
-    // 日本時間でフォーマット
-    return japanTime.toLocaleString('ja-JP', {
+    // 日本時間（Asia/Tokyo）でフォーマット
+    return date.toLocaleString('ja-JP', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
-      second: '2-digit'
+      second: '2-digit',
+      timeZone: 'Asia/Tokyo'
     });
   } catch (error) {
     console.error('一時パスワード有効期限のフォーマットエラー:', error);
@@ -34,7 +32,8 @@ const StudentTable = ({
   onToggleStatus,
   onDeleteStudent,
   onViewDailyReports,
-  onViewTestResults
+  onViewTestResults,
+  onTestApproval
 }) => {
   console.log('=== StudentTable レンダリング ===');
   console.log('受け取ったstudents:', students);
@@ -244,10 +243,10 @@ const StudentTable = ({
                     </button>
                     <button 
                       className="px-2 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 transition-all duration-200"
-                      onClick={() => onViewTestResults(student)}
-                      title="テストの合否確認"
+                      onClick={() => onTestApproval && onTestApproval(student)}
+                      title="テストの合格承認"
                     >
-                      📝 合否確認
+                      ✅ 合格承認
                     </button>
                     <button 
                       className="px-2 py-1 bg-purple-600 text-white rounded text-xs font-medium hover:bg-purple-700 transition-all duration-200"

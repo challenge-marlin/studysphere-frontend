@@ -1,6 +1,30 @@
 import React from 'react';
 import { isExpired, formatUTCToJapanTimeString } from '../../utils/dateUtils';
 
+// 一時パスワードの有効期限を日本時間の読みやすい形式に変換
+const formatTempPasswordExpiry = (expiryTime) => {
+  if (!expiryTime) return '';
+  
+  try {
+    // データベースから取得した時刻をDateオブジェクトに変換
+    const date = new Date(expiryTime);
+    
+    // 日本時間（Asia/Tokyo）でフォーマット
+    return date.toLocaleString('ja-JP', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZone: 'Asia/Tokyo'
+    });
+  } catch (error) {
+    console.error('一時パスワード有効期限のフォーマットエラー:', error);
+    return expiryTime; // エラーの場合は元の値を返す
+  }
+};
+
 const StudentList = ({ 
   students, 
   onIssueTemporaryPassword, 
@@ -91,7 +115,7 @@ const StudentList = ({
                             </span>
                             {student.expires_at && (
                               <span className="text-gray-400">
-                                ({student.expires_at})
+                                ({formatTempPasswordExpiry(student.expires_at)})
                               </span>
                             )}
                           </div>

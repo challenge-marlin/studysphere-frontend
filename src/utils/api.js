@@ -630,3 +630,16 @@ export const getCertificateData = async (userId, lessonId, examResultId = null) 
     : `/api/learning/certificate/${userId}/${lessonId}`;
   return apiGet(endpoint);
 };
+
+// 合格承認関連のAPI
+export const getPendingApprovals = async (satelliteId) => {
+  return apiGet(`/api/test/instructor/pending-approvals?satelliteId=${satelliteId}`);
+};
+
+export const approveTest = async (examResultId, studentId, lessonId) => {
+  return apiPost('/api/test/instructor/approve-test', {
+    examResultId,
+    studentId,
+    lessonId
+  });
+};

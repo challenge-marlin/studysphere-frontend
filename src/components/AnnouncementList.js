@@ -14,7 +14,30 @@ const AnnouncementList = () => {
     const fetchAnnouncements = async () => {
         try {
             setLoading(true);
-            const response = await apiGet('/api/announcements/admin');
+            
+            // 現在選択中の拠点IDを取得
+            const selectedSatellite = sessionStorage.getItem('selectedSatellite');
+            let selectedSatelliteId = null;
+            
+            if (selectedSatellite) {
+                try {
+                    const satelliteData = JSON.parse(selectedSatellite);
+                    selectedSatelliteId = satelliteData.id;
+                } catch (error) {
+                    console.error('拠点情報のパースエラー:', error);
+                }
+            }
+            
+            // クエリパラメータを構築
+            const queryParams = new URLSearchParams();
+            if (selectedSatelliteId) {
+                queryParams.append('selected_satellite_id', selectedSatelliteId);
+            }
+            
+            const url = `/api/announcements/admin${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+            console.log('アナウンス取得URL:', url);
+            
+            const response = await apiGet(url);
             if (response.success && response.data) {
                 // データが配列でない場合は空配列を設定
                 const announcementsData = Array.isArray(response.data.announcements) ? response.data.announcements : [];
@@ -56,6 +79,20 @@ const AnnouncementList = () => {
 
     useEffect(() => {
         fetchAnnouncements();
+        
+        // 拠点切り替えイベントをリッスン
+        const handleSatelliteChange = () => {
+            console.log('拠点切り替えを検知、アナウンス一覧を再取得します');
+            fetchAnnouncements();
+        };
+        
+        // カスタムイベントをリッスン
+        window.addEventListener('satelliteChanged', handleSatelliteChange);
+        
+        // クリーンアップ
+        return () => {
+            window.removeEventListener('satelliteChanged', handleSatelliteChange);
+        };
     }, []);
 
     return (

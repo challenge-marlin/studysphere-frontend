@@ -117,7 +117,10 @@ const TodayActiveModal = ({
       const response = await apiPost('/api/temp-passwords/issue', requestData);
       
       if (response.success) {
-        alert(`${selectedStudents.length}名の利用者に一時パスワードを発行しました。\n\n${response.message}`);
+        alert(`${selectedStudents.length}名の利用者に一時パスワードを発行しました。`);
+        
+        // 利用者一覧を更新
+        onStudentsUpdate();
         
         // モーダルを閉じて状態をリセット
         handleClose();

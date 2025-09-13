@@ -11,6 +11,8 @@ import StudentAdder from './student-management/StudentAdder';
 import TagManager from './student-management/TagManager';
 import CourseAssignmentModal from './student-management/CourseAssignmentModal';
 import StudentTable from './student-management/StudentTable';
+import TestApprovalModal from './student-management/TestApprovalModal';
+import PendingApprovalAlert from './student-management/PendingApprovalAlert';
 
 import TodayActiveModal from './student-management/TodayActiveModal';
 import DailyReportManagement from './DailyReportManagement';
@@ -49,9 +51,31 @@ const StudentManagementRefactored = ({ teacherId }) => {
   const [showDailyReportModal, setShowDailyReportModal] = useState(false);
   const [selectedStudentForReports, setSelectedStudentForReports] = useState(null);
 
+  // 合格承認モーダルの状態
+  const [showTestApprovalModal, setShowTestApprovalModal] = useState(false);
+  const [selectedStudentForApproval, setSelectedStudentForApproval] = useState(null);
+
   // 合否確認機能
   const handleViewTestResults = (student) => {
     navigate(`/instructor/student-detail/${student.id}`);
+  };
+
+  // 合格承認機能
+  const handleTestApproval = (student) => {
+    setSelectedStudentForApproval(student);
+    setShowTestApprovalModal(true);
+  };
+
+  // 合格承認モーダルを閉じる
+  const closeTestApprovalModal = () => {
+    setShowTestApprovalModal(false);
+    setSelectedStudentForApproval(null);
+  };
+
+  // 合格承認成功時の処理
+  const handleApprovalSuccess = () => {
+    // 利用者データを再取得
+    fetchStudents();
   };
 
 
@@ -276,7 +300,14 @@ const StudentManagementRefactored = ({ teacherId }) => {
   // 子コンポーネントのフックを使用
   const tempPasswordManager = TempPasswordManager({ 
     students, 
-    onStudentsUpdate: setStudents 
+    onStudentsUpdate: (updatedStudents) => {
+      setStudents(updatedStudents);
+      // 一時パスワード発行後、サーバーから最新データを再取得
+      setTimeout(() => {
+        console.log('一時パスワード発行後、データを再取得します');
+        fetchStudents();
+      }, 1000);
+    }
   });
 
   const studentEditor = StudentEditor({ 
@@ -554,6 +585,17 @@ const StudentManagementRefactored = ({ teacherId }) => {
           </div>
         </div>
 
+        {/* 未承認アラート */}
+        <PendingApprovalAlert 
+          satelliteId={currentSatelliteId}
+          onApprovalClick={(studentId) => {
+            const student = students.find(s => s.id === parseInt(studentId));
+            if (student) {
+              handleTestApproval(student);
+            }
+          }}
+        />
+
         {/* フィルター部分 */}
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-100">
           <div className="space-y-6">
@@ -644,6 +686,7 @@ const StudentManagementRefactored = ({ teacherId }) => {
             onDeleteStudent={deleteStudent}
             onViewDailyReports={openDailyReportModal}
             onViewTestResults={handleViewTestResults}
+            onTestApproval={handleTestApproval}
           />
         </div>
 
@@ -1247,6 +1290,17 @@ const StudentManagementRefactored = ({ teacherId }) => {
           <DailyReportManagement
             student={selectedStudentForReports}
             onClose={closeDailyReportModal}
+          />
+        )}
+
+        {/* 合格承認モーダル */}
+        {showTestApprovalModal && selectedStudentForApproval && (
+          <TestApprovalModal
+            isOpen={showTestApprovalModal}
+            onClose={closeTestApprovalModal}
+            student={selectedStudentForApproval}
+            satelliteId={currentSatelliteId}
+            onApprovalSuccess={handleApprovalSuccess}
           />
         )}
       </div>

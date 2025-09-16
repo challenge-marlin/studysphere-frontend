@@ -15,6 +15,10 @@ import PersonalMessageList from '../components/PersonalMessageList';
 import MessageSender from '../components/MessageSender';
 import AnnouncementCreator from '../components/AnnouncementCreator';
 import AnnouncementList from '../components/AnnouncementList';
+import TestApprovalModal from '../components/student-management/TestApprovalModal';
+import SubmissionApprovalModal from '../components/student-management/SubmissionApprovalModal';
+import PendingApprovalAlert from '../components/student-management/PendingApprovalAlert';
+import PendingSubmissionAlert from '../components/student-management/PendingSubmissionAlert';
 
 import { 
   getInstructorSpecializations, 
@@ -43,6 +47,12 @@ const InstructorDashboard = () => {
   const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
   const [showHomeSupportModal, setShowHomeSupportModal] = useState(false);
   const [authError, setAuthError] = useState(null);
+  
+  // テスト承認・提出物承認モーダル関連の状態
+  const [showTestApprovalModal, setShowTestApprovalModal] = useState(false);
+  const [showSubmissionApprovalModal, setShowSubmissionApprovalModal] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [selectedSatelliteId, setSelectedSatelliteId] = useState(null);
 
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
@@ -452,6 +462,40 @@ const InstructorDashboard = () => {
     window.dispatchEvent(new CustomEvent('homeSupportUserAdded'));
   };
 
+  // テスト承認モーダルを開く
+  const handleTestApproval = (student) => {
+    setSelectedStudent(student);
+    
+    // 現在選択されている拠点IDを取得
+    const selectedSatellite = sessionStorage.getItem('selectedSatellite');
+    let currentSatelliteId = null;
+    
+    if (selectedSatellite) {
+      try {
+        const satelliteData = JSON.parse(selectedSatellite);
+        currentSatelliteId = satelliteData.id;
+      } catch (error) {
+        console.error('拠点情報のパースエラー:', error);
+      }
+    }
+    
+    // 学生のsatellite_idまたは現在選択されている拠点IDを使用
+    setSelectedSatelliteId(student.satellite_id || currentSatelliteId || 1); // デフォルトは1
+    setShowTestApprovalModal(true);
+  };
+
+  // 提出物確認モーダルを開く
+  const handleSubmissionApproval = (student) => {
+    setSelectedStudent(student);
+    setShowSubmissionApprovalModal(true);
+  };
+
+  // 承認成功時のコールバック
+  const handleApprovalSuccess = () => {
+    // 学生リストを更新するためのイベントを発火
+    window.dispatchEvent(new CustomEvent('studentListUpdated'));
+  };
+
   // 在宅利用者追加モーダルを開く関数をグローバルに公開
   useEffect(() => {
     window.openHomeSupportModal = () => {
@@ -665,7 +709,13 @@ const InstructorDashboard = () => {
               </div>
             </div>
           )}
-          {activeTab === 'students' && <StudentManagement instructorId={localUser.id} />}
+          {activeTab === 'students' && (
+            <StudentManagement 
+              instructorId={localUser.id}
+              onTestApproval={handleTestApproval}
+              onSubmissionApproval={handleSubmissionApproval}
+            />
+          )}
 
           {activeTab === 'location' && <LocationManagementForInstructor currentUser={localUser} onLocationChange={handleLocationChange} />}
           {activeTab === 'home-support' && (
@@ -989,6 +1039,23 @@ const InstructorDashboard = () => {
         isOpen={showHomeSupportModal}
         onClose={() => setShowHomeSupportModal(false)}
         onSuccess={handleHomeSupportSuccess}
+      />
+
+      {/* テスト承認モーダル */}
+      <TestApprovalModal
+        isOpen={showTestApprovalModal}
+        onClose={() => setShowTestApprovalModal(false)}
+        student={selectedStudent}
+        satelliteId={selectedSatelliteId}
+        onApprovalSuccess={handleApprovalSuccess}
+      />
+
+      {/* 提出物確認モーダル */}
+      <SubmissionApprovalModal
+        isOpen={showSubmissionApprovalModal}
+        onClose={() => setShowSubmissionApprovalModal(false)}
+        student={selectedStudent}
+        onApprovalSuccess={handleApprovalSuccess}
       />
     </div>
   );

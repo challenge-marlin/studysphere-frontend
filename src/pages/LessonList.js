@@ -306,32 +306,22 @@ const LessonList = ({ selectedCourseId }) => {
                  <p className="text-sm text-gray-600">開始日時: {(() => {
                    const dateStr = currentLesson.started_at || currentLesson.created_at;
                    if (!dateStr) return '';
-                   // データベースの値を変更せず、表示形式のみ成型（UTC扱いで解釈）
-                   const date = new Date(dateStr);
-                   return date.toLocaleString('ja-JP', { 
-                     year: 'numeric', 
-                     month: '2-digit', 
-                     day: '2-digit', 
-                     hour: '2-digit', 
-                     minute: '2-digit',
-                     hour12: false,
-                     timeZone: 'UTC'
-                   });
+                   // データベースから取得した日本時間の値をそのまま表示
+                   return dateStr
+                     .replace(/-/g, '/')           // ハイフンをスラッシュに変換
+                     .replace('T', ' ')            // Tをスペースに変換
+                     .replace(/\.\d{3}Z?$/, '')    // .000Z または .000 を削除
+                     .replace(/\s+/g, ' ');        // 複数のスペースを1つに統一
                  })()}</p>
                  <p className="text-sm text-gray-600">最終更新: {(() => {
                    const dateStr = currentLesson.updated_at;
                    if (!dateStr) return '';
-                   // データベースの値を変更せず、表示形式のみ成型（UTC扱いで解釈）
-                   const date = new Date(dateStr);
-                   return date.toLocaleString('ja-JP', { 
-                     year: 'numeric', 
-                     month: '2-digit', 
-                     day: '2-digit', 
-                     hour: '2-digit', 
-                     minute: '2-digit',
-                     hour12: false,
-                     timeZone: 'UTC'
-                   });
+                   // データベースから取得した日本時間の値をそのまま表示
+                   return dateStr
+                     .replace(/-/g, '/')           // ハイフンをスラッシュに変換
+                     .replace('T', ' ')            // Tをスペースに変換
+                     .replace(/\.\d{3}Z?$/, '')    // .000Z または .000 を削除
+                     .replace(/\s+/g, ' ');        // 複数のスペースを1つに統一
                  })()}</p>
                </div>
                <div className="flex gap-2">

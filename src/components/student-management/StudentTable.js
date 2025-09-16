@@ -33,7 +33,8 @@ const StudentTable = ({
   onDeleteStudent,
   onViewDailyReports,
   onViewTestResults,
-  onTestApproval
+  onTestApproval,
+  onSubmissionApproval
 }) => {
   console.log('=== StudentTable レンダリング ===');
   console.log('受け取ったstudents:', students);
@@ -55,7 +56,7 @@ const StudentTable = ({
           </thead>
           <tbody className="divide-y divide-gray-100">
             {students.map((student, index) => (
-              <tr key={student.id} className={`hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200 ${
+              <tr key={student.id} id={`student-row-${student.id}`} className={`hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200 ${
                 index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
               }`}>
 
@@ -250,8 +251,8 @@ const StudentTable = ({
                     </button>
                     <button 
                       className="px-2 py-1 bg-purple-600 text-white rounded text-xs font-medium hover:bg-purple-700 transition-all duration-200"
-                      onClick={() => {/* TODO: 提出物確認機能を実装 */}}
-                      title="提出物の確認"
+                      onClick={() => onSubmissionApproval && onSubmissionApproval(student)}
+                      title="提出物の確認・承認"
                     >
                       📄 提出物確認
                     </button>

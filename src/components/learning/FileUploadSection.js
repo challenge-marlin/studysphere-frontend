@@ -13,14 +13,19 @@ const FileUploadSection = ({
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleString('ja-JP', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    if (!dateString) return '';
+    
+    // データベースから取得した日本時間の値をそのまま表示
+    // 例: "2025-09-08 13:52:16" -> "2025/09/08 13:52:16"
+    // 例: "2025-09-08T13:52:16.000Z" -> "2025/09/08 13:52:16"
+    // タイムゾーン変換を避けるため、文字列として直接フォーマット
+    let formatted = dateString
+      .replace(/-/g, '/')           // ハイフンをスラッシュに変換
+      .replace('T', ' ')            // Tをスペースに変換
+      .replace(/\.\d{3}Z?$/, '')    // .000Z または .000 を削除
+      .replace(/\s+/g, ' ');        // 複数のスペースを1つに統一
+    
+    return formatted;
   };
 
   return (
@@ -45,20 +50,26 @@ const FileUploadSection = ({
               </div>
               <div className="flex items-center gap-4 text-xs text-gray-500">
                 <span>アップロード: {file.uploadDate}</span>
-                {file.s3Key && (
+                {file.instructorApproved ? (
+                  <span className="text-green-600 font-mono text-xs bg-green-50 px-2 py-1 rounded">
+                    承認済
+                  </span>
+                ) : file.s3Key ? (
                   <span className="text-blue-600 font-mono text-xs bg-blue-50 px-2 py-1 rounded">
                     ストレージ保存済
                   </span>
-                )}
+                ) : null}
               </div>
             </div>
-            <button 
-              onClick={() => onFileDelete(file.id)}
-              className="ml-3 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium transition-colors hover:bg-red-100"
-              title="ファイルを削除"
-            >
-              削除
-            </button>
+            {!file.instructorApproved && (
+              <button 
+                onClick={() => onFileDelete(file.id)}
+                className="ml-3 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium transition-colors hover:bg-red-100"
+                title="ファイルを削除"
+              >
+                削除
+              </button>
+            )}
           </div>
         ))}
         {uploadedFiles.length === 0 && (

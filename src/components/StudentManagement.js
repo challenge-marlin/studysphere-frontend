@@ -13,13 +13,15 @@ import CourseAssignmentModal from './student-management/CourseAssignmentModal';
 import StudentTable from './student-management/StudentTable';
 import TestApprovalModal from './student-management/TestApprovalModal';
 import PendingApprovalAlert from './student-management/PendingApprovalAlert';
+import SubmissionApprovalModal from './student-management/SubmissionApprovalModal';
+import PendingSubmissionAlert from './student-management/PendingSubmissionAlert';
 
 import TodayActiveModal from './student-management/TodayActiveModal';
 import DailyReportManagement from './DailyReportManagement';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
 
-const StudentManagementRefactored = ({ teacherId }) => {
+const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionApproval }) => {
   const { currentUser, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   
@@ -55,21 +57,61 @@ const StudentManagementRefactored = ({ teacherId }) => {
   const [showTestApprovalModal, setShowTestApprovalModal] = useState(false);
   const [selectedStudentForApproval, setSelectedStudentForApproval] = useState(null);
 
+  // 提出物承認モーダルの状態
+  const [showSubmissionApprovalModal, setShowSubmissionApprovalModal] = useState(false);
+  const [selectedStudentForSubmission, setSelectedStudentForSubmission] = useState(null);
+
   // 合否確認機能
   const handleViewTestResults = (student) => {
     navigate(`/instructor/student-detail/${student.id}`);
   };
 
   // 合格承認機能
-  const handleTestApproval = (student) => {
-    setSelectedStudentForApproval(student);
-    setShowTestApprovalModal(true);
+  const handleTestApprovalInternal = (student) => {
+    if (onTestApproval) {
+      onTestApproval(student);
+    } else {
+      setSelectedStudentForApproval(student);
+      setShowTestApprovalModal(true);
+    }
+  };
+
+  // 提出物確認機能
+  const handleSubmissionApprovalInternal = (student) => {
+    if (onSubmissionApproval) {
+      onSubmissionApproval(student);
+    } else {
+      setSelectedStudentForSubmission(student);
+      setShowSubmissionApprovalModal(true);
+    }
+  };
+
+  // 学生の行にスクロールする機能
+  const scrollToStudent = (studentId) => {
+    const element = document.getElementById(`student-row-${studentId}`);
+    if (element) {
+      element.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      });
+      // ハイライト効果を追加
+      element.style.backgroundColor = '#fef3c7';
+      setTimeout(() => {
+        element.style.backgroundColor = '';
+      }, 2000);
+    }
   };
 
   // 合格承認モーダルを閉じる
   const closeTestApprovalModal = () => {
     setShowTestApprovalModal(false);
     setSelectedStudentForApproval(null);
+  };
+
+  // 提出物承認モーダルを閉じる
+  const closeSubmissionApprovalModal = () => {
+    setShowSubmissionApprovalModal(false);
+    setSelectedStudentForSubmission(null);
   };
 
   // 合格承認成功時の処理
@@ -585,18 +627,41 @@ const StudentManagementRefactored = ({ teacherId }) => {
           </div>
         </div>
 
-        {/* 未承認アラート */}
-        <PendingApprovalAlert 
-          satelliteId={currentSatelliteId}
-          onApprovalClick={(studentId) => {
-            const student = students.find(s => s.id === parseInt(studentId));
-            if (student) {
-              handleTestApproval(student);
-            }
-          }}
-        />
+        {/* 1. テスト未承認アラート */}
+        {currentSatelliteId && (
+          <PendingApprovalAlert 
+            satelliteId={currentSatelliteId}
+            onApprovalClick={(studentId) => {
+              const student = students.find(s => s.id === parseInt(studentId));
+              if (student) {
+                handleTestApprovalInternal(student);
+              }
+            }}
+            onStudentClick={scrollToStudent}
+          />
+        )}
 
-        {/* フィルター部分 */}
+        {/* 2. 提出物未承認アラート */}
+        {currentSatelliteId && (
+          <PendingSubmissionAlert 
+            satelliteId={currentSatelliteId}
+            onSubmissionClick={(studentId) => {
+              const student = students.find(s => s.id === studentId);
+              if (student) {
+                handleSubmissionApprovalInternal(student);
+              }
+            }}
+            onStudentClick={scrollToStudent}
+          />
+        )}
+
+        {/* 3. 利用者一覧ヘッダー */}
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">利用者一覧</h2>
+          <p className="text-gray-600">※利用者の管理と一時パスワード発行を行います</p>
+        </div>
+
+        {/* 4. フィルター部分 */}
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-100">
           <div className="space-y-6">
             {/* トップフィルター */}
@@ -686,7 +751,8 @@ const StudentManagementRefactored = ({ teacherId }) => {
             onDeleteStudent={deleteStudent}
             onViewDailyReports={openDailyReportModal}
             onViewTestResults={handleViewTestResults}
-            onTestApproval={handleTestApproval}
+            onTestApproval={handleTestApprovalInternal}
+            onSubmissionApproval={handleSubmissionApprovalInternal}
           />
         </div>
 
@@ -1300,6 +1366,16 @@ const StudentManagementRefactored = ({ teacherId }) => {
             onClose={closeTestApprovalModal}
             student={selectedStudentForApproval}
             satelliteId={currentSatelliteId}
+            onApprovalSuccess={handleApprovalSuccess}
+          />
+        )}
+
+        {/* 提出物承認モーダル */}
+        {showSubmissionApprovalModal && selectedStudentForSubmission && (
+          <SubmissionApprovalModal
+            isOpen={showSubmissionApprovalModal}
+            onClose={closeSubmissionApprovalModal}
+            student={selectedStudentForSubmission}
             onApprovalSuccess={handleApprovalSuccess}
           />
         )}

@@ -643,3 +643,29 @@ export const approveTest = async (examResultId, studentId, lessonId) => {
     lessonId
   });
 };
+
+// 提出物承認関連のAPI
+export const getPendingSubmissions = async (satelliteId) => {
+  return apiGet(`/api/submissions/instructor/pending-submissions/${satelliteId}`);
+};
+
+export const getStudentSubmissions = async (studentId) => {
+  return apiGet(`/api/submissions/instructor/student/${studentId}/submissions`);
+};
+
+export const downloadSubmission = async (submissionId) => {
+  return apiDownloadBinary(`/api/submissions/instructor/download/${submissionId}`);
+};
+
+export const approveSubmission = async (submissionId, studentId, lessonId, comment = '') => {
+  return apiPost('/api/submissions/instructor/approve-submission', {
+    submissionId,
+    studentId,
+    lessonId,
+    comment
+  });
+};
+
+export const getPendingSubmissionCount = async (satelliteId) => {
+  return apiGet(`/api/submissions/instructor/pending-count/${satelliteId}`);
+};

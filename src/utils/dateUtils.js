@@ -1,5 +1,6 @@
 /**
- * フロントエンド用の日本時間での時刻処理を統一するためのユーティリティ関数
+ * フロントエンド用の時刻処理を統一するためのユーティリティ関数
+ * データベースは既に日本時間で保存されているため、追加のタイムゾーン変換は行わない
  */
 
 /**
@@ -40,34 +41,12 @@ export const getCurrentJapanTime = () => {
 };
 
 /**
- * 日本時間での日付文字列を取得
+ * 日付文字列を取得（データベースの時間データをそのまま表示）
  * @param {Date|string} date - 日付
  * @param {Object} options - オプション
- * @returns {string} 日本時間での日付文字列
+ * @returns {string} 日付文字列
  */
 export const formatJapanTime = (date, options = {}) => {
-  const defaultOptions = {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    timeZone: 'Asia/Tokyo'
-  };
-  
-  const dateObj = new Date(date);
-  return dateObj.toLocaleString('ja-JP', { ...defaultOptions, ...options });
-};
-
-/**
- * データベースから取得したタイムスタンプを表示用にフォーマット
- * （データベースは既に日本時間で保存されているが、UTC形式で送信されるため、9時間を引く）
- * @param {Date|string} date - 日付
- * @param {Object} options - オプション
- * @returns {string} 表示用日付文字列
- */
-export const formatDatabaseTime = (date, options = {}) => {
   const defaultOptions = {
     year: 'numeric',
     month: '2-digit',
@@ -78,38 +57,73 @@ export const formatDatabaseTime = (date, options = {}) => {
   };
   
   const dateObj = new Date(date);
-  // データベースから取得したタイムスタンプは既に日本時間だが、UTC形式で送信されるため、9時間を引く
-  const japanTime = new Date(dateObj.getTime() - (9 * 60 * 60 * 1000));
-  return japanTime.toLocaleString('ja-JP', { ...defaultOptions, ...options });
+  return dateObj.toLocaleString('ja-JP', { ...defaultOptions, ...options });
 };
 
 /**
- * 日本時間での日付のみ文字列を取得
+ * データベースから取得したタイムスタンプを表示用にフォーマット
+ * （データベースは既に日本時間で保存されているため、そのまま表示）
  * @param {Date|string} date - 日付
- * @returns {string} 日本時間での日付文字列（YYYY-MM-DD）
+ * @param {Object} options - オプション
+ * @returns {string} 表示用日付文字列
+ */
+export const formatDatabaseTime = (date, options = {}) => {
+  if (!date) return '';
+  
+  // データベースから取得した日本時間の値をそのまま表示
+  // タイムゾーン変換を避けるため、文字列として直接フォーマット
+  const dateString = date.toString();
+  
+  // ISO形式またはDATETIME形式の場合
+  if (dateString.includes('-') && (dateString.includes(' ') || dateString.includes('T'))) {
+    let formatted = dateString
+      .replace(/-/g, '/')           // ハイフンをスラッシュに変換
+      .replace('T', ' ')            // Tをスペースに変換
+      .replace(/\.\d{3}Z?$/, '')    // .000Z または .000 を削除
+      .replace(/\s+/g, ' ');        // 複数のスペースを1つに統一
+    
+    return formatted;
+  }
+  
+  // その他の場合は従来の方法を使用
+  const defaultOptions = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  };
+  
+  const dateObj = new Date(date);
+  return dateObj.toLocaleString('ja-JP', { ...defaultOptions, ...options });
+};
+
+/**
+ * 日付のみ文字列を取得（データベースの時間データをそのまま表示）
+ * @param {Date|string} date - 日付
+ * @returns {string} 日付文字列（YYYY-MM-DD）
  */
 export const formatJapanDate = (date) => {
   const dateObj = new Date(date);
   return dateObj.toLocaleDateString('ja-JP', {
     year: 'numeric',
     month: '2-digit',
-    day: '2-digit',
-    timeZone: 'Asia/Tokyo'
+    day: '2-digit'
   }).replace(/\//g, '-');
 };
 
 /**
- * 日本時間での時刻のみ文字列を取得
+ * 時刻のみ文字列を取得（データベースの時間データをそのまま表示）
  * @param {Date|string} date - 日付
- * @returns {string} 日本時間での時刻文字列（HH:MM:SS）
+ * @returns {string} 時刻文字列（HH:MM:SS）
  */
 export const formatJapanTimeOnly = (date) => {
   const dateObj = new Date(date);
   return dateObj.toLocaleTimeString('ja-JP', {
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit',
-    timeZone: 'Asia/Tokyo'
+    second: '2-digit'
   });
 };
 

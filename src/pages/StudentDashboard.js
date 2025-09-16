@@ -562,10 +562,24 @@ const StudentDashboard = () => {
         )}
 
         <div className="space-y-8">
-          {/* ダッシュボード */}
-          <div className="bg-white rounded-2xl shadow-xl p-8">
-            <Dashboard onTabChange={handleTabChange} />
-          </div>
+          {/* アクティブタブに応じたコンテンツ表示 */}
+          {activeTab === 'dashboard' && (
+            <div className="bg-white rounded-2xl shadow-xl p-8">
+              <Dashboard onTabChange={handleTabChange} />
+            </div>
+          )}
+          
+          {activeTab === 'lessons' && (
+            <div className="bg-white rounded-2xl shadow-xl p-8">
+              <LessonList selectedCourseId={selectedCourseId} />
+            </div>
+          )}
+          
+          {activeTab === 'career-assessment' && (
+            <div className="bg-white rounded-2xl shadow-xl p-8">
+              <CareerAssessment />
+            </div>
+          )}
         </div>
       </main>
     </div>

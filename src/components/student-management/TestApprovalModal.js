@@ -20,8 +20,18 @@ const TestApprovalModal = ({
     setLoading(true);
     setError(null);
     
+    // 認証トークンの状態を確認
+    const accessToken = localStorage.getItem('accessToken');
+    console.log('TestApprovalModal: 認証トークン確認:', {
+      hasToken: !!accessToken,
+      tokenLength: accessToken ? accessToken.length : 0,
+      tokenPreview: accessToken ? accessToken.substring(0, 20) + '...' : 'なし'
+    });
+    
     try {
+      console.log('TestApprovalModal: getPendingApprovals呼び出し開始, satelliteId:', satelliteId, 'type:', typeof satelliteId);
       const response = await getPendingApprovals(satelliteId);
+      console.log('TestApprovalModal: getPendingApprovalsレスポンス:', response);
       if (response.success) {
         // 選択された学生のテストのみをフィルタリング
         const studentTests = response.data.filter(test => test.user_id === student.id);
@@ -31,7 +41,13 @@ const TestApprovalModal = ({
       }
     } catch (error) {
       console.error('未承認テスト取得エラー:', error);
-      setError('未承認テストの取得中にエラーが発生しました');
+      console.error('エラー詳細:', {
+        message: error.message,
+        stack: error.stack,
+        response: error.response,
+        status: error.status
+      });
+      setError(`未承認テストの取得中にエラーが発生しました: ${error.message}`);
     } finally {
       setLoading(false);
     }

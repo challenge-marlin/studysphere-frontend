@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getPendingApprovals } from '../../utils/api';
 
-const PendingApprovalAlert = ({ satelliteId, onApprovalClick }) => {
+const PendingApprovalAlert = ({ satelliteId, onApprovalClick, onStudentClick }) => {
   const [pendingApprovals, setPendingApprovals] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -79,7 +79,11 @@ const PendingApprovalAlert = ({ satelliteId, onApprovalClick }) => {
           <div key={studentId} className="bg-white rounded-lg p-3 border border-yellow-200">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <h4 className="font-medium text-gray-800 mb-1">
+                <h4 
+                  className="font-medium text-gray-800 mb-1 cursor-pointer hover:text-yellow-700 transition-colors"
+                  onClick={() => onStudentClick && onStudentClick(studentId)}
+                  title="クリックして該当者の行に移動"
+                >
                   {studentData.student_name}さん
                 </h4>
                 <div className="space-y-1">
@@ -87,8 +91,11 @@ const PendingApprovalAlert = ({ satelliteId, onApprovalClick }) => {
                     <div key={test.exam_result_id} className="flex items-center gap-2 text-sm">
                       <span className="text-gray-600">
                         {test.lesson_name}のテスト合格が未承認です
+                        {test.score && test.score > 0 && (
+                          <span className="ml-1 text-gray-500">({test.score}点)</span>
+                        )}
                       </span>
-                      {test.has_assignment && (
+                      {test.has_assignment === 1 && (
                         <span className="text-orange-600">
                           （提出物の承認も必要）
                         </span>
@@ -97,19 +104,13 @@ const PendingApprovalAlert = ({ satelliteId, onApprovalClick }) => {
                   ))}
                 </div>
               </div>
-              <button
-                onClick={() => onApprovalClick && onApprovalClick(studentId)}
-                className="ml-4 px-3 py-1 bg-yellow-600 text-white rounded text-sm hover:bg-yellow-700 transition-colors"
-              >
-                承認する
-              </button>
             </div>
           </div>
         ))}
       </div>
       
       <div className="mt-3 text-xs text-yellow-700">
-        💡 合格承認ボタンから個別に承認できます
+        💡 学生名をクリックして該当者の行に移動し、合格承認ボタンから個別に承認できます
       </div>
     </div>
   );

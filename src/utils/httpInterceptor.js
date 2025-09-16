@@ -17,7 +17,8 @@ const isAuthRequiredEndpoint = (url) => {
     '/instructor-login',
     '/refresh',
     '/register',
-    '/forgot-password'
+    '/forgot-password',
+    '/api/messages/unread-count'
   ];
   
   // 静的リソースやHMRファイルを除外

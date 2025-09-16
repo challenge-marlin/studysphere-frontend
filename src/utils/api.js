@@ -63,6 +63,23 @@ export const apiCall = async (endpoint, options = {}, retryCount = 0) => {
     
     // 認証エラーの場合
     if (response.status === 401 || response.status === 403) {
+      // 認証が不要なエンドポイントの場合は処理をスキップ
+      const authExcludedEndpoints = [
+        '/login',
+        '/instructor-login',
+        '/refresh',
+        '/register',
+        '/forgot-password',
+        '/api/messages/unread-count'
+      ];
+      
+      const isAuthExcluded = authExcludedEndpoints.some(excludedEndpoint => endpoint.includes(excludedEndpoint));
+      
+      if (isAuthExcluded) {
+        console.log('認証不要エンドポイントのため、認証エラー処理をスキップします');
+        return response;
+      }
+      
       isAuthErrorHandling = true;
       console.warn('認証エラーを検出しました。リダイレクト処理を開始します。');
       
@@ -246,6 +263,23 @@ export const apiDownloadBinary = async (endpoint, options = {}) => {
     
     // 認証エラーの場合
     if (response.status === 401 || response.status === 403) {
+      // 認証が不要なエンドポイントの場合は処理をスキップ
+      const authExcludedEndpoints = [
+        '/login',
+        '/instructor-login',
+        '/refresh',
+        '/register',
+        '/forgot-password',
+        '/api/messages/unread-count'
+      ];
+      
+      const isAuthExcluded = authExcludedEndpoints.some(excludedEndpoint => endpoint.includes(excludedEndpoint));
+      
+      if (isAuthExcluded) {
+        console.log('認証不要エンドポイントのため、認証エラー処理をスキップします');
+        return response;
+      }
+      
       isAuthErrorHandling = true;
       console.warn('認証エラーを検出しました。リダイレクト処理を開始します。');
       

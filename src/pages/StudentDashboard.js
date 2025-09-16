@@ -359,6 +359,12 @@ const StudentDashboard = () => {
 
   // 新着メッセージ確認
   const checkNewMessages = async () => {
+    // 認証されていない場合はスキップ
+    if (!currentUser) {
+      console.log('認証されていないため、新着メッセージ確認をスキップします');
+      return;
+    }
+
     try {
       const response = await apiGet('/api/messages/unread-count');
       if (response.success && response.data.unread_count > 0) {
@@ -380,6 +386,12 @@ const StudentDashboard = () => {
 
   // 定期確認の開始
   const startMessagePolling = () => {
+    // 認証されていない場合はスキップ
+    if (!currentUser) {
+      console.log('認証されていないため、メッセージ定期確認を開始しません');
+      return;
+    }
+
     if (messagePollingInterval) {
       clearInterval(messagePollingInterval);
     }

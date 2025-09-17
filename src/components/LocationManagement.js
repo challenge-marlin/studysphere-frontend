@@ -3002,13 +3002,6 @@ const LocationManagement = () => {
                               <td className="px-4 py-3">
                                 <div className="flex gap-2">
                                   <button 
-                                    onClick={() => handleRegenerateCompanyToken(company.id)}
-                                    className="px-3 py-1 bg-blue-500 text-white rounded text-sm font-medium transition-colors duration-300 hover:bg-blue-600"
-                                    title="管理トークンを再生成"
-                                  >
-                                    再生成
-                                  </button>
-                                  <button 
                                     onClick={() => handleDeleteCompany(company)}
                                     className="px-3 py-1 bg-red-500 text-white rounded text-sm font-medium transition-colors duration-300 hover:bg-red-600"
                                     title="企業を削除"

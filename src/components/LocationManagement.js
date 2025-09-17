@@ -684,9 +684,31 @@ const LocationManagement = () => {
   };
 
   // 削除ハンドラー
-  const handleDeleteOffice = (office) => {
-    if (window.confirm(`「${office.name}」を削除しますか？\nこの操作は取り消せません。`)) {
-      alert(`「${office.name}」を削除しました。`);
+  const handleDeleteOffice = async (office) => {
+    if (!window.confirm(`「${office.name}」を削除しますか？\nこの操作は取り消せません。`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/satellites/${office.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        showNotification('事業所が正常に削除されました', 'success');
+        // 事業所一覧を再取得
+        await fetchSatellites();
+      } else {
+        showNotification(`事業所の削除に失敗しました: ${result.message}`, 'error');
+      }
+    } catch (error) {
+      console.error('事業所削除エラー:', error);
+      showNotification('事業所の削除に失敗しました', 'error');
     }
   };
 

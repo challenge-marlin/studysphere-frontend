@@ -979,14 +979,14 @@ const AdminManagement = () => {
 
         <div className="bg-white rounded-xl shadow-lg overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-fixed">
               <thead className="bg-red-50">
                 <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">📅 日時</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">👤 管理者</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">⚡ 操作</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">📝 詳細</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-red-800">🌐 IPアドレス</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-red-800" style={{ width: '180px' }}>📅 日時</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-red-800" style={{ width: '150px' }}>👤 管理者・指導員</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-red-800" style={{ width: '120px' }}>⚡ 操作</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-red-800" style={{ width: '300px' }}>📝 詳細</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-red-800" style={{ width: '140px' }}>🌐 IPアドレス</th>
                 </tr>
               </thead>
               <tbody>

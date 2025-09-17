@@ -18,7 +18,8 @@ const isAuthRequiredEndpoint = (url) => {
     '/refresh',
     '/register',
     '/forgot-password',
-    '/api/messages/unread-count'
+    '/api/messages/unread-count',
+    '/verify-temp-password'
   ];
   
   // 静的リソースやHMRファイルを除外

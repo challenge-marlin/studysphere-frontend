@@ -15,6 +15,7 @@ import TestApprovalModal from './student-management/TestApprovalModal';
 import PendingApprovalAlert from './student-management/PendingApprovalAlert';
 import SubmissionApprovalModal from './student-management/SubmissionApprovalModal';
 import PendingSubmissionAlert from './student-management/PendingSubmissionAlert';
+import ModalErrorDisplay from './common/ModalErrorDisplay';
 
 import TodayActiveModal from './student-management/TodayActiveModal';
 import DailyReportManagement from './DailyReportManagement';
@@ -1021,6 +1022,7 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
                       studentAdder.setBulkInputMode(false);
                       studentAdder.setBulkInputText('');
                       studentAdder.setBulkInstructorId('');
+                      studentAdder.setModalError(null);
                     }}
                   >
                     ×
@@ -1029,6 +1031,12 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
               </div>
               
               <div className="p-6">
+                {/* エラー表示 */}
+                <ModalErrorDisplay 
+                  error={studentAdder.modalError} 
+                  onClose={() => studentAdder.setModalError(null)} 
+                />
+                
                 <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-xl">
                   <button 
                     className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all duration-200 ${

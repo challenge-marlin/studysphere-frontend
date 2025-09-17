@@ -35,7 +35,13 @@ const TestComponent = () => (
 
 function App() {
   return (
-    <Router basename={process.env.PUBLIC_URL}>
+    <Router 
+      basename={process.env.PUBLIC_URL}
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true
+      }}
+    >
       <AuthProvider>
         <div className="App">
           <Routes>

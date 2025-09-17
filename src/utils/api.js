@@ -623,10 +623,23 @@ export const removeHomeSupportFlag = (userId) => {
  * @returns {Promise} - 検証結果
  */
 export const verifyTemporaryPasswordAPI = async (loginCode, tempPassword) => {
-  return apiCall('/api/users/verify-temp-password', {
+  const result = await apiCall('/api/users/verify-temp-password', {
     method: 'POST',
     body: JSON.stringify({ loginCode, tempPassword })
   });
+  
+  // フロントエンドで期限チェックを実行
+  if (result.success && result.data && result.data.expiresAt) {
+    const { isExpired } = await import('./dateUtils');
+    if (isExpired(result.data.expiresAt)) {
+      return {
+        success: false,
+        message: 'パスワードの有効期限が切れています'
+      };
+    }
+  }
+  
+  return result;
 };
 
 /**
@@ -635,9 +648,26 @@ export const verifyTemporaryPasswordAPI = async (loginCode, tempPassword) => {
  * @returns {Promise} - 状態確認結果
  */
 export const checkTempPasswordStatusAPI = async (loginCode) => {
-  return apiCall(`/api/temp-passwords/status/${loginCode}`, {
+  const result = await apiCall(`/api/temp-passwords/status/${loginCode}`, {
     method: 'GET'
   });
+  
+  // フロントエンドで期限チェックを実行
+  if (result.success && result.data && result.data.expiresAt) {
+    const { isExpired } = await import('./dateUtils');
+    const expired = isExpired(result.data.expiresAt);
+    
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        hasValidPassword: !expired,
+        message: expired ? '一時パスワードの有効期限が切れています' : '有効な一時パスワードがあります'
+      }
+    };
+  }
+  
+  return result;
 };
 
 /**

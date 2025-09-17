@@ -9,6 +9,7 @@ import {
   clearOperationLogs, 
   exportLogsToCSV
 } from '../utils/operationLogManager';
+import ModalErrorDisplay from './common/ModalErrorDisplay';
 
 const AdminManagement = () => {
   const [admins, setAdmins] = useState([]);
@@ -225,6 +226,15 @@ const AdminManagement = () => {
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
+    
+    // ログインIDの場合は半角英数記号のみを許可
+    if (name === 'username') {
+      // 半角英数字、アンダースコア、ハイフン、スラッシュ、ドットのみを許可
+      if (!/^[a-zA-Z0-9_/.-]*$/.test(value)) {
+        return; // 無効な文字は入力しない
+      }
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
@@ -238,7 +248,7 @@ const AdminManagement = () => {
       if (editingAdmin) {
         // 編集モード
         const result = await apiPut(`/api/admins/${editingAdmin.id}`, formData);
-                      if (result.success) {
+        if (result.success) {
           await fetchAdmins(); // 一覧を再取得
           const currentUser = getCurrentUser();
           const adminName = currentUser ? currentUser.name || currentUser.username : '不明な管理者';
@@ -247,6 +257,20 @@ const AdminManagement = () => {
             adminId: adminId,
             adminName: adminName
           });
+          
+          // 成功時のみフォームをリセットしてモーダルを閉じる
+          setFormData({
+            name: '',
+            email: '',
+            username: '',
+            password: '',
+            role: 9,
+            status: 'active',
+            company_id: null
+          });
+          setShowAddForm(false);
+          setEditingAdmin(null);
+          setError(null);
         } else {
           setError(result.message || '管理者の更新に失敗しました');
           return;
@@ -263,25 +287,25 @@ const AdminManagement = () => {
             adminId: adminId,
             adminName: adminName
           });
+          
+          // 成功時のみフォームをリセットしてモーダルを閉じる
+          setFormData({
+            name: '',
+            email: '',
+            username: '',
+            password: '',
+            role: 9,
+            status: 'active',
+            company_id: null
+          });
+          setShowAddForm(false);
+          setEditingAdmin(null);
+          setError(null);
         } else {
           setError(result.message || '管理者の作成に失敗しました');
           return;
         }
       }
-
-      // フォームをリセット
-      setFormData({
-        name: '',
-        email: '',
-        username: '',
-        password: '',
-        role: 9,
-        status: 'active',
-        company_id: null
-      });
-      setShowAddForm(false);
-      setEditingAdmin(null);
-      setError(null);
     } catch (err) {
       console.error('管理者操作エラー:', err);
       setError('操作に失敗しました');
@@ -578,10 +602,17 @@ const AdminManagement = () => {
             <h3 className="text-2xl font-bold text-gray-800 mb-6">
               {editingAdmin ? '管理者情報編集' : '管理者追加'}
             </h3>
+            
+            {/* エラー表示 */}
+            <ModalErrorDisplay 
+              error={error} 
+              onClose={() => setError(null)} 
+            />
+            
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">氏名 *</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">ユーザ名 *</label>
                   <input
                     type="text"
                     name="name"
@@ -593,7 +624,7 @@ const AdminManagement = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">ユーザー名 *</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">ユーザID *</label>
                   <input
                     type="text"
                     name="username"
@@ -603,6 +634,7 @@ const AdminManagement = () => {
                     placeholder="yamada_admin"
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
                   />
+                  <p className="text-xs text-gray-500 mt-1">使用可能文字: 半角英数字、アンダースコア(_)、ハイフン(-)、スラッシュ(/)、ドット(.)</p>
                 </div>
               </div>
 
@@ -628,9 +660,11 @@ const AdminManagement = () => {
                     value={formData.password}
                     onChange={handleInputChange}
                     required={!editingAdmin}
+                    minLength="6"
                     placeholder="パスワード"
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
                   />
+                  <p className="text-xs text-gray-500 mt-1">6文字以上で入力してください</p>
                 </div>
               </div>
 
@@ -692,7 +726,7 @@ const AdminManagement = () => {
                     className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200"
                     onClick={() => handleSort('name')}
                   >
-                    👤 氏名
+                    👤 ユーザ名
                     {sortConfig.key === 'name' && (
                       <span className="ml-1">
                         {sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}
@@ -703,7 +737,7 @@ const AdminManagement = () => {
                     className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200"
                     onClick={() => handleSort('username')}
                   >
-                    🆔 ユーザー名
+                    🆔 ユーザID
                     {sortConfig.key === 'username' && (
                       <span className="ml-1">
                         {sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}

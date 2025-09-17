@@ -4,6 +4,7 @@ import SanitizedTextarea from './SanitizedTextarea';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 import { apiGet, apiPost, apiPut, apiDelete, apiCall } from '../utils/api';
 import { useAuth } from './contexts/AuthContext';
+import ModalErrorDisplay from './common/ModalErrorDisplay';
 
 const InstructorManagement = () => {
   const { currentUser } = useAuth();
@@ -64,6 +65,7 @@ const InstructorManagement = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [showNoLocationFilter, setShowNoLocationFilter] = useState(false);
   const [satelliteManagers, setSatelliteManagers] = useState({});
+  const [modalError, setModalError] = useState(null);
   
   const [newInstructor, setNewInstructor] = useState({
     name: '',
@@ -412,8 +414,8 @@ const InstructorManagement = () => {
       return;
     }
     
-    if (!/^[a-zA-Z0-9_]+$/.test(newInstructor.username)) {
-      alert('ログインIDは半角英数字とアンダースコアのみ使用可能です。');
+    if (!/^[a-zA-Z0-9_/.-]+$/.test(newInstructor.username)) {
+      alert('ログインIDは半角英数字、アンダースコア、ハイフン、スラッシュ、ドットのみ使用可能です。');
       return;
     }
     
@@ -504,6 +506,7 @@ const InstructorManagement = () => {
       
       // バックエンドで操作ログが記録されるため、フロントエンドでは記録しない
       
+      // 成功時のみフォームをリセットしてモーダルを閉じる
       setNewInstructor({
         name: '',
         username: '', // ログインIDを追加
@@ -515,11 +518,12 @@ const InstructorManagement = () => {
         password: ''
       });
       setShowAddForm(false);
+      setModalError(null);
       
       alert('指導員が正常に追加されました。');
     } catch (error) {
       console.error('指導員追加エラー:', error);
-      alert(`指導員の追加に失敗しました: ${error.message}`);
+      setModalError(`指導員の追加に失敗しました: ${error.message}`);
     }
   };
 
@@ -624,8 +628,8 @@ const InstructorManagement = () => {
       return;
     }
     
-    if (!/^[a-zA-Z0-9_]+$/.test(selectedInstructor.username)) {
-      alert('ログインIDは半角英数字とアンダースコアのみ使用可能です。');
+    if (!/^[a-zA-Z0-9_/.-]+$/.test(selectedInstructor.username)) {
+      alert('ログインIDは半角英数字、アンダースコア、ハイフン、スラッシュ、ドットのみ使用可能です。');
       return;
     }
     
@@ -1057,7 +1061,7 @@ const InstructorManagement = () => {
                    className="px-6 py-4 text-left text-sm font-semibold text-red-800 cursor-pointer hover:bg-red-100 transition-colors duration-200"
                    onClick={() => handleSort('username')}
                  >
-                   🔑 ログインID
+                   🔑 ユーザID
                    {sortConfig.key === 'username' && (
                      <span className="ml-1">
                        {sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}
@@ -1158,14 +1162,14 @@ const InstructorManagement = () => {
                           const locationId = instructor.facilityLocationIds[index];
                           const isManager = isSatelliteManager(instructor.id, locationId);
                           return (
-                            <div key={index} className="flex items-center gap-1">
+                            <div key={index} className="flex flex-col">
                               <span className={`px-2 py-1 rounded-full text-xs font-medium block ${
                                 isManager ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
                               }`}>
                                 {isManager && '👑 '}{name}
                               </span>
                               {isManager && (
-                                <span className="text-xs text-gray-500">(管理者)</span>
+                                <span className="text-xs text-gray-500 mt-1">(管理者)</span>
                               )}
                             </div>
                           );
@@ -1398,13 +1402,22 @@ const InstructorManagement = () => {
               <h3 className="text-xl font-bold text-gray-800">新しい指導員を追加</h3>
               <button 
                 className="text-gray-400 hover:text-gray-600 text-2xl font-bold transition-colors duration-200"
-                onClick={() => setShowAddForm(false)}
+                onClick={() => {
+                  setShowAddForm(false);
+                  setModalError(null);
+                }}
               >
                 ×
               </button>
             </div>
             
             <div className="flex-1 overflow-y-auto p-6">
+              {/* エラー表示 */}
+              <ModalErrorDisplay 
+                error={modalError} 
+                onClose={() => setModalError(null)} 
+              />
+              
               <form onSubmit={handleAddInstructor} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">指導員名:</label>
@@ -1419,19 +1432,19 @@ const InstructorManagement = () => {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">ログインID: <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ユーザID: <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   name="username"
                   value={newInstructor.username}
                   onChange={handleInputChange}
                   required
-                  pattern="[a-zA-Z0-9_]+"
-                  title="半角英数字とアンダースコアのみ使用可能です"
+                  pattern="[a-zA-Z0-9_/.-]+"
+                  title="半角英数字、アンダースコア、ハイフン、スラッシュ、ドットのみ使用可能です"
                   placeholder="例: instructor001"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
                 />
-                <p className="text-xs text-gray-500 mt-1">半角英数字とアンダースコアのみ使用可能です</p>
+                <p className="text-xs text-gray-500 mt-1">使用可能文字: 半角英数字、アンダースコア(_)、ハイフン(-)、スラッシュ(/)、ドット(.)</p>
               </div>
               
               <div>
@@ -1547,8 +1560,10 @@ const InstructorManagement = () => {
                   value={newInstructor.password}
                   onChange={handleInputChange}
                   required
+                  minLength="6"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
                 />
+                <p className="text-xs text-gray-500 mt-1">6文字以上で入力してください</p>
               </div>
               
               <div className="flex gap-3 pt-4">
@@ -1604,19 +1619,19 @@ const InstructorManagement = () => {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">ログインID: <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ユーザID: <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   name="username"
                   value={selectedInstructor.username}
                   onChange={handleEditInputChange}
                   required
-                  pattern="[a-zA-Z0-9_]+"
-                  title="半角英数字とアンダースコアのみ使用可能です"
+                  pattern="[a-zA-Z0-9_/.-]+"
+                  title="半角英数字、アンダースコア、ハイフン、スラッシュ、ドットのみ使用可能です"
                   placeholder="例: instructor001"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
                 />
-                <p className="text-xs text-gray-500 mt-1">半角英数字とアンダースコアのみ使用可能です</p>
+                <p className="text-xs text-gray-500 mt-1">使用可能文字: 半角英数字、アンダースコア(_)、ハイフン(-)、スラッシュ(/)、ドット(.)</p>
               </div>
               
               <div>

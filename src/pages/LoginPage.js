@@ -192,6 +192,15 @@ const LoginPage = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    
+    // ログインIDの場合は半角英数記号のみを許可
+    if (name === 'id') {
+      // 半角英数字とアンダースコアのみを許可
+      if (!/^[a-zA-Z0-9_]*$/.test(value)) {
+        return; // 無効な文字は入力しない
+      }
+    }
+    
     setCredentials(prev => ({
       ...prev,
       [name]: value

@@ -4,6 +4,7 @@ import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 import { apiGet, apiPut } from '../utils/api';
 import { useAuth } from './contexts/AuthContext';
 import { isExpired, getCurrentJapanTime } from '../utils/dateUtils';
+import ModalErrorDisplay from './common/ModalErrorDisplay';
 // import { fetch } from '../utils/httpInterceptor'; // 一時的に無効化
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
@@ -57,6 +58,7 @@ const LocationManagement = () => {
   const [error, setError] = useState(null);
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
   const [alertShown, setAlertShown] = useState(false); // アラート表示済みフラグ
+  const [modalError, setModalError] = useState(null);
 
   // 企業一覧（DBから取得）
   const [companies, setCompanies] = useState([]);
@@ -884,7 +886,10 @@ const LocationManagement = () => {
         expiry: result.data.token_expiry_at
       });
       showNotification('拠点が正常に追加されました', 'success');
+      
+      // 成功時のみフォームをリセットしてモーダルを閉じる
       setShowOfficeForm(false);
+      setModalError(null);
       // フォームをリセット
       setNewOffice({
         company_id: '',
@@ -905,7 +910,7 @@ const LocationManagement = () => {
       await fetchCompanies();
     } catch (err) {
       console.error('拠点追加エラー:', err);
-      showNotification(err.message, 'error');
+      setModalError(err.message);
     } finally {
       setAddOfficeLoading(false);
     }
@@ -2347,6 +2352,13 @@ const LocationManagement = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-8 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto shadow-2xl">
             <h3 className="text-2xl font-bold text-gray-800 mb-6">事業所追加</h3>
+            
+            {/* エラー表示 */}
+            <ModalErrorDisplay 
+              error={modalError} 
+              onClose={() => setModalError(null)} 
+            />
+            
             <form className="space-y-6" onSubmit={e => { e.preventDefault(); handleAddOffice(); }}>
               
               {/* 組織選択セクション */}
@@ -2537,7 +2549,10 @@ const LocationManagement = () => {
               <div className="flex gap-4 pt-4 border-t border-gray-200">
                 <button 
                   type="button" 
-                  onClick={() => setShowOfficeForm(false)} 
+                  onClick={() => {
+                    setShowOfficeForm(false);
+                    setModalError(null);
+                  }} 
                   className="flex-1 bg-gray-100 text-gray-700 border-2 border-gray-200 px-6 py-3 rounded-lg font-semibold transition-colors duration-300 hover:bg-gray-200"
                 >
                   キャンセル

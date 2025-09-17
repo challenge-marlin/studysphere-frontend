@@ -55,7 +55,7 @@ const LessonTable = ({ lessons, onStartLesson, onTakeTest, onSubmitAssignment, c
                   <td className="px-4 py-3 text-gray-600">{lesson.description}</td>
                   <td className="px-4 py-3 text-gray-500">{lesson.duration}</td>
                   <td className="px-4 py-3">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
                       lesson.progress_status === 'completed'
                         ? 'bg-green-100 text-green-800'
                         : lesson.progress_status === 'in_progress'

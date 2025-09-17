@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import SanitizedInput from '../SanitizedInput';
 import { useAuth } from '../contexts/AuthContext';
+import ModalErrorDisplay from '../common/ModalErrorDisplay';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
 
@@ -18,6 +19,7 @@ const StudentAdder = ({ onStudentAdded, instructors }) => {
   const [bulkInstructorId, setBulkInstructorId] = useState('');
   const [companies, setCompanies] = useState([]);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
+  const [modalError, setModalError] = useState(null);
 
   // 個別入力の処理
   const handleInputChange = (e) => {
@@ -103,6 +105,7 @@ const StudentAdder = ({ onStudentAdded, instructors }) => {
       if (response.ok) {
         alert('利用者が追加されました');
         setShowAddForm(false);
+        setModalError(null);
         setNewStudent({
           name: '',
           email: '',
@@ -112,11 +115,11 @@ const StudentAdder = ({ onStudentAdded, instructors }) => {
         onStudentAdded(); // 親コンポーネントに更新を通知
       } else {
         const errorData = await response.json();
-        alert(`利用者追加に失敗しました: ${errorData.message}`);
+        setModalError(`利用者追加に失敗しました: ${errorData.message}`);
       }
     } catch (error) {
       console.error('利用者追加エラー:', error);
-      alert('利用者追加に失敗しました');
+      setModalError('利用者追加に失敗しました');
     }
   };
 
@@ -242,6 +245,7 @@ const StudentAdder = ({ onStudentAdded, instructors }) => {
       if (response.ok) {
         alert(`${students.length}名の利用者が追加されました`);
         setShowAddForm(false);
+        setModalError(null);
         setBulkInputText('');
         setBulkInstructorId('');
         onStudentAdded(); // 親コンポーネントに更新を通知
@@ -259,11 +263,11 @@ const StudentAdder = ({ onStudentAdded, instructors }) => {
           errorMessage += `\n\n成功: ${errorData.successCount}件`;
         }
         
-        alert(errorMessage);
+        setModalError(errorMessage);
       }
     } catch (error) {
       console.error('一括追加エラー:', error);
-      alert('一括追加に失敗しました');
+      setModalError('一括追加に失敗しました');
     }
   };
 
@@ -281,6 +285,8 @@ const StudentAdder = ({ onStudentAdded, instructors }) => {
     companies,
     loadingCompanies,
     currentUser,
+    modalError,
+    setModalError,
     handleInputChange,
     handleTagChange,
     handleAddStudent,

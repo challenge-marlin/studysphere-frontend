@@ -78,10 +78,22 @@ const AutoLoginPage = () => {
         console.log('AutoLoginPage: 一時パスワード認証を開始');
         
         // 一時パスワード認証を実行
+        console.log('AutoLoginPage: 認証API呼び出し開始');
         const result = await verifyTemporaryPasswordAPI(finalLoginCode, finalTempPassword);
+        console.log('AutoLoginPage: 認証API応答:', result);
         
         if (result.success) {
           console.log('AutoLoginPage: 認証成功:', result.data);
+          
+          // JWTトークンをlocalStorageに保存
+          if (result.data.access_token) {
+            localStorage.setItem('accessToken', result.data.access_token);
+            console.log('AutoLoginPage: アクセストークンを保存');
+          }
+          if (result.data.refresh_token) {
+            localStorage.setItem('refreshToken', result.data.refresh_token);
+            console.log('AutoLoginPage: リフレッシュトークンを保存');
+          }
           
           // 認証情報をlocalStorageに保存
           localStorage.setItem('autoLoginCode', finalLoginCode);
@@ -100,15 +112,18 @@ const AutoLoginPage = () => {
           
           console.log('AutoLoginPage: ユーザーデータを保存:', userData);
           
-          // 認証処理を実行（トークンなしでログイン）
-          login(userData);
+          // 認証処理を実行（JWTトークン付きでログイン）
+          login(userData, result.data.access_token, result.data.refresh_token);
           
           // 認証情報の保存確認
           console.log('AutoLoginPage: 保存された認証情報確認:', {
             autoLoginCode: localStorage.getItem('autoLoginCode'),
             tempPassword: localStorage.getItem('tempPassword') ? '***' : 'なし',
             loginCode: localStorage.getItem('loginCode'),
-            temp_password: localStorage.getItem('temp_password') ? '***' : 'なし'
+            temp_password: localStorage.getItem('temp_password') ? '***' : 'なし',
+            accessToken: localStorage.getItem('accessToken') ? '***' : 'なし',
+            refreshToken: localStorage.getItem('refreshToken') ? '***' : 'なし',
+            currentUser: localStorage.getItem('currentUser') ? '存在' : 'なし'
           });
           
           console.log('AutoLoginPage: 自動ログイン成功');
@@ -117,8 +132,9 @@ const AutoLoginPage = () => {
           navigate('/student/dashboard');
           
         } else {
-          console.error('AutoLoginPage: 認証失敗:', result.message);
-          setError(result.message || '認証に失敗しました');
+          console.error('AutoLoginPage: 認証失敗:', result);
+          const errorMessage = result.message || result.error || '認証に失敗しました';
+          setError(`認証エラー: ${errorMessage}`);
           
           // 3秒後にログインページにリダイレクト
           setTimeout(() => {

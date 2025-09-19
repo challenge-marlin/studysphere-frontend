@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet } from '../utils/api';
+import { getCurrentUserSatelliteId } from '../utils/locationUtils';
+import { useAuth } from './contexts/AuthContext';
 
 const UserFilter = ({ 
     onFilterChange, 
@@ -10,6 +12,7 @@ const UserFilter = ({
     showNameFilter = true,
     className = ""
 }) => {
+    const { currentUser } = useAuth();
     const [filters, setFilters] = useState({
         instructor_filter: 'all',
         name_filter: '',
@@ -27,8 +30,16 @@ const UserFilter = ({
             const instructorEndpoint = apiEndpoint.includes('/announcements/') 
                 ? '/api/announcements/admin/instructors-for-filter'
                 : '/api/messages/instructors-for-filter';
-                
-            const response = await apiGet(instructorEndpoint);
+            
+            // 現在選択中の拠点IDを取得して追加
+            const currentSatelliteId = getCurrentUserSatelliteId(currentUser);
+            const queryParams = new URLSearchParams();
+            if (currentSatelliteId) {
+                queryParams.append('satellite_id', currentSatelliteId);
+            }
+            
+            const url = queryParams.toString() ? `${instructorEndpoint}?${queryParams.toString()}` : instructorEndpoint;
+            const response = await apiGet(url);
             if (response.success) {
                 setAvailableInstructors(response.data);
             }
@@ -43,6 +54,12 @@ const UserFilter = ({
         try {
             setLoading(true);
             const queryParams = new URLSearchParams();
+            
+            // 現在選択中の拠点IDを取得して追加
+            const currentSatelliteId = getCurrentUserSatelliteId(currentUser);
+            if (currentSatelliteId) {
+                queryParams.append('satellite_id', currentSatelliteId);
+            }
             
             if (filters.instructor_filter !== 'all') {
                 queryParams.append('instructor_filter', filters.instructor_filter);

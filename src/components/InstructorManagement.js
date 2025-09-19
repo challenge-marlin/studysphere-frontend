@@ -77,6 +77,75 @@ const InstructorManagement = () => {
     managerSettings: {}, // 拠点ごとの管理者設定
     password: ''
   });
+  
+  // リアルタイムバリデーション用の状態
+  const [usernameValidation, setUsernameValidation] = useState({
+    isChecking: false,
+    isValid: null,
+    message: '',
+    suggestions: []
+  });
+
+  // username重複チェック関数
+  const checkUsernameAvailability = async (username) => {
+    if (!username || username.trim() === '') {
+      setUsernameValidation({
+        isChecking: false,
+        isValid: null,
+        message: '',
+        suggestions: []
+      });
+      return;
+    }
+    
+    setUsernameValidation(prev => ({ ...prev, isChecking: true }));
+    
+    try {
+      const response = await apiGet(`/api/username/check/${encodeURIComponent(username)}`);
+      
+      if (response.success) {
+        setUsernameValidation({
+          isChecking: false,
+          isValid: response.available,
+          message: response.message,
+          suggestions: []
+        });
+        
+        // 利用不可の場合、候補を取得
+        if (!response.available) {
+          try {
+            const suggestionsResponse = await apiGet(`/api/username/suggestions/${encodeURIComponent(username)}`);
+            if (suggestionsResponse.success && suggestionsResponse.suggestions.length > 0) {
+              setUsernameValidation(prev => ({
+                ...prev,
+                suggestions: suggestionsResponse.suggestions
+              }));
+            }
+          } catch (suggestionsError) {
+            console.error('候補取得エラー:', suggestionsError);
+          }
+        }
+      } else {
+        setUsernameValidation({
+          isChecking: false,
+          isValid: false,
+          message: response.message || 'ログインIDのチェックに失敗しました',
+          suggestions: []
+        });
+      }
+    } catch (error) {
+      console.error('username重複チェックエラー:', error);
+      setUsernameValidation({
+        isChecking: false,
+        isValid: false,
+        message: 'ログインIDのチェックに失敗しました',
+        suggestions: []
+      });
+    }
+  };
+
+  // デバウンス用のタイマー
+  const [usernameCheckTimer, setUsernameCheckTimer] = useState(null);
 
   // 企業一覧を取得
   const fetchCompanies = async () => {
@@ -517,6 +586,12 @@ const InstructorManagement = () => {
         managerSettings: {},
         password: ''
       });
+      setUsernameValidation({
+        isChecking: false,
+        isValid: null,
+        message: '',
+        suggestions: []
+      });
       setShowAddForm(false);
       setModalError(null);
       
@@ -529,6 +604,21 @@ const InstructorManagement = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    
+    // usernameの場合はリアルタイムチェックを実行
+    if (name === 'username') {
+      // 既存のタイマーをクリア
+      if (usernameCheckTimer) {
+        clearTimeout(usernameCheckTimer);
+      }
+      
+      // 新しいタイマーを設定（500ms後にチェック実行）
+      const newTimer = setTimeout(() => {
+        checkUsernameAvailability(value);
+      }, 500);
+      setUsernameCheckTimer(newTimer);
+    }
+    
     setNewInstructor(prev => {
       const updated = {
         ...prev,
@@ -752,6 +842,21 @@ const InstructorManagement = () => {
 
   const handleEditInputChange = (e) => {
     const { name, value } = e.target;
+    
+    // usernameの場合はリアルタイムチェックを実行
+    if (name === 'username') {
+      // 既存のタイマーをクリア
+      if (usernameCheckTimer) {
+        clearTimeout(usernameCheckTimer);
+      }
+      
+      // 新しいタイマーを設定（500ms後にチェック実行）
+      const newTimer = setTimeout(() => {
+        checkUsernameAvailability(value);
+      }, 500);
+      setUsernameCheckTimer(newTimer);
+    }
+    
     setSelectedInstructor(prev => ({
       ...prev,
       [name]: value
@@ -1433,18 +1538,80 @@ const InstructorManagement = () => {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">ユーザID: <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  name="username"
-                  value={newInstructor.username}
-                  onChange={handleInputChange}
-                  required
-                  pattern="[a-zA-Z0-9_/.-]+"
-                  title="半角英数字、アンダースコア、ハイフン、スラッシュ、ドットのみ使用可能です"
-                  placeholder="例: instructor001"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="username"
+                    value={newInstructor.username}
+                    onChange={handleInputChange}
+                    required
+                    pattern="[a-zA-Z0-9_/.-]+"
+                    title="半角英数字、アンダースコア、ハイフン、スラッシュ、ドットのみ使用可能です"
+                    placeholder="例: instructor001"
+                    className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors duration-300 ${
+                      usernameValidation.isValid === true 
+                        ? 'border-green-400 focus:border-green-500' 
+                        : usernameValidation.isValid === false 
+                        ? 'border-red-400 focus:border-red-500' 
+                        : 'border-gray-200 focus:border-indigo-400'
+                    }`}
+                  />
+                  {usernameValidation.isChecking && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-500"></div>
+                    </div>
+                  )}
+                  {usernameValidation.isValid === true && !usernameValidation.isChecking && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <svg className="h-4 w-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  )}
+                  {usernameValidation.isValid === false && !usernameValidation.isChecking && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <svg className="h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
                 <p className="text-xs text-gray-500 mt-1">使用可能文字: 半角英数字、アンダースコア(_)、ハイフン(-)、スラッシュ(/)、ドット(.)</p>
+                
+                {/* バリデーションメッセージ */}
+                {usernameValidation.message && (
+                  <div className={`mt-2 text-sm ${
+                    usernameValidation.isValid === true 
+                      ? 'text-green-600' 
+                      : usernameValidation.isValid === false 
+                      ? 'text-red-600' 
+                      : 'text-gray-600'
+                  }`}>
+                    {usernameValidation.message}
+                  </div>
+                )}
+                
+                {/* 候補表示 */}
+                {usernameValidation.suggestions.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-600 mb-1">利用可能な候補:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {usernameValidation.suggestions.map((suggestion, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => {
+                            setNewInstructor(prev => ({ ...prev, username: suggestion }));
+                            checkUsernameAvailability(suggestion);
+                          }}
+                          className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition-colors"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               
               <div>
@@ -1620,18 +1787,80 @@ const InstructorManagement = () => {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">ユーザID: <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  name="username"
-                  value={selectedInstructor.username}
-                  onChange={handleEditInputChange}
-                  required
-                  pattern="[a-zA-Z0-9_/.-]+"
-                  title="半角英数字、アンダースコア、ハイフン、スラッシュ、ドットのみ使用可能です"
-                  placeholder="例: instructor001"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 transition-colors duration-300"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="username"
+                    value={selectedInstructor.username}
+                    onChange={handleEditInputChange}
+                    required
+                    pattern="[a-zA-Z0-9_/.-]+"
+                    title="半角英数字、アンダースコア、ハイフン、スラッシュ、ドットのみ使用可能です"
+                    placeholder="例: instructor001"
+                    className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors duration-300 ${
+                      usernameValidation.isValid === true 
+                        ? 'border-green-400 focus:border-green-500' 
+                        : usernameValidation.isValid === false 
+                        ? 'border-red-400 focus:border-red-500' 
+                        : 'border-gray-200 focus:border-indigo-400'
+                    }`}
+                  />
+                  {usernameValidation.isChecking && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-500"></div>
+                    </div>
+                  )}
+                  {usernameValidation.isValid === true && !usernameValidation.isChecking && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <svg className="h-4 w-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  )}
+                  {usernameValidation.isValid === false && !usernameValidation.isChecking && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <svg className="h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
                 <p className="text-xs text-gray-500 mt-1">使用可能文字: 半角英数字、アンダースコア(_)、ハイフン(-)、スラッシュ(/)、ドット(.)</p>
+                
+                {/* バリデーションメッセージ */}
+                {usernameValidation.message && (
+                  <div className={`mt-2 text-sm ${
+                    usernameValidation.isValid === true 
+                      ? 'text-green-600' 
+                      : usernameValidation.isValid === false 
+                      ? 'text-red-600' 
+                      : 'text-gray-600'
+                  }`}>
+                    {usernameValidation.message}
+                  </div>
+                )}
+                
+                {/* 候補表示 */}
+                {usernameValidation.suggestions.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-600 mb-1">利用可能な候補:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {usernameValidation.suggestions.map((suggestion, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => {
+                            setSelectedInstructor(prev => ({ ...prev, username: suggestion }));
+                            checkUsernameAvailability(suggestion);
+                          }}
+                          className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition-colors"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               
               <div>

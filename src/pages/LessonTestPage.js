@@ -117,8 +117,67 @@ const LessonTestPage = () => {
         sessionStorage.removeItem(testCacheKey);
       }
       
-      // レッスン全体のテキスト内容を取得
+      // レッスン全体のテキスト内容を取得（コンテキスト化の完了を確実に待機）
+      console.log('レッスンテキスト内容の取得を開始...');
       const textContent = await getLessonTextContent();
+      
+      // テキストコンテンツの検証（最小長さを50文字に緩和）
+      if (!textContent || textContent.trim().length < 50) {
+        throw new Error(`テキストコンテンツが不足しています: 長さ=${textContent?.length || 0}`);
+      }
+      
+      // テキストコンテンツが有効な内容を含んでいるかチェック（より柔軟な検証）
+      const hasValidContent = textContent.includes('AI') || 
+                            textContent.includes('Google') || 
+                            textContent.includes('検索') || 
+                            textContent.includes('音声') ||
+                            textContent.includes('翻訳') ||
+                            textContent.includes('画像') ||
+                            textContent.includes('DALL') ||
+                            textContent.includes('Perplexity') ||
+                            textContent.includes('倫理') ||
+                            textContent.includes('バイアス') ||
+                            textContent.includes('Windows') ||
+                            textContent.includes('ソフトウェア') ||
+                            textContent.includes('コンピュータ') ||
+                            textContent.includes('基本操作') ||
+                            textContent.length > 200; // 長いテキストの場合は有効とみなす
+      
+      if (!hasValidContent) {
+        console.warn('テキストコンテンツに有効な学習内容が含まれていない可能性があります:', {
+          textContentPreview: textContent.substring(0, 1000),
+          textContentLength: textContent.length
+        });
+      }
+      
+      console.log('テキストコンテンツの検証完了:', {
+        textContentLength: textContent.length,
+        hasValidContent,
+        textContentPreview: textContent.substring(0, 500),
+        textContentEnd: textContent.substring(textContent.length - 500)
+      });
+      
+      const requestBody = {
+        type: 'lesson',
+        lessonId: currentLesson,
+        lessonTitle: lessonData?.title || `第${currentLesson}回`,
+        lessonDescription: lessonData?.description || '',
+        textContent: textContent,
+        fileType: lessonData?.file_type || 'text/plain',
+        fileName: lessonData?.s3_key || `lesson_${currentLesson}`,
+        questionCount: 30
+      };
+      
+      console.log('テスト生成APIリクエスト送信:', {
+        url: 'http://localhost:5050/api/test/learning/generate-test',
+        requestBody: {
+          ...requestBody,
+          textContentLength: textContent?.length || 0,
+          textContentPreview: textContent?.substring(0, 200) + '...',
+          textContentEnd: textContent ? textContent.substring(textContent.length - 200) : 'null',
+          textContentFull: textContent // 完全なテキストコンテンツをログ出力
+        }
+      });
       
       const response = await fetch('http://localhost:5050/api/test/learning/generate-test', {
         method: 'POST',
@@ -126,36 +185,55 @@ const LessonTestPage = () => {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          type: 'lesson',
-          lessonId: currentLesson,
-          lessonTitle: lessonData?.title || `第${currentLesson}回`,
-          lessonDescription: lessonData?.description || '',
-          textContent: textContent,
-          questionCount: 30
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (response.ok) {
         const result = await response.json();
-        if (result.success) {
-          // テスト問題をキャッシュに保存
+        console.log('テスト生成APIレスポンス:', {
+          success: result.success,
+          dataLength: result.data ? JSON.stringify(result.data).length : 0,
+          dataPreview: result.data ? JSON.stringify(result.data).substring(0, 500) + '...' : 'null',
+          firstQuestion: result.data?.questions?.[0]?.question || 'null'
+        });
+        
+        if (result.success && result.data && result.data.questions && result.data.questions.length > 0) {
+          // テスト問題をキャッシュに保存（成功した場合のみ）
           sessionStorage.setItem(testCacheKey, JSON.stringify(result.data));
           console.log('テスト問題をキャッシュに保存:', {
             key: testCacheKey,
-            dataLength: JSON.stringify(result.data).length
+            dataLength: JSON.stringify(result.data).length,
+            questionCount: result.data?.questions?.length || 0,
+            firstQuestion: result.data.questions[0]?.question || 'null'
           });
           
           setTestData(result.data);
         } else {
+          console.warn('APIレスポンスが無効です:', {
+            success: result.success,
+            hasData: !!result.data,
+            hasQuestions: !!(result.data?.questions),
+            questionCount: result.data?.questions?.length || 0
+          });
           throw new Error(result.message || 'テストデータの生成に失敗しました');
         }
       } else {
-        throw new Error('テストデータの生成に失敗しました');
+        const errorText = await response.text();
+        console.error('API呼び出し失敗:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorText: errorText
+        });
+        throw new Error(`テストデータの生成に失敗しました: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
-      console.error('テストデータ生成エラー:', error);
+      console.error('テストデータ生成エラー:', {
+        error: error.message,
+        stack: error.stack,
+        currentLesson: currentLesson
+      });
       // フォールバック: モックデータを使用
+      console.warn('モックデータを使用します');
       generateMockTestData();
     } finally {
       setLoading(false);
@@ -171,6 +249,25 @@ const LessonTestPage = () => {
         lessonId: currentLesson,
         sectionCount: sectionData?.length || 0,
         lessonTitle: lessonData?.title
+      });
+      
+      // セッションストレージの状態を確認
+      const allContextKeys = Object.keys(sessionStorage).filter(key => key.startsWith('pdf_context_'));
+      console.log('現在のセッションストレージのコンテキストキー:', allContextKeys);
+      
+      // 各コンテキストの詳細情報を表示
+      allContextKeys.forEach(key => {
+        try {
+          const data = JSON.parse(sessionStorage.getItem(key));
+          console.log(`コンテキストキー ${key}:`, {
+            lessonId: data.metadata?.lessonId,
+            lessonTitle: data.metadata?.lessonTitle,
+            contextLength: data.context?.length || 0,
+            contextPreview: data.context?.substring(0, 100) + '...'
+          });
+        } catch (error) {
+          console.warn(`コンテキストキー ${key} の解析に失敗:`, error);
+        }
       });
       
       // レッスンの基本情報
@@ -191,25 +288,69 @@ const LessonTestPage = () => {
           
           if (section.text_file_key) {
             try {
-              // まずセッションストレージからコンテキスト化されたテキストを取得
-              const storedContext = SessionStorageManager.getContext(currentLesson, section.text_file_key);
+              // まずセッションストレージからコンテキスト化されたテキストを取得（厳密なマッチング）
+              let storedContext = SessionStorageManager.getContext(currentLesson, section.text_file_key);
               
-              if (storedContext && storedContext.context) {
-                allTextContent += `\n\n## セクション${i + 1}: ${section.section_title || 'セクション'}\n\n`;
-                allTextContent += storedContext.context;
-                console.log(`セクション${i + 1}のコンテキスト取得完了:`, {
-                  contextLength: storedContext.context.length,
-                  sectionTitle: section.section_title
+              // メタデータから正確なレッスンIDを確認
+              if (storedContext && storedContext.metadata && storedContext.metadata.lessonId !== currentLesson) {
+                console.warn(`セクション${i + 1}のコンテキストのレッスンIDが一致しません:`, {
+                  expectedLessonId: currentLesson,
+                  actualLessonId: storedContext.metadata.lessonId,
+                  sectionTitle: section.section_title,
+                  textFileKey: section.text_file_key
                 });
-                continue; // セッションストレージから取得できた場合は次のセクションへ
+                storedContext = null; // 間違ったレッスンのコンテキストは使用しない
               }
               
-              // セッションストレージにない場合は、PDFファイルからテキストを抽出するAPIを呼び出し
-              console.log(`セクション${i + 1}のテキスト抽出API呼び出し:`, {
-                textFileKey: section.text_file_key
+              if (storedContext && storedContext.context) {
+                // コンテキストが有効かどうかを検証
+                const contextLength = storedContext.context.length;
+                const hasValidContent = storedContext.context.includes('AI') || 
+                                      storedContext.context.includes('Google') || 
+                                      storedContext.context.includes('検索') || 
+                                      storedContext.context.includes('音声') ||
+                                      storedContext.context.includes('翻訳') ||
+                                      storedContext.context.includes('画像') ||
+                                      storedContext.context.includes('DALL') ||
+                                      storedContext.context.includes('Perplexity') ||
+                                      storedContext.context.includes('倫理') ||
+                                      storedContext.context.includes('バイアス') ||
+                                      storedContext.context.includes('Windows') ||
+                                      storedContext.context.includes('ソフトウェア') ||
+                                      storedContext.context.includes('コンピュータ') ||
+                                      storedContext.context.includes('基本操作') ||
+                                      storedContext.context.length > 200;
+                
+                if (contextLength > 50 && hasValidContent) {
+                  allTextContent += `\n\n## セクション${i + 1}: ${section.section_title || 'セクション'}\n\n`;
+                  allTextContent += storedContext.context;
+                  console.log(`セクション${i + 1}のコンテキスト取得完了:`, {
+                    contextLength: storedContext.context.length,
+                    sectionTitle: section.section_title,
+                    lessonId: storedContext.metadata?.lessonId,
+                    expectedLessonId: currentLesson,
+                    hasValidContent
+                  });
+                  continue; // セッションストレージから取得できた場合は次のセクションへ
+                } else {
+                  console.warn(`セクション${i + 1}のコンテキストが無効です:`, {
+                    contextLength,
+                    hasValidContent,
+                    contextPreview: storedContext.context.substring(0, 200)
+                  });
+                  storedContext = null; // 無効なコンテキストは使用しない
+                }
+              }
+              
+              // セッションストレージにない場合は、レッスンIDに基づいてコンテンツを取得
+              console.log(`セクション${i + 1}のコンテンツ取得:`, {
+                currentLesson: currentLesson,
+                sectionTitle: section.section_title,
+                note: 'セッションストレージにコンテンツがないため、レッスンコンテンツAPIを使用'
               });
               
-              const response = await fetch(`http://localhost:5050/api/test/learning/extract-text/${section.text_file_key}`, {
+              // レッスンコンテンツAPIを呼び出してテキストコンテンツを取得
+              const response = await fetch(`http://localhost:5050/api/learning/lesson/${currentLesson}/content`, {
                 headers: {
                   'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
                   'Content-Type': 'application/json'
@@ -218,28 +359,75 @@ const LessonTestPage = () => {
               
               if (response.ok) {
                 const result = await response.json();
-                if (result.data?.text) {
-                  allTextContent += `\n\n## セクション${i + 1}: ${section.section_title || 'セクション'}\n\n`;
-                  allTextContent += result.data.text;
-                  console.log(`セクション${i + 1}のテキスト抽出完了:`, {
-                    textLength: result.data.text.length,
-                    sectionTitle: section.section_title
-                  });
+                if (result.success && result.data?.textContent) {
+                  // レッスンコンテンツが有効かどうかを検証
+                  const extractedText = result.data.textContent;
+                  const textLength = extractedText.length;
+                  const hasValidContent = extractedText.includes('AI') || 
+                                        extractedText.includes('Google') || 
+                                        extractedText.includes('検索') || 
+                                        extractedText.includes('音声') ||
+                                        extractedText.includes('翻訳') ||
+                                        extractedText.includes('画像') ||
+                                        extractedText.includes('DALL') ||
+                                        extractedText.includes('Perplexity') ||
+                                        extractedText.includes('倫理') ||
+                                        extractedText.includes('バイアス') ||
+                                        extractedText.includes('Windows') ||
+                                        extractedText.includes('ソフトウェア') ||
+                                        extractedText.includes('コンピュータ') ||
+                                        extractedText.includes('基本操作') ||
+                                        extractedText.length > 200;
+                  
+                  if (textLength > 50 && hasValidContent) {
+                    allTextContent += `\n\n## セクション${i + 1}: ${section.section_title || 'セクション'}\n\n`;
+                    allTextContent += extractedText;
+                    
+                    // 取得したテキストをセッションストレージに保存
+                    const saveSuccess = SessionStorageManager.saveContext(
+                      currentLesson,
+                      `lesson_${currentLesson}_content`,
+                      extractedText,
+                      {
+                        fileType: 'lesson_content',
+                        lessonTitle: lessonData?.title,
+                        sectionTitle: section.section_title,
+                        source: 'lesson_content_api'
+                      }
+                    );
+                    
+                    if (saveSuccess) {
+                      console.log(`セクション${i + 1}のコンテキストをセッションストレージに保存完了`);
+                    }
+                    
+                    console.log(`セクション${i + 1}のレッスンコンテンツ取得完了:`, {
+                      textLength: extractedText.length,
+                      sectionTitle: section.section_title,
+                      savedToSessionStorage: saveSuccess,
+                      hasValidContent
+                    });
+                  } else {
+                    console.warn(`セクション${i + 1}のレッスンコンテンツが無効です:`, {
+                      textLength,
+                      hasValidContent,
+                      textPreview: extractedText.substring(0, 200)
+                    });
+                  }
                 } else {
-                  console.warn(`セクション${i + 1}のテキスト抽出結果が空:`, result);
+                  console.warn(`セクション${i + 1}のレッスンコンテンツ取得結果が空:`, result);
                 }
               } else {
-                console.warn(`セクション${i + 1}のテキスト抽出API失敗:`, {
+                console.warn(`セクション${i + 1}のレッスンコンテンツAPI失敗:`, {
                   status: response.status,
                   statusText: response.statusText,
                   sectionTitle: section.section_title
                 });
               }
             } catch (error) {
-              console.error(`セクション${i + 1}のテキスト取得エラー:`, {
+              console.error(`セクション${i + 1}のレッスンコンテンツ取得エラー:`, {
                 error: error.message,
                 sectionTitle: section.section_title,
-                textFileKey: section.text_file_key
+                currentLesson: currentLesson
               });
             }
           } else {
@@ -256,11 +444,34 @@ const LessonTestPage = () => {
         });
       }
       
+      // コンテキスト化の完了を確認
+      const finalTextLength = allTextContent.length;
+      const hasValidFinalContent = allTextContent.includes('AI') || 
+                                   allTextContent.includes('Google') || 
+                                   allTextContent.includes('検索') || 
+                                   allTextContent.includes('音声') ||
+                                   allTextContent.includes('翻訳') ||
+                                   allTextContent.includes('画像') ||
+                                   allTextContent.includes('DALL') ||
+                                   allTextContent.includes('Perplexity') ||
+                                   allTextContent.includes('倫理') ||
+                                   allTextContent.includes('バイアス') ||
+                                   allTextContent.includes('Windows') ||
+                                   allTextContent.includes('ソフトウェア') ||
+                                   allTextContent.includes('コンピュータ') ||
+                                   allTextContent.includes('基本操作') ||
+                                   allTextContent.length > 200;
+      
       console.log('レッスン全体のテキスト内容取得完了:', {
         totalLength: allTextContent.length,
         sectionCount: sectionData?.length || 0,
+        hasValidFinalContent,
+        textPreview: allTextContent.substring(0, 500),
+        textEnd: allTextContent.substring(allTextContent.length - 500),
         hasContent: allTextContent.length > 0,
-        contentPreview: allTextContent.substring(0, 200) + '...'
+        contentPreview: allTextContent.substring(0, 200) + '...',
+        currentLesson: currentLesson,
+        lessonTitle: lessonData?.title
       });
       
       return allTextContent;

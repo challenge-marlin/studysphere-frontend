@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost } from '../../utils/api';
+import { getCurrentUserSatelliteId } from '../../utils/locationUtils';
+import { useAuth } from '../contexts/AuthContext';
 
 const TodayActiveModal = ({ 
   isOpen, 
@@ -9,6 +11,7 @@ const TodayActiveModal = ({
   onStudentsUpdate,
   onSelectStudents 
 }) => {
+  const { currentUser } = useAuth();
   // 基本状態管理
   const [tempPasswordUsers, setTempPasswordUsers] = useState([]);
   const [instructors, setInstructors] = useState([]);
@@ -40,14 +43,21 @@ const TodayActiveModal = ({
       setTempPasswordLoading(true);
       
       // 指導員一覧を取得（自分自身を除外）
-      const instructorResponse = await apiGet('/api/temp-passwords/instructors');
+      const currentSatelliteId = getCurrentUserSatelliteId(currentUser);
+      const instructorParams = new URLSearchParams();
+      if (currentSatelliteId) {
+        instructorParams.append('satellite_id', currentSatelliteId);
+      }
+      const instructorResponse = await apiGet(`/api/temp-passwords/instructors?${instructorParams}`);
+      console.log('指導員一覧取得レスポンス:', instructorResponse);
+      
       if (instructorResponse.success) {
-        // 現在ログインしている指導員を除外
-        const currentUser = JSON.parse(localStorage.getItem('user'));
-        const filteredInstructors = instructorResponse.data.filter(instructor => 
-          instructor.id !== currentUser?.id
-        );
-        setInstructors(filteredInstructors);
+        // バックエンドで既に自分自身を除外しているため、フロントエンドでのフィルタリングは不要
+        console.log('取得した指導員数:', instructorResponse.data.length);
+        setInstructors(instructorResponse.data);
+      } else {
+        console.error('指導員一覧取得失敗:', instructorResponse);
+        alert('指導員一覧の取得に失敗しました: ' + (instructorResponse.message || '不明なエラー'));
       }
       
       // 一時パスワード対象利用者を取得
@@ -65,19 +75,43 @@ const TodayActiveModal = ({
   const fetchTempPasswordUsers = async () => {
     try {
       const params = new URLSearchParams();
+      
+      // 現在選択中の拠点IDを取得して追加
+      const currentSatelliteId = getCurrentUserSatelliteId(currentUser);
+      console.log('=== TodayActiveModal fetchTempPasswordUsers デバッグ ===');
+      console.log('currentUser:', currentUser);
+      console.log('currentSatelliteId:', currentSatelliteId);
+      console.log('selectedInstructors:', selectedInstructors);
+      
+      if (currentSatelliteId) {
+        params.append('satellite_id', currentSatelliteId);
+        console.log('satellite_id パラメータを追加:', currentSatelliteId);
+      } else {
+        console.log('satellite_id が取得できませんでした');
+      }
+      
       if (selectedInstructors.length > 0) {
         selectedInstructors.forEach(instructorId => {
           params.append('selected_instructor_ids', instructorId);
         });
+        console.log('selected_instructor_ids パラメータを追加:', selectedInstructors);
       }
       
+      console.log('送信するパラメータ:', params.toString());
       const response = await apiGet(`/api/temp-passwords/users?${params}`);
+      
+      console.log('一時パスワード対象利用者取得レスポンス:', response);
+      console.log('取得した利用者数:', response.data?.length || 0);
+      console.log('利用者データ詳細:', response.data);
       
       if (response.success) {
         setTempPasswordUsers(response.data);
         // 全選択状態でスタート
         const allSelected = response.data.map(user => user.id);
         onSelectStudents(allSelected);
+      } else {
+        console.error('一時パスワード対象利用者取得失敗:', response);
+        setTempPasswordUsers([]);
       }
     } catch (error) {
       console.error('一時パスワード対象利用者取得エラー:', error);
@@ -93,6 +127,8 @@ const TodayActiveModal = ({
         return '担当なし・パスワード未発行';
       case 'selected_instructor':
         return '選択指導員の担当利用者';
+      case 'other_instructor':
+        return 'その他の担当者の利用者';
       default:
         return 'その他';
     }
@@ -142,7 +178,8 @@ const TodayActiveModal = ({
     setExpiryTime('');
     setAnnouncementTitle('');
     setAnnouncementMessage('');
-    setSelectedInstructors([]);
+    // 選択された指導員の状態は保持する（ユーザビリティ向上のため）
+    // setSelectedInstructors([]);
     onClose();
   };
 
@@ -197,9 +234,9 @@ const TodayActiveModal = ({
                 <div className="bg-white p-6 rounded-lg shadow">
                   <h4 className="text-lg font-semibold mb-4">別担当者選択（オプション）</h4>
                                      <div className="flex flex-wrap gap-3 max-h-48 overflow-y-auto">
-                     {instructors.map(instructor => (
+                     {instructors.map((instructor, index) => (
                        <button
-                         key={instructor.id}
+                         key={`instructor-${instructor.id}-${index}`}
                          onClick={() => toggleInstructorSelection(instructor.id)}
                          className={`px-4 py-2 rounded-lg border transition-all duration-200 min-w-0 flex-1 basis-64 text-left ${
                            selectedInstructors.includes(instructor.id)
@@ -213,7 +250,7 @@ const TodayActiveModal = ({
                              ? 'text-blue-100'
                              : 'text-gray-600'
                          }`}>
-                           {instructor.company_name} / {instructor.satellite_name}
+                           {instructor.company_name} {instructor.satellite_name ? `/ ${instructor.satellite_name}` : ''}
                          </div>
                        </button>
                      ))}
@@ -239,8 +276,11 @@ const TodayActiveModal = ({
                   <div className="text-center py-4">読み込み中...</div>
                 ) : (
                   <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {tempPasswordUsers.map(user => (
-                      <div key={user.id} className="flex items-center p-3 border rounded hover:bg-gray-50">
+                    {tempPasswordUsers.length === 0 ? (
+                      <div className="text-center py-4 text-gray-500">利用者が見つかりません</div>
+                    ) : (
+                      tempPasswordUsers.map((user, index) => (
+                      <div key={`${user.id}-${user.user_type}-${index}`} className="flex items-center p-3 border rounded hover:bg-gray-50">
                         <input
                           type="checkbox"
                           checked={selectedStudents.includes(user.id)}
@@ -257,7 +297,8 @@ const TodayActiveModal = ({
                           </div>
                         </div>
                       </div>
-                    ))}
+                    )))
+                    }
                   </div>
                 )}
               </div>

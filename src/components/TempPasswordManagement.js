@@ -15,6 +15,7 @@ const TempPasswordManagement = () => {
     const [announcementMessage, setAnnouncementMessage] = useState('');
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
+    const [userTypeFilter, setUserTypeFilter] = useState('initial'); // 'initial', 'all', 'no_instructor', 'selected_instructor', 'other_instructor'
 
     // 階層データを取得
     const fetchHierarchyData = async () => {
@@ -77,8 +78,9 @@ const TempPasswordManagement = () => {
                     console.log(`${index + 1}. ${user.name} - ${user.company_name}/${user.satellite_name} (instructor_id: ${user.instructor_id}, satellite_ids: ${JSON.stringify(user.satellite_ids)})`);
                 });
                 setUsers(response.data);
-                // 全選択状態でスタート
-                const allSelected = response.data.map(user => user.id);
+                // 初期状態では担当なしと選択担当者の利用者のみを選択
+                const filteredUsers = filterUsersByType(response.data, userTypeFilter);
+                const allSelected = filteredUsers.map(user => user.id);
                 setSelectedUsers(allSelected);
             }
         } catch (error) {
@@ -95,6 +97,7 @@ const TempPasswordManagement = () => {
 
     useEffect(() => {
         if (hierarchyData.length > 0) {
+            // 初期状態で（担当なし＋自担当）且つ有効な一時パスワードを持っていない利用者を表示
             fetchUsers();
         }
     }, [fetchUsers, hierarchyData.length]);
@@ -120,6 +123,13 @@ const TempPasswordManagement = () => {
             
             return newSelected;
         });
+        
+        // 企業選択が変更されたら利用者一覧を再取得
+        setTimeout(() => {
+            if (hierarchyData.length > 0) {
+                fetchUsers();
+            }
+        }, 100);
     };
 
     // 拠点選択の切り替え
@@ -140,6 +150,13 @@ const TempPasswordManagement = () => {
             
             return newSelected;
         });
+        
+        // 拠点選択が変更されたら利用者一覧を再取得
+        setTimeout(() => {
+            if (hierarchyData.length > 0) {
+                fetchUsers();
+            }
+        }, 100);
     };
 
     // 担当者選択の切り替え
@@ -149,6 +166,40 @@ const TempPasswordManagement = () => {
                 ? prev.filter(id => id !== instructorId)
                 : [...prev, instructorId]
         );
+        
+        // 担当者選択が変更されたら利用者一覧を再取得
+        setTimeout(() => {
+            if (hierarchyData.length > 0) {
+                fetchUsers();
+            }
+        }, 100);
+    };
+
+    // 利用者タイプによるフィルタリング関数
+    const filterUsersByType = (users, filterType) => {
+        switch (filterType) {
+            case 'initial':
+                // 初期状態：担当なしと選択担当者の利用者のみ
+                return users.filter(user => 
+                    user.user_type === 'no_instructor' || 
+                    user.user_type === 'selected_instructor'
+                );
+            case 'all':
+                return users;
+            case 'no_instructor':
+                return users.filter(user => user.user_type === 'no_instructor');
+            case 'selected_instructor':
+                return users.filter(user => user.user_type === 'selected_instructor');
+            case 'other_instructor':
+                return users.filter(user => user.user_type === 'other_instructor');
+            default:
+                return users;
+        }
+    };
+
+    // フィルタリングされた利用者一覧を取得
+    const getFilteredUsers = () => {
+        return filterUsersByType(users, userTypeFilter);
     };
 
     // 利用者選択の切り替え
@@ -162,10 +213,17 @@ const TempPasswordManagement = () => {
 
     // 全選択/全解除
     const toggleAllUsers = () => {
-        if (selectedUsers.length === users.length) {
-            setSelectedUsers([]);
+        const filteredUsers = getFilteredUsers();
+        const filteredUserIds = filteredUsers.map(user => user.id);
+        const selectedFilteredUsers = selectedUsers.filter(id => filteredUserIds.includes(id));
+        
+        if (selectedFilteredUsers.length === filteredUserIds.length) {
+            // フィルタリングされた利用者が全て選択されている場合は、それらを解除
+            setSelectedUsers(selectedUsers.filter(id => !filteredUserIds.includes(id)));
         } else {
-            setSelectedUsers(users.map(user => user.id));
+            // フィルタリングされた利用者を全て選択
+            const newSelectedUsers = [...new Set([...selectedUsers, ...filteredUserIds])];
+            setSelectedUsers(newSelectedUsers);
         }
     };
 
@@ -219,6 +277,10 @@ const TempPasswordManagement = () => {
                 return '選択担当者の利用者';
             case 'other_instructor':
                 return 'その他の担当者の利用者';
+            case 'my_user':
+                return '自分の担当利用者';
+            case 'no_instructor_no_temp':
+                return '担当なし・パスワード未発行';
             default:
                 return 'その他';
         }
@@ -237,8 +299,13 @@ const TempPasswordManagement = () => {
     // 表示用の担当者リストを取得（拠点選択に基づく）
     const getVisibleInstructors = () => {
         const visibleSatellites = getVisibleSatellites();
+        // 拠点が選択されていない場合でも、選択された企業の担当者を表示
         if (selectedSatellites.length === 0) {
-            return []; // 拠点が選択されていない場合は担当者を表示しない
+            return hierarchyData
+                .filter(company => selectedCompanies.includes(company.id))
+                .flatMap(company => company.satellites)
+                .flatMap(satellite => satellite.instructors)
+                .filter((instructor, index, self) => self.findIndex(i => i.id === instructor.id) === index); // 重複を除去
         }
         return visibleSatellites
             .filter(satellite => selectedSatellites.includes(satellite.id))
@@ -308,8 +375,8 @@ const TempPasswordManagement = () => {
                 {/* 担当者選択 */}
                 <div className="mb-6">
                     <h3 className="text-md font-medium mb-3 text-gray-700">担当者選択（複数選択可能）</h3>
-                    {selectedSatellites.length === 0 ? (
-                        <p className="text-gray-500 italic">拠点を選択してください</p>
+                    {selectedCompanies.length === 0 ? (
+                        <p className="text-gray-500 italic">企業を選択してください</p>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                             {/* 「なし」オプション */}
@@ -350,19 +417,52 @@ const TempPasswordManagement = () => {
             <div className="bg-white p-6 rounded-lg shadow mb-6">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-lg font-semibold">利用者選択</h2>
-                    <button
-                        onClick={toggleAllUsers}
-                        className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-                    >
-                        {selectedUsers.length === users.length ? '全解除' : '全選択'}
-                    </button>
+                    <div className="flex items-center space-x-4">
+                        {/* 利用者タイプフィルター */}
+                        <select
+                            value={userTypeFilter}
+                            onChange={(e) => setUserTypeFilter(e.target.value)}
+                            className="px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                            <option value="initial">初期表示（担当なし＋選択担当者）</option>
+                            <option value="all">全ての利用者</option>
+                            <option value="no_instructor">担当なしのみ</option>
+                            <option value="selected_instructor">選択担当者の利用者のみ</option>
+                            <option value="other_instructor">その他の担当者の利用者のみ</option>
+                        </select>
+                        <button
+                            onClick={toggleAllUsers}
+                            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                        >
+                            {(() => {
+                                const filteredUsers = getFilteredUsers();
+                                const filteredUserIds = filteredUsers.map(user => user.id);
+                                const selectedFilteredUsers = selectedUsers.filter(id => filteredUserIds.includes(id));
+                                return selectedFilteredUsers.length === filteredUserIds.length ? '全解除' : '全選択';
+                            })()}
+                        </button>
+                    </div>
                 </div>
 
                 {loading ? (
                     <div className="text-center py-4">読み込み中...</div>
+                ) : users.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                        {selectedCompanies.length === 0 ? (
+                            <div>
+                                <p>担当なしまたは自担当で一時パスワード未発行の利用者がいません</p>
+                                <p className="text-sm mt-2">企業・拠点・担当者を選択して詳細な条件で検索してください</p>
+                            </div>
+                        ) : (
+                            <div>
+                                <p>選択条件に該当する利用者がいません</p>
+                                <p className="text-sm mt-2">担当者を選択するか、条件を変更してください</p>
+                            </div>
+                        )}
+                    </div>
                 ) : (
                     <div className="space-y-2 max-h-96 overflow-y-auto">
-                        {users.map(user => (
+                        {getFilteredUsers().map(user => (
                             <div key={user.id} className="flex items-center p-3 border rounded hover:bg-gray-50">
                                 <input
                                     type="checkbox"
@@ -381,6 +481,12 @@ const TempPasswordManagement = () => {
                                 </div>
                             </div>
                         ))}
+                        {getFilteredUsers().length === 0 && users.length > 0 && (
+                            <div className="text-center py-8 text-gray-500">
+                                <p>選択したフィルター条件に該当する利用者がいません</p>
+                                <p className="text-sm mt-2">フィルター条件を変更してください</p>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -435,6 +541,16 @@ const TempPasswordManagement = () => {
                 >
                     {loading ? '発行中...' : `${selectedUsers.length}名に一時パスワードを発行`}
                 </button>
+                {selectedUsers.length > 0 && (
+                    <div className="mt-2 text-sm text-gray-600">
+                        選択中の利用者: {selectedUsers.length}名
+                        {getFilteredUsers().length > 0 && (
+                            <span className="ml-2">
+                                （表示中: {getFilteredUsers().filter(user => selectedUsers.includes(user.id)).length}名）
+                            </span>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

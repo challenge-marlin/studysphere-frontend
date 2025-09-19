@@ -75,12 +75,12 @@ const EnhancedLearningPageRefactored = () => {
 
   // 学習開始時の進捗更新は削除（LessonList.jsのhandleStartLessonで実行されるため）
 
-  // アップロード済みファイルを取得
+  // 提出物確認ファイルを取得
   const fetchUploadedFiles = async (lessonId = null) => {
     const targetLessonId = lessonId || currentLesson;
     
     try {
-      console.log(`📁 アップロード済みファイル取得開始: レッスンID ${targetLessonId}`);
+      console.log(`📁 提出物確認ファイル取得開始: レッスンID ${targetLessonId}`);
       
       const response = await fetch(`http://localhost:5050/api/learning/lesson/${targetLessonId}/uploaded-files`, {
         headers: {
@@ -91,23 +91,23 @@ const EnhancedLearningPageRefactored = () => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log(`📁 アップロード済みファイルデータ:`, data);
+        console.log(`📁 提出物確認ファイルデータ:`, data);
         
         if (data.success) {
           setUploadedFiles(data.data);
-          console.log(`✅ アップロード済みファイル設定完了: ${data.data.length}件`);
+          console.log(`✅ 提出物確認ファイル設定完了: ${data.data.length}件`);
         } else {
-          console.error('アップロード済みファイル取得失敗:', data.message);
+          console.error('提出物確認ファイル取得失敗:', data.message);
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
-        console.error('アップロード済みファイルAPIエラー:', {
+        console.error('提出物確認ファイルAPIエラー:', {
           status: response.status,
           error: errorData.message
         });
       }
     } catch (error) {
-      console.error('アップロード済みファイル取得エラー:', error);
+      console.error('提出物確認ファイル取得エラー:', error);
     }
   };
 
@@ -277,7 +277,7 @@ const EnhancedLearningPageRefactored = () => {
         console.log(`🔍 課題提出状況確認開始: レッスンID ${targetLessonId}`);
         await checkAssignmentStatus(targetLessonId);
         
-        // アップロード済みファイルを取得
+        // 提出物確認ファイルを取得
         await fetchUploadedFiles(targetLessonId);
         
         console.log('レッスンデータ取得成功:', data.data);
@@ -804,7 +804,7 @@ const EnhancedLearningPageRefactored = () => {
           
           // 課題提出完了の処理（既にassignmentStatusが更新されているため、追加処理は不要）
           
-          // 課題提出状況とアップロード済みファイルを再確認
+          // 課題提出状況と提出物確認ファイルを再確認
           setTimeout(() => {
             checkAssignmentStatus();
             fetchUploadedFiles();
@@ -1019,7 +1019,7 @@ const EnhancedLearningPageRefactored = () => {
                }
              />
 
-            {/* アップロード済みファイル（課題がある場合のみ表示） */}
+            {/* 提出物確認（課題がある場合のみ表示） */}
             {assignmentStatus.hasAssignment && (
               <FileUploadSection
                 uploadedFiles={uploadedFiles}

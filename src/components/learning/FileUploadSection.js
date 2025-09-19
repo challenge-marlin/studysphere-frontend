@@ -32,7 +32,7 @@ const FileUploadSection = ({
     <div className="bg-white rounded-2xl shadow-xl p-6 mt-6">
       <div className="flex items-center gap-3 mb-4">
         <span className="text-2xl">📁</span>
-        <h3 className="text-xl font-bold text-gray-800">アップロード済みファイル</h3>
+        <h3 className="text-xl font-bold text-gray-800">提出物確認</h3>
         <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
           {uploadedFiles.length}件
         </span>

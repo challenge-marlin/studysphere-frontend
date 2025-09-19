@@ -204,7 +204,7 @@ const TextSection = ({
       }, 5 * 60 * 1000); // 5分に短縮
       
       // PDFテキスト抽出APIを呼び出し
-      const response = await fetch(`/api/learning/extract-pdf-text`, {
+      const response = await fetch(`http://localhost:5050/api/learning/extract-pdf-text`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1183,12 +1183,6 @@ const LessonManagement = () => {
                              🎥 動画管理・視聴
                            </button>
                            <button
-                             onClick={() => handleOpenMultiTextManagement(lesson)}
-                             className="text-purple-600 hover:text-purple-800 font-medium"
-                           >
-                             📄 複数テキスト管理
-                           </button>
-                           <button
                              onClick={() => handleOpenTextVideoLinkModal(lesson)}
                              className="text-green-600 hover:text-green-800 font-medium"
                            >
@@ -1711,6 +1705,30 @@ const LessonManagement = () => {
                      ))}
                    </div>
                  )}
+               </div>
+
+               {/* 複数テキスト管理セクション */}
+               <div className="mb-6">
+                 <div className="flex justify-between items-center mb-3">
+                   <label className="block text-sm font-medium text-gray-700">
+                     📄 複数テキスト管理
+                   </label>
+                   <button
+                     type="button"
+                     onClick={() => {
+                       setSelectedLessonForMultiText(selectedLesson);
+                       setShowMultiTextModal(true);
+                       fetchMultiTextFiles(selectedLesson.id);
+                     }}
+                     className="px-3 py-1 bg-purple-500 text-white text-sm rounded hover:bg-purple-600 transition-colors"
+                   >
+                     📄 テキスト管理
+                   </button>
+                 </div>
+                 
+                 <div className="text-center py-4 text-gray-500 border-2 border-dashed border-gray-300 rounded-lg">
+                   複数テキストファイルの管理は「テキスト管理」ボタンから行えます
+                 </div>
                </div>
             </form>
             </div>

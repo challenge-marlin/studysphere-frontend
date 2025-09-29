@@ -1,6 +1,9 @@
 // API呼び出し用のユーティリティ関数
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 
+  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
+    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
+    : 'http://localhost:5050');
 
 // 認証エラー検出フラグ
 let isAuthErrorHandling = false;
@@ -89,7 +92,7 @@ export const apiCall = async (endpoint, options = {}, retryCount = 0) => {
       
       // 即座にリダイレクト処理を実行
       setTimeout(() => {
-        handleTokenInvalid(window.navigate || (() => window.location.href = '/studysphere/homepage'), '認証に失敗しました');
+        handleTokenInvalid(window.navigate || (() => window.location.href = '/homepage'), '認証に失敗しました');
         isAuthErrorHandling = false;
       }, 100);
       
@@ -289,7 +292,7 @@ export const apiDownloadBinary = async (endpoint, options = {}) => {
       
       // 即座にリダイレクト処理を実行
       setTimeout(() => {
-        handleTokenInvalid(window.navigate || (() => window.location.href = '/studysphere/homepage'), '認証に失敗しました');
+        handleTokenInvalid(window.navigate || (() => window.location.href = '/homepage'), '認証に失敗しました');
         isAuthErrorHandling = false;
       }, 100);
       

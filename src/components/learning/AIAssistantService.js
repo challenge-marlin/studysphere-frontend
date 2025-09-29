@@ -1,7 +1,10 @@
 // AIアシスタントサービス - GPT-4oモデルを使用
 class AIAssistantService {
   constructor() {
-    this.baseURL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
+    this.baseURL = process.env.REACT_APP_API_URL || 
+      (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
+        ? 'https://backend.studysphere.ayatori-inc.co.jp' 
+        : 'http://localhost:5050');
     this.apiKey = process.env.REACT_APP_OPENAI_API_KEY;
   }
 

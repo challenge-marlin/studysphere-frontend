@@ -20,7 +20,10 @@ import ModalErrorDisplay from './common/ModalErrorDisplay';
 import TodayActiveModal from './student-management/TodayActiveModal';
 import DailyReportManagement from './DailyReportManagement';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 
+  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
+    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
+    : 'http://localhost:5050');
 
 const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionApproval }) => {
   const { currentUser, isAuthenticated } = useAuth();

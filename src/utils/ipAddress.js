@@ -4,38 +4,34 @@
  */
 
 /**
- * 外部APIを使用してIPアドレスを取得
+ * バックエンドAPIを使用してIPアドレスを取得
  * @returns {Promise<string>} IPアドレス
  */
-const getIPFromExternalAPI = async () => {
+const getIPFromBackendAPI = async () => {
   try {
-    // 複数のIP取得サービスを試行
-    const services = [
-      'https://api.ipify.org?format=json',
-      'https://api.myip.com',
-      'https://ipapi.co/json/'
-    ];
+    const API_BASE_URL = process.env.REACT_APP_API_URL || 
+      (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
+        ? 'https://backend.studysphere.ayatori-inc.co.jp' 
+        : 'http://localhost:5050');
 
-    for (const service of services) {
-      try {
-        const response = await fetch(service, {
-          method: 'GET',
-          timeout: 5000
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          return data.ip || data.query || 'N/A';
-        }
-      } catch (error) {
-        console.warn(`IP取得サービス ${service} でエラー:`, error);
-        continue;
+    const response = await fetch(`${API_BASE_URL}/api/operation-logs/client-ip`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
       }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      return data.data?.ip || 'N/A';
     }
     
     return 'N/A';
   } catch (error) {
-    console.error('IPアドレス取得エラー:', error);
+    console.warn('バックエンドIP取得サービスでエラー:', error);
     return 'N/A';
   }
 };
@@ -99,14 +95,14 @@ const getLocalIPAddress = () => {
  */
 export const getClientIPAddress = async () => {
   try {
-    // まず外部APIでパブリックIPを取得
-    const publicIP = await getIPFromExternalAPI();
+    // まずバックエンドAPIでIPを取得
+    const backendIP = await getIPFromBackendAPI();
     
-    if (publicIP && publicIP !== 'N/A') {
-      return publicIP;
+    if (backendIP && backendIP !== 'N/A') {
+      return backendIP;
     }
 
-    // 外部APIが失敗した場合、ローカルIPを取得
+    // バックエンドAPIが失敗した場合、ローカルIPを取得
     const localIP = await getLocalIPAddress();
     return localIP;
 

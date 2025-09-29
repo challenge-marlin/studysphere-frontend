@@ -17,7 +17,10 @@ import { setGlobalNavigate, setupFetchInterceptor } from '../../utils/httpInterc
 import { addOperationLog } from '../../utils/operationLogManager';
 import { markTempPasswordAsUsedAPI } from '../../utils/api';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 
+  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
+    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
+    : 'http://localhost:5050');
 
 // 認証コンテキストの作成
 export const AuthContext = createContext();

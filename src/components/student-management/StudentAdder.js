@@ -3,7 +3,10 @@ import SanitizedInput from '../SanitizedInput';
 import { useAuth } from '../contexts/AuthContext';
 import ModalErrorDisplay from '../common/ModalErrorDisplay';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 
+  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
+    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
+    : 'http://localhost:5050');
 
 const StudentAdder = ({ onStudentAdded, instructors }) => {
   const { currentUser } = useAuth();

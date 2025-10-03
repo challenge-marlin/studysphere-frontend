@@ -1,23 +1,68 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 const HomePage = () => {
+  const [backgroundImage, setBackgroundImage] = useState('');
+  const [characterImage, setCharacterImage] = useState('');
+
+  // ランダム背景画像の設定
+  useEffect(() => {
+    const randomNumber = Math.floor(Math.random() * 7) + 1;
+    setBackgroundImage(`/images/background/${randomNumber}.png`);
+  }, []);
+
+  // ランダムキャラクター画像の設定
+  useEffect(() => {
+    const randomNumber = Math.floor(Math.random() * 6) + 1;
+    setCharacterImage(`/images/mio/${randomNumber}.png`);
+  }, []);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
+    <div className="min-h-screen bg-black">
       {/* ヘッダー */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
+      <header className="fixed top-0 left-0 w-full bg-black bg-opacity-90 backdrop-blur-lg z-50 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
+          <div className="flex justify-between items-center py-4">
             <div className="flex items-center">
-              <h1 className="text-3xl font-bold text-indigo-600">Study Sphere</h1>
-            </div>
-            <div className="flex space-x-4">
-              <Link
-                to="/admin-instructor-login"
-                className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+              <a 
+                href="https://www.ayatori-inc.co.jp/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-white text-3xl font-bold hover:text-blue-400 transition-colors"
               >
-                管理者・指導員ログイン
-              </Link>
+                AYATORI.Inc
+              </a>
+            </div>
+            <nav className="hidden md:flex items-center space-x-8">
+              <a href="#features" className="text-white hover:text-blue-400 transition-colors font-medium relative group">
+                主要機能
+                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-400 transition-all duration-300 group-hover:w-full"></span>
+              </a>
+              <a href="#support" className="text-white hover:text-blue-400 transition-colors font-medium relative group">
+                サポート
+                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-400 transition-all duration-300 group-hover:w-full"></span>
+              </a>
+              <a href="#home-support" className="text-white hover:text-blue-400 transition-colors font-medium relative group">
+                在宅支援
+                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-400 transition-all duration-300 group-hover:w-full"></span>
+              </a>
+              <a 
+                href="https://www.ayatori-inc.co.jp/?page_id=7" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-white hover:text-blue-400 transition-colors font-medium relative group"
+              >
+                問い合わせ
+                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-400 transition-all duration-300 group-hover:w-full"></span>
+              </a>
+            </nav>
+            {/* モバイルメニューボタン */}
+            <div className="md:hidden">
+              <button className="text-white">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -26,201 +71,120 @@ const HomePage = () => {
       {/* メインコンテンツ */}
       <main>
         {/* ヒーローセクション */}
-        <section className="py-20 bg-gradient-to-r from-indigo-600 to-purple-700 text-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-5xl font-bold mb-6">
-              次世代の学習管理システム
-            </h2>
-            <p className="text-xl mb-8 max-w-3xl mx-auto">
-              StudySphereは、企業の教育・研修を効率化し、<br />
-              学習者の成長をサポートする包括的な学習管理プラットフォームです。
+        <section className="relative h-screen flex items-center justify-center text-center overflow-hidden bg-black pt-20">
+          {/* 背景画像 */}
+          <div 
+            className="absolute top-0 left-0 w-full h-full bg-cover bg-center bg-no-repeat z-10"
+            style={{
+              backgroundImage: backgroundImage ? `url(${backgroundImage})` : 'none',
+            }}
+          >
+            {/* オーバーレイ */}
+            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-black/20 via-black/40 to-black/80 z-20"></div>
+          </div>
+          
+          {/* コンテンツ */}
+          <div className="relative z-30 text-white max-w-4xl px-4 mx-auto">
+            <h1 className="text-6xl md:text-7xl font-bold mb-6 text-shadow-lg animate-fade-in-up">
+              StudySphere
+            </h1>
+            <p className="text-2xl md:text-3xl mb-8 opacity-90 animate-fade-in-up animation-delay-200">
+              「学ぶ」は、あなたの力になる。
             </p>
-            <div className="flex justify-center space-x-4">
+            <p className="text-lg md:text-xl mb-12 opacity-80 leading-relaxed animate-fade-in-up animation-delay-400">
+              ここから、あなたのペースで未来を創ろう。
+            </p>
+            
+            {/* ボタン群 */}
+            <div className="flex flex-col sm:flex-row justify-center items-center gap-6 animate-fade-in-up animation-delay-600">
+              <Link
+                to="/admin-instructor-login"
+                className="bg-white/20 text-white px-8 py-4 rounded-full hover:bg-white/30 transition-all duration-300 font-semibold text-lg border-2 border-white/30 hover:border-white/50 transform hover:-translate-y-1 hover:shadow-xl backdrop-blur-sm"
+              >
+                管理者・指導員
+              </Link>
               <Link
                 to="/student-login"
-                className="bg-white text-indigo-600 px-8 py-3 rounded-lg hover:bg-gray-100 transition-colors font-semibold text-lg"
+                className="bg-white/20 text-white px-8 py-4 rounded-full hover:bg-white/30 transition-all duration-300 font-semibold text-lg border-2 border-white/30 hover:border-white/50 transform hover:-translate-y-1 hover:shadow-xl backdrop-blur-sm"
               >
-                今すぐ始める
+                利用者
               </Link>
+              <a
+                href="https://drive.google.com/file/d/1hBn-q4GTexuB8zzv9MFYooGqm7Ie3yPz/view?usp=drive_link"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-white/20 text-white px-8 py-4 rounded-full hover:bg-white/30 transition-all duration-300 font-semibold text-lg border-2 border-white/30 hover:border-white/50 transform hover:-translate-y-1 hover:shadow-xl backdrop-blur-sm flex items-center gap-3"
+              >
+                <span className="text-2xl">⊞</span>
+                <span className="animate-bounce">⬇</span>
+                アプリをダウンロード
+              </a>
             </div>
           </div>
         </section>
 
-        {/* 特徴セクション */}
-        <section className="py-20">
+        {/* 学習機能セクション */}
+        <section className="py-20 bg-black">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h3 className="text-4xl font-bold text-gray-900 mb-4">
-                主な特徴
-              </h3>
-              <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-                StudySphereが提供する革新的な機能をご紹介します
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-3 gap-8">
-              {/* 特徴1 */}
-              <div className="bg-white p-8 rounded-xl shadow-lg hover:shadow-xl transition-shadow">
-                <div className="w-16 h-16 bg-indigo-100 rounded-lg flex items-center justify-center mb-6">
-                  <span className="text-3xl">📚</span>
-                </div>
-                <h4 className="text-2xl font-semibold text-gray-900 mb-4">
-                  包括的なカリキュラム管理
-                </h4>
-                <p className="text-gray-600">
-                  企業のニーズに合わせたカスタマイズ可能なカリキュラムを提供。
-                  学習進捗の追跡と効果測定により、確実なスキル向上を実現します。
-                </p>
-              </div>
-
-              {/* 特徴2 */}
-              <div className="bg-white p-8 rounded-xl shadow-lg hover:shadow-xl transition-shadow">
-                <div className="w-16 h-16 bg-purple-100 rounded-lg flex items-center justify-center mb-6">
-                  <span className="text-3xl">👥</span>
-                </div>
-                <h4 className="text-2xl font-semibold text-gray-900 mb-4">
-                  多様なユーザー管理
-                </h4>
-                <p className="text-gray-600">
-                  管理者、指導員、学習者それぞれの役割に応じた
-                  適切な権限管理とダッシュボードを提供。
-                  企業規模に応じた柔軟な運用が可能です。
-                </p>
-              </div>
-
-              {/* 特徴3 */}
-              <div className="bg-white p-8 rounded-xl shadow-lg hover:shadow-xl transition-shadow">
-                <div className="w-16 h-16 bg-green-100 rounded-lg flex items-center justify-center mb-6">
-                  <span className="text-3xl">📊</span>
-                </div>
-                <h4 className="text-2xl font-semibold text-gray-900 mb-4">
-                  詳細な分析・レポート
-                </h4>
-                <p className="text-gray-600">
-                  学習効果の測定から個人・組織レベルの分析まで。
-                  データに基づく意思決定をサポートし、
-                  継続的な改善を促進します。
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* 機能詳細セクション */}
-        <section className="py-20 bg-gray-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h3 className="text-4xl font-bold text-gray-900 mb-4">
-                主要機能
-              </h3>
-              <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-                学習管理に必要な機能を網羅的に提供
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-12">
-              {/* 機能1 */}
-              <div className="flex items-start space-x-6">
-                <div className="w-12 h-12 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-white text-xl">🎯</span>
-                </div>
-                <div>
-                  <h4 className="text-xl font-semibold text-gray-900 mb-3">
-                    学習進捗管理
-                  </h4>
-                  <p className="text-gray-600">
-                    個別の学習進捗をリアルタイムで追跡。
-                    達成度評価とフィードバックにより、
-                    効果的な学習をサポートします。
+            <div className="text-center max-w-4xl mx-auto">
+              <div className="flex flex-col items-center gap-8">
+                {/* テキスト部分 */}
+                <div className="max-w-2xl">
+                  <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
+                    学習の質を高める、StudySphereのすべて。
+                  </h2>
+                  <p className="text-xl text-gray-300 leading-relaxed">
+                    あなたの「学びたい」を叶える機能、安心のサポート、<br />
+                    自由な学習環境をご紹介します。
                   </p>
                 </div>
-              </div>
-
-              {/* 機能2 */}
-              <div className="flex items-start space-x-6">
-                <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-white text-xl">🏢</span>
+                
+                {/* キャラクター画像 */}
+                <div className="order-2 md:order-1">
+                  {characterImage && (
+                    <img 
+                      src={characterImage} 
+                      alt="キャラクター" 
+                      className="max-w-48 md:max-w-64 h-auto rounded-xl shadow-2xl hover:scale-105 transition-transform duration-300"
+                    />
+                  )}
                 </div>
-                <div>
-                  <h4 className="text-xl font-semibold text-gray-900 mb-3">
-                    企業・拠点管理
-                  </h4>
-                  <p className="text-gray-600">
-                    複数企業・拠点での運用に対応。
-                    各拠点の特性に合わせた
-                    柔軟な学習環境を構築できます。
-                  </p>
-                </div>
-              </div>
-
-              {/* 機能3 */}
-              <div className="flex items-start space-x-6">
-                <div className="w-12 h-12 bg-green-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-white text-xl">📈</span>
-                </div>
-                <div>
-                  <h4 className="text-xl font-semibold text-gray-900 mb-3">
-                    効果測定・評価
-                  </h4>
-                  <p className="text-gray-600">
-                    定期的な効果テストと評価により、
-                    学習成果を客観的に測定。
-                    継続的な改善を実現します。
-                  </p>
-                </div>
-              </div>
-
-              {/* 機能4 */}
-              <div className="flex items-start space-x-6">
-                <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-white text-xl">🔒</span>
-                </div>
-                <div>
-                  <h4 className="text-xl font-semibold text-gray-900 mb-3">
-                    セキュアな認証
-                  </h4>
-                  <p className="text-gray-600">
-                    多段階認証と権限管理により、
-                    企業データの安全性を確保。
-                    安心して学習管理を行えます。
-                  </p>
+                
+                {/* ボタン群 */}
+                <div className="flex flex-wrap justify-center gap-4 order-3">
+                  <a 
+                    href="#features" 
+                    className="bg-transparent border-2 border-white text-white px-6 py-3 rounded hover:bg-white hover:text-black transition-all duration-300 font-semibold"
+                  >
+                    主要機能
+                  </a>
+                  <a 
+                    href="#support" 
+                    className="bg-transparent border-2 border-white text-white px-6 py-3 rounded hover:bg-white hover:text-black transition-all duration-300 font-semibold"
+                  >
+                    サポート
+                  </a>
+                  <a 
+                    href="#home-support" 
+                    className="bg-transparent border-2 border-white text-white px-6 py-3 rounded hover:bg-white hover:text-black transition-all duration-300 font-semibold"
+                  >
+                    在宅支援
+                  </a>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* CTAセクション */}
-        <section className="py-20 bg-gradient-to-r from-indigo-600 to-purple-700 text-white">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h3 className="text-4xl font-bold mb-6">
-              今すぐStudySphereを始めましょう
-            </h3>
-            <p className="text-xl mb-8">
-              企業の教育・研修を次のレベルへ引き上げる
-              StudySphereの導入をお待ちしています。
-            </p>
-            <Link
-              to="/admin-instructor-login"
-              className="bg-white text-indigo-600 px-8 py-3 rounded-lg hover:bg-gray-100 transition-colors font-semibold text-lg inline-block"
-            >
-              管理者・指導員ログイン
-            </Link>
-          </div>
-        </section>
       </main>
 
       {/* フッター */}
       <footer className="bg-gray-900 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h4 className="text-2xl font-bold mb-4">Study Sphere</h4>
-            <p className="text-gray-400 mb-6">
-              次世代の学習管理システム
-            </p>
             <div className="border-t border-gray-800 pt-6">
               <p className="text-gray-500 text-sm">
-                © 2024 Study Sphere. All rights reserved.
+                Copyright© AYATORI.inc All Rights Reserved.
               </p>
             </div>
           </div>

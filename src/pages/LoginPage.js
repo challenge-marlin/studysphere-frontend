@@ -7,7 +7,10 @@ import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 import { addOperationLog } from '../utils/operationLogManager';
 
 // API設定
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 
+  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
+    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
+    : 'http://localhost:5050');
 
 const LoginPage = () => {
   const [credentials, setCredentials] = useState({ id: '', password: '' });
@@ -1028,7 +1031,7 @@ const LoginPage = () => {
             キャッシュをクリアして再ログイン
           </button>
           
-          <div className="border-t border-gray-200 pt-4">
+          <div className="border-t border-gray-200 pt-4" style={{ display: 'none' }}>
             <button
               onClick={restoreMasterUser}
               disabled={isRestoring}

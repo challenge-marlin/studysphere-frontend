@@ -7,7 +7,10 @@ import { isExpired, getCurrentJapanTime } from '../utils/dateUtils';
 import ModalErrorDisplay from './common/ModalErrorDisplay';
 // import { fetch } from '../utils/httpInterceptor'; // 一時的に無効化
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 
+  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
+    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
+    : 'http://localhost:5050');
 
 const LocationManagement = () => {
   const { currentUser } = useAuth();
@@ -503,13 +506,31 @@ const LocationManagement = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
-      const response = await fetch(`${API_BASE_URL}/`, { 
-        method: 'GET',
-        signal: controller.signal
-      });
+      // 複数のエンドポイントを試行
+      const endpoints = [
+        `${API_BASE_URL}/api/health`,
+        `${API_BASE_URL}/api/operation-logs/client-ip`
+      ];
+      
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(endpoint, { 
+            method: 'GET',
+            signal: controller.signal
+          });
+          
+          if (response.ok) {
+            clearTimeout(timeoutId);
+            return true;
+          }
+        } catch (endpointError) {
+          console.warn(`エンドポイント ${endpoint} でエラー:`, endpointError);
+          continue;
+        }
+      }
       
       clearTimeout(timeoutId);
-      return response.ok;
+      return false;
     } catch (error) {
       console.error('バックエンド接続エラー:', error);
       return false;

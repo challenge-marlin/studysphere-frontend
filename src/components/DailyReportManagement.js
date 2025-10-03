@@ -5,7 +5,10 @@ import SanitizedTextarea from './SanitizedTextarea';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 import { convertTimeToMySQLDateTime } from '../utils/dateUtils';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 
+  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
+    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
+    : 'http://localhost:5050');
 
 const DailyReportManagement = ({ student, onClose }) => {
   const { currentUser } = useAuth();

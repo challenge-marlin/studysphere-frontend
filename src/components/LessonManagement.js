@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete, apiCall, apiDownloadBinary } from '../utils/api';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || '';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 
+  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
+    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
+    : 'http://localhost:5050');
 
 const LessonManagement = () => {
   const [lessons, setLessons] = useState([]);
@@ -38,6 +41,13 @@ const LessonManagement = () => {
   const [selectedLessonFiles, setSelectedLessonFiles] = useState(null);
   const [fileListLoading, setFileListLoading] = useState(false);
   const [updateFile, setUpdateFile] = useState(false);
+  
+  // 複数テキストファイルアップロード用の状態
+  const [additionalTextFiles, setAdditionalTextFiles] = useState([]);
+  const [showMultiTextModal, setShowMultiTextModal] = useState(false);
+  const [selectedLessonForMultiText, setSelectedLessonForMultiText] = useState(null);
+  const [multiTextFiles, setMultiTextFiles] = useState([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
   
   // テキストと動画の紐づけ機能用の状態
   const [showTextVideoLinkModal, setShowTextVideoLinkModal] = useState(false);
@@ -167,6 +177,97 @@ const LessonManagement = () => {
   // ファイル選択
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
+  };
+
+  // 複数テキストファイル選択
+  const handleMultiTextFileChange = (e) => {
+    const files = Array.from(e.target.files);
+    setAdditionalTextFiles(prev => [...prev, ...files]);
+  };
+
+  // 複数テキストファイル削除
+  const handleRemoveMultiTextFile = (index) => {
+    setAdditionalTextFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // 複数テキストファイルアップロード
+  const handleUploadMultiTextFiles = async () => {
+    if (additionalTextFiles.length === 0) {
+      alert('アップロードするファイルを選択してください');
+      return;
+    }
+
+    setUploadingFiles(true);
+    try {
+      const uploadPromises = additionalTextFiles.map(async (file, index) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('lessonId', selectedLessonForMultiText.id);
+        formData.append('order', index);
+
+        const response = await fetch(`${API_BASE_URL}/api/lesson-text-files`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          },
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error(`ファイル ${file.name} のアップロードに失敗しました`);
+        }
+
+        return await response.json();
+      });
+
+      await Promise.all(uploadPromises);
+      alert('すべてのファイルがアップロードされました');
+      setAdditionalTextFiles([]);
+      setShowMultiTextModal(false);
+      fetchLessons(); // レッスン一覧を更新
+    } catch (error) {
+      console.error('複数ファイルアップロードエラー:', error);
+      alert('ファイルのアップロード中にエラーが発生しました: ' + error.message);
+    } finally {
+      setUploadingFiles(false);
+    }
+  };
+
+  // 複数テキストファイル管理モーダルを開く
+  const handleOpenMultiTextManagement = async (lesson) => {
+    setSelectedLessonForMultiText(lesson);
+    setShowMultiTextModal(true);
+    await fetchMultiTextFiles(lesson.id);
+  };
+
+  // 複数テキストファイル一覧取得
+  const fetchMultiTextFiles = async (lessonId) => {
+    try {
+      const response = await apiGet(`/api/lesson-text-files/lesson/${lessonId}`);
+      if (response.success) {
+        setMultiTextFiles(response.data);
+      }
+    } catch (error) {
+      console.error('複数テキストファイル取得エラー:', error);
+    }
+  };
+
+  // 複数テキストファイル削除
+  const handleDeleteMultiTextFile = async (fileId) => {
+    if (!window.confirm('このファイルを削除しますか？')) return;
+
+    try {
+      const response = await apiDelete(`/api/lesson-text-files/${fileId}`);
+      if (response.success) {
+        alert('ファイルが削除されました');
+        await fetchMultiTextFiles(selectedLessonForMultiText.id);
+      } else {
+        alert('ファイルの削除に失敗しました: ' + response.message);
+      }
+    } catch (error) {
+      console.error('複数テキストファイル削除エラー:', error);
+      alert('ファイルの削除中にエラーが発生しました: ' + error.message);
+    }
   };
 
   // 動画管理モーダルを開く
@@ -1605,6 +1706,30 @@ const LessonManagement = () => {
                    </div>
                  )}
                </div>
+
+               {/* 複数テキスト管理セクション */}
+               <div className="mb-6">
+                 <div className="flex justify-between items-center mb-3">
+                   <label className="block text-sm font-medium text-gray-700">
+                     📄 複数テキスト管理
+                   </label>
+                   <button
+                     type="button"
+                     onClick={() => {
+                       setSelectedLessonForMultiText(selectedLesson);
+                       setShowMultiTextModal(true);
+                       fetchMultiTextFiles(selectedLesson.id);
+                     }}
+                     className="px-3 py-1 bg-purple-500 text-white text-sm rounded hover:bg-purple-600 transition-colors"
+                   >
+                     📄 テキスト管理
+                   </button>
+                 </div>
+                 
+                 <div className="text-center py-4 text-gray-500 border-2 border-dashed border-gray-300 rounded-lg">
+                   複数テキストファイルの管理は「テキスト管理」ボタンから行えます
+                 </div>
+               </div>
             </form>
             </div>
             
@@ -2221,6 +2346,147 @@ const LessonManagement = () => {
             <div className="p-6 border-t border-gray-200 flex justify-end">
               <button
                 onClick={() => setShowVideoPlayerModal(false)}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-400 transition-all duration-200"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 複数テキストファイル管理モーダル */}
+      {showMultiTextModal && selectedLessonForMultiText && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl w-full max-w-[95vw] max-h-[90vh] flex flex-col">
+            {/* ヘッダー - 固定 */}
+            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-800">
+                📄 複数テキストファイル管理 - {selectedLessonForMultiText.title}
+              </h2>
+              <button
+                onClick={() => setShowMultiTextModal(false)}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            {/* コンテンツ - スクロール可能 */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="mb-4 p-3 bg-purple-50 rounded-lg">
+                <p className="text-sm text-purple-800">
+                  <strong>コース:</strong> {selectedLessonForMultiText.course_title}
+                </p>
+                <p className="text-sm text-purple-800">
+                  <strong>テキストファイル数:</strong> {multiTextFiles.length}個
+                </p>
+              </div>
+
+              {/* 2カラムレイアウト */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* 左カラム: ファイルアップロードセクション */}
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">📤 ファイルアップロード</h3>
+                  
+                  {/* ファイル選択 */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      複数ファイル選択
+                    </label>
+                    <input
+                      type="file"
+                      multiple
+                      accept=".pdf,.txt,.md,.docx,.pptx"
+                      onChange={handleMultiTextFileChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      PDF、テキスト、Markdown、Word、PowerPointファイルを選択できます
+                    </p>
+                  </div>
+
+                  {/* 選択されたファイル一覧 */}
+                  {additionalTextFiles.length > 0 && (
+                    <div className="mb-4">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">選択されたファイル:</h4>
+                      <div className="space-y-2">
+                        {additionalTextFiles.map((file, index) => (
+                          <div key={index} className="flex items-center justify-between bg-white p-2 rounded border">
+                            <span className="text-sm text-gray-700 truncate">{file.name}</span>
+                            <button
+                              onClick={() => handleRemoveMultiTextFile(index)}
+                              className="text-red-500 hover:text-red-700 text-sm"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* アップロードボタン */}
+                  <button
+                    onClick={handleUploadMultiTextFiles}
+                    disabled={additionalTextFiles.length === 0 || uploadingFiles}
+                    className="w-full px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {uploadingFiles ? 'アップロード中...' : 'ファイルをアップロード'}
+                  </button>
+                </div>
+
+                {/* 右カラム: ファイル管理セクション */}
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">📋 ファイル一覧</h3>
+                  
+                  {multiTextFiles.length > 0 ? (
+                    <div className="space-y-2">
+                      {multiTextFiles.map((file, index) => (
+                        <div key={file.id} className="bg-white p-3 rounded-lg border border-gray-200">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs">
+                                  ファイル {index + 1}
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  順序: {file.order_index + 1}
+                                </span>
+                              </div>
+                              <h4 className="font-medium text-gray-800 text-sm">{file.file_name}</h4>
+                              <p className="text-xs text-gray-500">
+                                サイズ: {file.file_size ? `${(file.file_size / 1024).toFixed(1)}KB` : '不明'}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                タイプ: {file.file_type || '不明'}
+                              </p>
+                            </div>
+                            <div className="flex gap-1 ml-2">
+                              <button
+                                onClick={() => handleDeleteMultiTextFile(file.id)}
+                                className="px-2 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600"
+                              >
+                                削除
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>アップロードされたファイルがありません</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* フッター - 固定 */}
+            <div className="p-6 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => setShowMultiTextModal(false)}
                 className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-400 transition-all duration-200"
               >
                 閉じる

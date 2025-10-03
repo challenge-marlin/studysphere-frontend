@@ -47,8 +47,8 @@ function App() {
           <Routes>
             {/* デバッグ用テストルート */}
             <Route path="/test" element={<TestComponent />} />
-            {/* ルートパスから /homepage へのリダイレクト */}
-            <Route path="/" element={<Navigate to="/homepage" replace />} />
+            {/* ルートパス - 一般向け概要説明ページ（メインページ） */}
+            <Route path="/" element={<HomePage />} />
             {/* 一般向け概要説明ページ（メインページ） */}
             <Route path="/homepage" element={<HomePage />} />
             {/* 管理者・指導員用ログインページ */}

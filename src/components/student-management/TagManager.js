@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 
+  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
+    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
+    : 'http://localhost:5050');
 
 const TagManager = ({ students, onStudentsUpdate }) => {
   const [showTagModal, setShowTagModal] = useState(false);

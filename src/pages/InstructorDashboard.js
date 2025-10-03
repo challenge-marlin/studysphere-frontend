@@ -314,7 +314,10 @@ const InstructorDashboard = () => {
   const handlePasswordChange = async (currentPassword, newPassword) => {
     try {
       const token = localStorage.getItem('accessToken');
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 
+        (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
+          ? 'https://backend.studysphere.ayatori-inc.co.jp' 
+          : 'http://localhost:5050');
       const response = await fetch(`${API_BASE_URL}/api/users/${currentUser.id}/change-password`, {
         method: 'POST',
         headers: {

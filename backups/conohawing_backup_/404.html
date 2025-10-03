@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Redirecting...</title>
+    <script>
+      // GitHub Pages SPA redirect
+      // /reactStudySphereMockup/ 以降のパスをクエリとしてトップにリダイレクト
+      var path = window.location.pathname.replace(/^\/reactStudySphereMockup/, '');
+      var search = window.location.search || '';
+      var hash = window.location.hash || '';
+      var redirectUrl = '/reactStudySphereMockup/?redirect=' + encodeURIComponent(path + search + hash);
+      window.location.replace(redirectUrl);
+    </script>
+  </head>
+  <body>
+    <h1>Redirecting...</h1>
+  </body>
+</html> 

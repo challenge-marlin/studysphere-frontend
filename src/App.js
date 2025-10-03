@@ -34,9 +34,14 @@ const TestComponent = () => (
 );
 
 function App() {
+  // 環境に応じてbasenameを設定
+  const basename = process.env.NODE_ENV === 'production' 
+    ? process.env.PUBLIC_URL || '/'  // 本番環境ではプレフィックスなし
+    : '/studysphere';  // 開発環境では/studysphereプレフィックス
+
   return (
     <Router 
-      basename={process.env.PUBLIC_URL}
+      basename={basename}
       future={{
         v7_startTransition: true,
         v7_relativeSplatPath: true

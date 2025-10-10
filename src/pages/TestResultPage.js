@@ -209,8 +209,8 @@ const TestResultPage = () => {
           locationState: location.state
         });
       
-      // 正答数を計算（元の問題データを使用して結果表示の整合性を保つ）
-      const questionsToUse = testData.questions;
+      // 正答数を計算（シャッフルされた問題データを使用して結果表示の整合性を保つ）
+      const questionsToUse = shuffledQuestions && shuffledQuestions.length > 0 ? shuffledQuestions : testData.questions;
       const correctAnswers = score || 0;
       const total = totalQuestions || questionsToUse.length;
       const percentage = Math.round((correctAnswers / total) * 100);
@@ -227,7 +227,10 @@ const TestResultPage = () => {
         sectionIndex,
         lessonTitle,
         sectionTitle,
-        testData,
+        testData: {
+          ...testData,
+          questions: questionsToUse
+        },
         answers,
         correctAnswers,
         totalQuestions: total,

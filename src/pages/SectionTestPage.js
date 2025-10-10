@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import MultipleChoiceTest from '../components/learning/MultipleChoiceTest';
 import { SessionStorageManager } from '../utils/sessionStorage';
+import { API_BASE_URL } from '../config/apiConfig';
 
 const SectionTestPage = () => {
   const navigate = useNavigate();
@@ -92,7 +93,7 @@ const SectionTestPage = () => {
         });
         
         // レッスンデータを取得
-        const lessonResponse = await fetch(`http://localhost:5050/api/learning/lesson/${currentLesson}/content`, {
+        const lessonResponse = await fetch(`${API_BASE_URL}/api/learning/lesson/${currentLesson}/content`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
             'Content-Type': 'application/json'
@@ -109,7 +110,7 @@ const SectionTestPage = () => {
         }
 
         // セクションデータを取得
-        const sectionResponse = await fetch(`http://localhost:5050/api/lesson-text-video-links/lesson/${currentLesson}`, {
+        const sectionResponse = await fetch(`${API_BASE_URL}/api/lesson-text-video-links/lesson/${currentLesson}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
             'Content-Type': 'application/json'
@@ -308,7 +309,7 @@ const SectionTestPage = () => {
             
             console.log('フォールバックコンテキストでAPIリクエスト送信:', requestBody);
             
-            const response = await fetch('http://localhost:5050/api/test/learning/generate-test', {
+            const response = await fetch(`${API_BASE_URL}/api/test/learning/generate-test`, {
               method: 'POST',
               headers: {
                 'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
@@ -391,11 +392,11 @@ const SectionTestPage = () => {
       };
       
       console.log('APIリクエスト送信:', {
-        url: 'http://localhost:5050/api/test/learning/generate-test',
+        url: `${API_BASE_URL}/api/test/learning/generate-test`,
         body: requestBody
       });
       
-      const response = await fetch('http://localhost:5050/api/test/learning/generate-test', {
+      const response = await fetch(`${API_BASE_URL}/api/test/learning/generate-test`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
@@ -499,11 +500,11 @@ const SectionTestPage = () => {
       };
       
       console.log('生成されたコンテキストでAPIリクエスト送信:', {
-        url: 'http://localhost:5050/api/test/learning/generate-test',
+        url: `${API_BASE_URL}/api/test/learning/generate-test`,
         body: requestBody
       });
       
-      const response = await fetch('http://localhost:5050/api/test/learning/generate-test', {
+      const response = await fetch(`${API_BASE_URL}/api/test/learning/generate-test`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
@@ -692,7 +693,7 @@ const SectionTestPage = () => {
       });
       
       // テスト結果を提出
-      const response = await fetch('http://localhost:5050/api/learning/test/submit', {
+      const response = await fetch(`${API_BASE_URL}/api/learning/test/submit`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,

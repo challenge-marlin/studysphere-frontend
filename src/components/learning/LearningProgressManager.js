@@ -1,4 +1,5 @@
 import React, { useRef, useCallback } from 'react';
+import { API_BASE_URL } from '../../config/apiConfig';
 
 // 学習進捗管理のカスタムフック
 export const useLearningProgress = () => {
@@ -80,7 +81,7 @@ export const useLearningProgress = () => {
         console.log('学習進捗更新処理開始:', { userId, courseId, currentLesson });
         
         // まず、利用者とコースの関連付けを確認・作成
-        const assignResponse = await fetch('http://localhost:5050/api/learning/assign-course', {
+        const assignResponse = await fetch(`${API_BASE_URL}/api/learning/assign-course`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
@@ -99,7 +100,7 @@ export const useLearningProgress = () => {
         }
         
         // レッスン進捗を「学習中」に更新
-        const progressResponse = await fetch('http://localhost:5050/api/learning/progress/lesson', {
+        const progressResponse = await fetch(`${API_BASE_URL}/api/learning/progress/lesson`, {
           method: 'PUT',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
@@ -144,7 +145,7 @@ export const useLearningProgress = () => {
       
       // まず、利用者とコースの関連付けを確認・作成
       console.log('1. コース割り当て処理開始...');
-      const assignResponse = await fetch('http://localhost:5050/api/learning/assign-course', {
+      const assignResponse = await fetch(`${API_BASE_URL}/api/learning/assign-course`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
@@ -169,7 +170,7 @@ export const useLearningProgress = () => {
       
       // 現在のレッスンの進捗レコードを作成・更新
       console.log('2. レッスン進捗更新処理開始...');
-      const progressResponse = await fetch('http://localhost:5050/api/learning/progress/lesson', {
+      const progressResponse = await fetch(`${API_BASE_URL}/api/learning/progress/lesson`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,

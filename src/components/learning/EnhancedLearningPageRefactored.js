@@ -10,6 +10,7 @@ import FileUploadSection from './FileUploadSection';
 import UploadModal from './UploadModal';
 import AIAssistantService from './AIAssistantService';
 import { SessionStorageManager } from '../../utils/sessionStorage';
+import { API_BASE_URL } from '../../config/apiConfig';
 
 const EnhancedLearningPageRefactored = () => {
   const navigate = useNavigate();
@@ -82,7 +83,7 @@ const EnhancedLearningPageRefactored = () => {
     try {
       console.log(`📁 提出物確認ファイル取得開始: レッスンID ${targetLessonId}`);
       
-      const response = await fetch(`http://localhost:5050/api/learning/lesson/${targetLessonId}/uploaded-files`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/lesson/${targetLessonId}/uploaded-files`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'
@@ -121,7 +122,7 @@ const EnhancedLearningPageRefactored = () => {
     try {
       console.log(`🔍 課題提出状況確認開始: レッスンID ${targetLessonId} (currentLesson: ${currentLesson}), requestId: ${requestId}`);
       
-      const response = await fetch(`http://localhost:5050/api/learning/lesson/${targetLessonId}/assignment-status`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/lesson/${targetLessonId}/assignment-status`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'
@@ -191,10 +192,10 @@ const EnhancedLearningPageRefactored = () => {
         userId,
         retryCount: retryCount + 1,
         requestId,
-        url: `http://localhost:5050/api/learning/lesson/${targetLessonId}/content`
+        url: `${API_BASE_URL}/api/learning/lesson/${targetLessonId}/content`
       });
       
-      const response = await fetch(`http://localhost:5050/api/learning/lesson/${targetLessonId}/content`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/lesson/${targetLessonId}/content`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'
@@ -440,7 +441,7 @@ const EnhancedLearningPageRefactored = () => {
     try {
       console.log(`セクションデータを取得中: レッスンID ${lessonId} (試行回数: ${retryCount + 1})`);
       
-      const response = await fetch(`http://localhost:5050/api/lesson-text-video-links/lesson/${lessonId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/lesson-text-video-links/lesson/${lessonId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'
@@ -599,7 +600,7 @@ const EnhancedLearningPageRefactored = () => {
       
       console.log(`コースデータを取得中: コースID ${courseId}, 利用者ID ${userId} (試行回数: ${retryCount + 1})`);
       
-      const response = await fetch(`http://localhost:5050/api/learning/progress/${userId}/course/${courseId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/progress/${userId}/course/${courseId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'
@@ -840,7 +841,7 @@ const EnhancedLearningPageRefactored = () => {
       formData.append('file', zipFiles[0]);
       formData.append('lessonId', currentLesson);
 
-      const response = await fetch(`http://localhost:5050/api/learning/upload-assignment`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/upload-assignment`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
@@ -894,7 +895,7 @@ const EnhancedLearningPageRefactored = () => {
     try {
       console.log(`🗑️ ファイル削除開始: ファイルID ${fileId}, レッスンID ${currentLesson}`);
       
-      const response = await fetch(`http://localhost:5050/api/learning/lesson/${currentLesson}/uploaded-files/${fileId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/lesson/${currentLesson}/uploaded-files/${fileId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,

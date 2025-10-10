@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { API_BASE_URL } from '../config/apiConfig';
 
 const TestResultPage = () => {
   const navigate = useNavigate();
@@ -28,7 +29,7 @@ const TestResultPage = () => {
       const userAnswer = question.options[userAnswerIndex];
       const correctAnswer = question.options[correctAnswerIndex];
       
-      const response = await fetch('http://localhost:5050/api/learning/generate-feedback', {
+      const response = await fetch(`${API_BASE_URL}/api/learning/generate-feedback`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,

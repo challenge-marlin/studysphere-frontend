@@ -365,6 +365,11 @@ const LessonList = ({ selectedCourseId }) => {
     // 認証済みの場合はコース一覧を読み込み
     console.log('認証済みユーザーです。コース一覧を読み込みます。');
     loadCourses();
+    
+    // テスト結果も読み込み
+    if (currentUser) {
+      loadTestResults();
+    }
   }, [currentUser, navigate, selectedCourseId]);
 
   // 選択されたコースが変更されたときにレッスンを読み込み
@@ -372,6 +377,7 @@ const LessonList = ({ selectedCourseId }) => {
     if (selectedCourse) {
       loadLessons(selectedCourse.id);
       loadCurrentLesson(selectedCourse.id);
+      loadTestResults();
     }
   }, [selectedCourse]);
 

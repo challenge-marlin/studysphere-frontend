@@ -4,6 +4,7 @@ import StudentVoiceCareView from '../components/StudentVoiceCareView';
 import CertificateList from '../components/CertificateList';
 import { fetchStudentCourses } from '../utils/studentApi';
 import { useAuth } from '../components/contexts/AuthContext';
+import { API_BASE_URL } from '../config/apiConfig';
 
 const Dashboard = ({ onTabChange }) => {
   const { currentUser } = useAuth();
@@ -52,7 +53,7 @@ const Dashboard = ({ onTabChange }) => {
   const handleStartCourse = async (courseId) => {
     try {
       // 現在受講中のレッスンを取得
-      const currentLessonResponse = await fetch(`http://localhost:5050/api/learning/current-lesson?courseId=${courseId}`, {
+      const currentLessonResponse = await fetch(`${API_BASE_URL}/api/learning/current-lesson?courseId=${courseId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'
@@ -72,7 +73,7 @@ const Dashboard = ({ onTabChange }) => {
       }
 
       // 現在受講中のレッスンがない場合は、利用者のコース情報を取得
-      const response = await fetch(`http://localhost:5050/api/learning/progress/${currentUser.id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/progress/${currentUser.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'
@@ -92,7 +93,7 @@ const Dashboard = ({ onTabChange }) => {
             
             // 学習開始時に進捗を更新
             try {
-              await fetch('http://localhost:5050/api/learning/progress/lesson', {
+              await fetch(`${API_BASE_URL}/api/learning/progress/lesson`, {
                 method: 'PUT',
                 headers: {
                   'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
@@ -119,7 +120,7 @@ const Dashboard = ({ onTabChange }) => {
       // 学習データが存在しない場合は、新たに作成
       try {
         // 利用者とコースの関連付けを作成
-        const createUserCourseResponse = await fetch('http://localhost:5050/api/learning/assign-course', {
+        const createUserCourseResponse = await fetch(`${API_BASE_URL}/api/learning/assign-course`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
@@ -135,7 +136,7 @@ const Dashboard = ({ onTabChange }) => {
           const createData = await createUserCourseResponse.json();
           if (createData.success) {
             // 作成成功後、再度コース情報を取得して学習画面に遷移
-            const retryResponse = await fetch(`http://localhost:5050/api/learning/progress/${currentUser.id}`, {
+            const retryResponse = await fetch(`${API_BASE_URL}/api/learning/progress/${currentUser.id}`, {
               headers: {
                 'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
                 'Content-Type': 'application/json'
@@ -150,7 +151,7 @@ const Dashboard = ({ onTabChange }) => {
                   const firstLesson = targetCourse.lessons[0];
                   
                   // 最初のレッスンを学習中に設定
-                  await fetch('http://localhost:5050/api/learning/progress/lesson', {
+                  await fetch(`${API_BASE_URL}/api/learning/progress/lesson`, {
                     method: 'PUT',
                     headers: {
                       'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,

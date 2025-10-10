@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../config/apiConfig';
 
 const LearningProgress = ({ userId }) => {
   const [progressData, setProgressData] = useState(null);
@@ -13,7 +14,7 @@ const LearningProgress = ({ userId }) => {
         setLoading(true);
         setError(null);
 
-                 const response = await fetch(`http://localhost:5050/api/learning/progress/${userId}`, {
+                 const response = await fetch(`${API_BASE_URL}/api/learning/progress/${userId}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
             'Content-Type': 'application/json'
@@ -55,7 +56,7 @@ const LearningProgress = ({ userId }) => {
       try {
         const userId = localStorage.getItem('userId') || '1';
         
-                     await fetch('http://localhost:5050/api/learning/progress/lesson', {
+                     await fetch(`${API_BASE_URL}/api/learning/progress/lesson`, {
                method: 'PUT',
                headers: {
                  'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/contexts/AuthContext';
+import { API_BASE_URL } from '../config/apiConfig';
 
 const InstructorStudentDetail = () => {
   const { studentId } = useParams();
@@ -21,7 +22,7 @@ const InstructorStudentDetail = () => {
   const fetchStudentProgress = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:5050/api/learning/instructor/student/${studentId}/lesson-progress`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/instructor/student/${studentId}/lesson-progress`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'
@@ -50,7 +51,7 @@ const InstructorStudentDetail = () => {
   const handleApproveLesson = async (lessonId) => {
     try {
       setApproving(true);
-      const response = await fetch(`http://localhost:5050/api/learning/instructor/student/${studentId}/lesson/${lessonId}/approve`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/instructor/student/${studentId}/lesson/${lessonId}/approve`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,

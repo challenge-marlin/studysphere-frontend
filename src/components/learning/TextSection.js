@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import MarkdownRenderer from './MarkdownRenderer';
 import { SessionStorageManager } from '../../utils/sessionStorage';
+import { API_BASE_URL } from '../../config/apiConfig';
 
 const TextSection = ({
   lessonData,
@@ -204,7 +205,7 @@ const TextSection = ({
       }, 5 * 60 * 1000); // 5分に短縮
       
       // PDFテキスト抽出APIを呼び出し
-      const response = await fetch(`http://localhost:5050/api/learning/extract-pdf-text`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/extract-pdf-text`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -475,7 +476,7 @@ const TextSection = ({
             {/* PDFをiframeで表示 */}
             <div className="w-full h-full border border-gray-300 rounded-lg overflow-hidden relative">
               <iframe
-                src={lessonData.pdfUrl || `${process.env.REACT_APP_API_URL || 'http://localhost:5050'}/api/learning/pdf-viewer?key=${encodeURIComponent(lessonData.s3_key)}`}
+                src={lessonData.pdfUrl || `${API_BASE_URL}/api/learning/pdf-viewer?key=${encodeURIComponent(lessonData.s3_key)}`}
                 title="PDF Viewer"
                 className="w-full h-full"
                 frameBorder="0"
@@ -495,7 +496,7 @@ const TextSection = ({
                   <p className="text-gray-600 mb-3">PDFの表示に失敗しました</p>
                   <div className="space-y-2">
                     <button 
-                      onClick={() => window.open(lessonData.pdfUrl || `${process.env.REACT_APP_API_URL || 'http://localhost:5050'}/api/learning/pdf-viewer?key=${encodeURIComponent(lessonData.s3_key)}`, '_blank')}
+                      onClick={() => window.open(lessonData.pdfUrl || `${API_BASE_URL}/api/learning/pdf-viewer?key=${encodeURIComponent(lessonData.s3_key)}`, '_blank')}
                       className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 mr-2"
                     >
                       新しいタブで開く

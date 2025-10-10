@@ -4,6 +4,7 @@ import { useStudentGuard } from '../utils/hooks/useAuthGuard';
 import { useAuth } from '../components/contexts/AuthContext';
 import { verifyTemporaryPasswordAPI, apiGet } from '../utils/api';
 import { saveTempPasswordAuth } from '../utils/authUtils';
+import { API_BASE_URL } from '../config/apiConfig';
 import Dashboard from './Dashboard';
 import LessonList from './LessonList';
 import CareerAssessment from '../components/CareerAssessment';
@@ -28,7 +29,7 @@ const StudentDashboard = () => {
     const fetchUserCourses = async () => {
       if (currentUser?.id) {
         try {
-          const response = await fetch(`http://localhost:5050/api/learning/progress/${currentUser.id}`, {
+          const response = await fetch(`${API_BASE_URL}/api/learning/progress/${currentUser.id}`, {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
               'Content-Type': 'application/json'

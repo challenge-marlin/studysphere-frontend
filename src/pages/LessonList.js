@@ -17,6 +17,7 @@ const LessonList = ({ selectedCourseId }) => {
   const [currentLesson, setCurrentLesson] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [testResults, setTestResults] = useState({});
   
   // 試験結果モーダル関連の状態
   const [examResultListModalOpen, setExamResultListModalOpen] = useState(false);
@@ -159,14 +160,12 @@ const LessonList = ({ selectedCourseId }) => {
     }
   };
 
-<<<<<<< Updated upstream
-=======
   // テスト結果を取得
   const loadTestResults = async () => {
     try {
       console.log('🔍 テスト結果取得開始');
       
-      const response = await fetch(`${API_BASE_URL}/api/learning/test/results/${currentUser.id}`, {
+      const response = await fetch(`http://localhost:5050/api/learning/test/results/${currentUser.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'
@@ -225,13 +224,12 @@ const LessonList = ({ selectedCourseId }) => {
       setTestResults({});
     }
   };
-
->>>>>>> Stashed changes
   // コース選択時の処理
   const handleCourseSelect = (course) => {
     setSelectedCourse(course);
     loadLessons(course.id);
     loadCurrentLesson(course.id);
+    loadTestResults();
   };
 
   // レッスン学習へのリンク（改善版学習画面を使用）
@@ -239,19 +237,9 @@ const LessonList = ({ selectedCourseId }) => {
     try {
       console.log(`🎓 レッスン学習開始: レッスンID ${lesson.id}, コースID ${lesson.course_id}`);
       
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-      // 現在のレッスンを開始する前に、既存の進捗を確認・更新
-      const response = await fetch(`http://localhost:5050/api/learning/progress/lesson`, {
-=======
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
       // 1. まず、利用者とコースの関連付けを確認・作成
       console.log('1. コース割り当て処理開始...');
-      const assignResponse = await fetch(`${API_BASE_URL}/api/learning/assign-course`, {
+      const assignResponse = await fetch(`http://localhost:5050/api/learning/assign-course`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
@@ -283,8 +271,7 @@ const LessonList = ({ selectedCourseId }) => {
       
       console.log(`🔄 進捗更新開始: レッスンID ${lesson.id}, ステータス ${targetStatus}`);
       
-      const response = await fetch(`${API_BASE_URL}/api/learning/progress/lesson`, {
->>>>>>> Stashed changes
+      const response = await fetch(`http://localhost:5050/api/learning/progress/lesson`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
@@ -326,17 +313,6 @@ const LessonList = ({ selectedCourseId }) => {
     }
   };
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-  // テスト受験へのリンク
-  const handleTakeTest = (lesson) => {
-    navigate(`/student/test?course=${lesson.course_id}&lesson=${lesson.id}`);
-=======
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
   // 試験結果一覧を表示（新しい実装）
   const handleViewExamResults = (lesson) => {
     console.log(`📊 試験結果一覧表示: レッスンID ${lesson.id}`);
@@ -357,13 +333,6 @@ const LessonList = ({ selectedCourseId }) => {
     setExamResultDetailModalOpen(false);
     // 詳細モーダルを閉じたら一覧モーダルに戻る
     setExamResultListModalOpen(true);
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
   };
 
   // 課題提出へのリンク
@@ -552,21 +521,11 @@ const LessonList = ({ selectedCourseId }) => {
           onStartLesson={handleStartLesson}
           onViewExamResults={handleViewExamResults}
           onSubmitAssignment={handleSubmitAssignment}
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-          currentLessonId={currentLesson?.lesson_id || currentLesson?.id}
-=======
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
           currentLessonId={
             // レッスン一覧から計算したIDを優先、なければAPIから取得した値を使用
             getCurrentLessonIdFromList(lessons) || currentLesson?.lesson_id || currentLesson?.id
           }
           testResults={testResults}
->>>>>>> Stashed changes
         />
       )}
 

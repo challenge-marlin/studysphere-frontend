@@ -1,18 +1,6 @@
 import React from 'react';
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-const LessonTable = ({ lessons, onStartLesson, onTakeTest, onSubmitAssignment, currentLessonId }) => {
-=======
 const LessonTable = ({ lessons, onStartLesson, onViewExamResults, onSubmitAssignment, currentLessonId, testResults }) => {
->>>>>>> Stashed changes
-=======
-const LessonTable = ({ lessons, onStartLesson, onViewExamResults, onSubmitAssignment, currentLessonId, testResults }) => {
->>>>>>> Stashed changes
-=======
-const LessonTable = ({ lessons, onStartLesson, onViewExamResults, onSubmitAssignment, currentLessonId, testResults }) => {
->>>>>>> Stashed changes
   // レッスン進行状況の取得
   const getLessonStatus = (lesson) => {
     const status = lesson.progress_status || 'not_started';
@@ -78,15 +66,8 @@ const LessonTable = ({ lessons, onStartLesson, onViewExamResults, onSubmitAssign
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center">
-<<<<<<< Updated upstream
-                    {lesson.test_score !== null ? (
-                      <span className="text-green-600 font-medium">{lesson.test_score}点</span>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
-=======
                     {(() => {
-                      const testResult = testResults[lesson.id];
+                      const testResult = testResults && testResults[lesson.id];
                       console.log(`🔍 レッスン${lesson.id}のテスト結果:`, {
                         lessonId: lesson.id,
                         testResult: testResult,
@@ -116,7 +97,6 @@ const LessonTable = ({ lessons, onStartLesson, onViewExamResults, onSubmitAssign
                         return <span className="text-gray-400">-</span>;
                       }
                     })()}
->>>>>>> Stashed changes
                   </td>
                   <td className="px-4 py-3 text-center">
                     {lesson.has_assignment === 1 || lesson.has_assignment === true ? (
@@ -137,22 +117,6 @@ const LessonTable = ({ lessons, onStartLesson, onViewExamResults, onSubmitAssign
                       >
                         🎓 学習
                       </button>
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-                      {lesson.progress_status === 'completed' && (
-                        <button
-                          className="px-3 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
-                          onClick={() => onTakeTest(lesson)}
-                        >
-                          📝 テスト
-                        </button>
-                      )}
-=======
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
                       {/* 試験結果一覧ボタン（常に表示） */}
                       <button
                         className="px-3 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
@@ -160,13 +124,6 @@ const LessonTable = ({ lessons, onStartLesson, onViewExamResults, onSubmitAssign
                       >
                         📝 試験結果一覧
                       </button>
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
                       {(lesson.has_assignment === 1 || lesson.has_assignment === true) && 
                        !(lesson.assignment_submitted === 1 || lesson.assignment_submitted === true) && (
                         <button

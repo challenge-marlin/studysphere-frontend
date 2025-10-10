@@ -281,8 +281,7 @@ const LessonList = ({ selectedCourseId }) => {
         body: JSON.stringify({
           userId: currentUser.id,
           lessonId: lesson.id,
-          status: targetStatus,
-          forceUpdate: true  // 強制更新フラグを追加
+          status: targetStatus
           // testScoreとassignmentSubmittedは指定せず、既存の値を保持
         })
       });

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../../config/apiConfig';
 import ReactMarkdown from 'react-markdown';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
 
 const ExamResultDetailModal = ({ isOpen, onClose, resultKey }) => {
   const [markdownContent, setMarkdownContent] = useState('');

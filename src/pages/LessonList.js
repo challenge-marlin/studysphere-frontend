@@ -240,9 +240,12 @@ const LessonList = ({ selectedCourseId }) => {
       console.log(`🎓 レッスン学習開始: レッスンID ${lesson.id}, コースID ${lesson.course_id}`);
       
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
       // 現在のレッスンを開始する前に、既存の進捗を確認・更新
       const response = await fetch(`http://localhost:5050/api/learning/progress/lesson`, {
 =======
+=======
+>>>>>>> Stashed changes
       // 1. まず、利用者とコースの関連付けを確認・作成
       console.log('1. コース割り当て処理開始...');
       const assignResponse = await fetch(`${API_BASE_URL}/api/learning/assign-course`, {
@@ -321,10 +324,13 @@ const LessonList = ({ selectedCourseId }) => {
   };
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   // テスト受験へのリンク
   const handleTakeTest = (lesson) => {
     navigate(`/student/test?course=${lesson.course_id}&lesson=${lesson.id}`);
 =======
+=======
+>>>>>>> Stashed changes
   // 試験結果一覧を表示（新しい実装）
   const handleViewExamResults = (lesson) => {
     console.log(`📊 試験結果一覧表示: レッスンID ${lesson.id}`);
@@ -345,6 +351,9 @@ const LessonList = ({ selectedCourseId }) => {
     setExamResultDetailModalOpen(false);
     // 詳細モーダルを閉じたら一覧モーダルに戻る
     setExamResultListModalOpen(true);
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
   };
 
@@ -535,8 +544,11 @@ const LessonList = ({ selectedCourseId }) => {
           onViewExamResults={handleViewExamResults}
           onSubmitAssignment={handleSubmitAssignment}
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
           currentLessonId={currentLesson?.lesson_id || currentLesson?.id}
 =======
+=======
+>>>>>>> Stashed changes
           currentLessonId={
             // レッスン一覧から計算したIDを優先、なければAPIから取得した値を使用
             getCurrentLessonIdFromList(lessons) || currentLesson?.lesson_id || currentLesson?.id

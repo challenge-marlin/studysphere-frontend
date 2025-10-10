@@ -2,7 +2,11 @@ import React from 'react';
 
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 const LessonTable = ({ lessons, onStartLesson, onTakeTest, onSubmitAssignment, currentLessonId }) => {
+=======
+const LessonTable = ({ lessons, onStartLesson, onViewExamResults, onSubmitAssignment, currentLessonId, testResults }) => {
+>>>>>>> Stashed changes
 =======
 const LessonTable = ({ lessons, onStartLesson, onViewExamResults, onSubmitAssignment, currentLessonId, testResults }) => {
 >>>>>>> Stashed changes
@@ -135,6 +139,7 @@ const LessonTable = ({ lessons, onStartLesson, onViewExamResults, onSubmitAssign
                       </button>
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
                       {lesson.progress_status === 'completed' && (
                         <button
                           className="px-3 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
@@ -146,6 +151,8 @@ const LessonTable = ({ lessons, onStartLesson, onViewExamResults, onSubmitAssign
 =======
 =======
 >>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
                       {/* 試験結果一覧ボタン（常に表示） */}
                       <button
                         className="px-3 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
@@ -154,6 +161,9 @@ const LessonTable = ({ lessons, onStartLesson, onViewExamResults, onSubmitAssign
                         📝 試験結果一覧
                       </button>
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes

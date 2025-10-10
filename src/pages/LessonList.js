@@ -241,9 +241,12 @@ const LessonList = ({ selectedCourseId }) => {
       
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
       // 現在のレッスンを開始する前に、既存の進捗を確認・更新
       const response = await fetch(`http://localhost:5050/api/learning/progress/lesson`, {
 =======
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
       // 1. まず、利用者とコースの関連付けを確認・作成
@@ -325,10 +328,13 @@ const LessonList = ({ selectedCourseId }) => {
 
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   // テスト受験へのリンク
   const handleTakeTest = (lesson) => {
     navigate(`/student/test?course=${lesson.course_id}&lesson=${lesson.id}`);
 =======
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
   // 試験結果一覧を表示（新しい実装）
@@ -352,6 +358,9 @@ const LessonList = ({ selectedCourseId }) => {
     // 詳細モーダルを閉じたら一覧モーダルに戻る
     setExamResultListModalOpen(true);
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
@@ -545,8 +554,11 @@ const LessonList = ({ selectedCourseId }) => {
           onSubmitAssignment={handleSubmitAssignment}
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
           currentLessonId={currentLesson?.lesson_id || currentLesson?.id}
 =======
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
           currentLessonId={

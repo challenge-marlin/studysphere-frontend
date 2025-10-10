@@ -108,11 +108,8 @@ export const useLearningProgress = () => {
           body: JSON.stringify({
             userId: parseInt(userId),
             lessonId: parseInt(currentLesson),
-            status: 'in_progress',
-            testScore: null,
-            assignmentSubmitted: false,
-            instructorApproved: false,
-            instructorId: null
+            status: 'in_progress'
+            // testScore、assignmentSubmitted等は指定せず、既存の値を保持
           })
         });
         
@@ -181,11 +178,8 @@ export const useLearningProgress = () => {
         body: JSON.stringify({
           userId: parseInt(userId),
           lessonId: parseInt(currentLesson),
-          status: 'in_progress',
-          testScore: null,
-          assignmentSubmitted: false,
-          instructorApproved: false,
-          instructorId: null
+          status: 'in_progress'
+          // testScore、assignmentSubmitted等は指定せず、既存の値を保持
         })
       });
       

@@ -6,10 +6,10 @@
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  RewriteBase /reactStudySphereMockup/
+  RewriteBase /
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule ^.*$ /reactStudySphereMockup/index.html [L]
+  RewriteRule ^.*$ /index.html [L]
 </IfModule>
 
 <Files "manifest.json">

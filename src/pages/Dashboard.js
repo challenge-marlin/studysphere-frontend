@@ -101,9 +101,8 @@ const Dashboard = ({ onTabChange }) => {
                 body: JSON.stringify({
                   userId: parseInt(currentUser.id),
                   lessonId: parseInt(firstLesson.id),
-                  status: 'in_progress',
-                  testScore: null,
-                  assignmentSubmitted: false
+                  status: 'in_progress'
+                  // testScoreとassignmentSubmittedは指定せず、既存の値を保持
                 })
               });
             } catch (error) {
@@ -160,9 +159,8 @@ const Dashboard = ({ onTabChange }) => {
                     body: JSON.stringify({
                       userId: parseInt(currentUser.id),
                       lessonId: parseInt(firstLesson.id),
-                      status: 'in_progress',
-                      testScore: null,
-                      assignmentSubmitted: false
+                      status: 'in_progress'
+                      // testScoreとassignmentSubmittedは指定せず、既存の値を保持
                     })
                   });
                   

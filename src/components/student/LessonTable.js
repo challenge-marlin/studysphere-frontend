@@ -1,6 +1,10 @@
 import React from 'react';
 
+<<<<<<< Updated upstream
 const LessonTable = ({ lessons, onStartLesson, onTakeTest, onSubmitAssignment, currentLessonId }) => {
+=======
+const LessonTable = ({ lessons, onStartLesson, onViewExamResults, onSubmitAssignment, currentLessonId, testResults }) => {
+>>>>>>> Stashed changes
   // レッスン進行状況の取得
   const getLessonStatus = (lesson) => {
     const status = lesson.progress_status || 'not_started';
@@ -66,11 +70,45 @@ const LessonTable = ({ lessons, onStartLesson, onTakeTest, onSubmitAssignment, c
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center">
+<<<<<<< Updated upstream
                     {lesson.test_score !== null ? (
                       <span className="text-green-600 font-medium">{lesson.test_score}点</span>
                     ) : (
                       <span className="text-gray-400">-</span>
                     )}
+=======
+                    {(() => {
+                      const testResult = testResults[lesson.id];
+                      console.log(`🔍 レッスン${lesson.id}のテスト結果:`, {
+                        lessonId: lesson.id,
+                        testResult: testResult,
+                        testResults: testResults
+                      });
+                      
+                      if (testResult) {
+                        const percentage = testResult.percentage || Math.round((testResult.score / testResult.totalQuestions) * 100);
+                        return (
+                          <div className="flex flex-col items-center">
+                            <span className={`font-medium ${testResult.passed ? 'text-green-600' : 'text-red-600'}`}>
+                              {testResult.score}/{testResult.totalQuestions}点
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              ({percentage}%)
+                            </span>
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              testResult.passed 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {testResult.passed ? '合格' : '不合格'}
+                            </span>
+                          </div>
+                        );
+                      } else {
+                        return <span className="text-gray-400">-</span>;
+                      }
+                    })()}
+>>>>>>> Stashed changes
                   </td>
                   <td className="px-4 py-3 text-center">
                     {lesson.has_assignment === 1 || lesson.has_assignment === true ? (
@@ -91,6 +129,7 @@ const LessonTable = ({ lessons, onStartLesson, onTakeTest, onSubmitAssignment, c
                       >
                         🎓 学習
                       </button>
+<<<<<<< Updated upstream
                       {lesson.progress_status === 'completed' && (
                         <button
                           className="px-3 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
@@ -99,6 +138,15 @@ const LessonTable = ({ lessons, onStartLesson, onTakeTest, onSubmitAssignment, c
                           📝 テスト
                         </button>
                       )}
+=======
+                      {/* 試験結果一覧ボタン（常に表示） */}
+                      <button
+                        className="px-3 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+                        onClick={() => onViewExamResults(lesson)}
+                      >
+                        📝 試験結果一覧
+                      </button>
+>>>>>>> Stashed changes
                       {(lesson.has_assignment === 1 || lesson.has_assignment === true) && 
                        !(lesson.assignment_submitted === 1 || lesson.assignment_submitted === true) && (
                         <button

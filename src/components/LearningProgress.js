@@ -64,9 +64,8 @@ const LearningProgress = ({ userId }) => {
                body: JSON.stringify({
                  userId: parseInt(userId),
                  lessonId: parseInt(firstLesson.id),
-                 status: 'in_progress',
-                 testScore: null,
-                 assignmentSubmitted: false
+                 status: 'in_progress'
+                 // testScoreとassignmentSubmittedは指定せず、既存の値を保持
                })
              });
       } catch (error) {

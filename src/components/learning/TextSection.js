@@ -48,7 +48,7 @@ const TextSection = ({
     });
     
     // セッションストレージの状態を確認
-    const hasStoredContext = SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key);
+    const hasStoredContext = SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type);
     console.log('セッションストレージ状態:', {
       hasStoredContext,
       lessonId: lessonData.id,
@@ -57,7 +57,7 @@ const TextSection = ({
     
     // 既存のコンテキストがある場合は、親コンポーネントに完了状態を通知
     if (hasStoredContext) {
-      const storedContext = SessionStorageManager.getContext(lessonData.id, lessonData.s3_key);
+      const storedContext = SessionStorageManager.getContext(lessonData.id, lessonData.s3_key, lessonData.file_type);
       console.log('保存済みコンテキスト情報:', storedContext.metadata);
       
       if (onTextContentUpdate) {
@@ -87,7 +87,7 @@ const TextSection = ({
       extractPdfText(lessonData.s3_key);
     }
     // TXT、MD、RTFファイルの場合は既存のtextContentをセッションストレージに保存
-    else if ((lessonData?.file_type === 'txt' || lessonData?.file_type === 'md' || lessonData?.file_type === 'application/rtf') && textContent) {
+    else if ((lessonData?.file_type === 'txt' || lessonData?.file_type === 'md' || lessonData?.file_type === 'text/markdown' || lessonData?.file_type === 'application/rtf') && textContent) {
       console.log('テキストファイルのコンテキストをセッションストレージに保存:', {
         fileType: lessonData.file_type,
         textLength: textContent.length,
@@ -145,7 +145,7 @@ const TextSection = ({
     }
     
     // セッションストレージから既存のコンテキストを確認
-    const existingContext = SessionStorageManager.getContext(lessonData?.id, s3Key);
+    const existingContext = SessionStorageManager.getContext(lessonData?.id, s3Key, lessonData?.file_type);
     if (existingContext) {
       console.log('セッションストレージから既存のコンテキストを使用:', {
         contextLength: existingContext.context.length,
@@ -517,7 +517,7 @@ const TextSection = ({
         ) : (
           <div className="prose prose-sm max-w-none">
             {/* MDファイルの場合はMarkdownとしてレンダリング */}
-            {lessonData?.file_type === 'md' || lessonData?.s3_key?.toLowerCase().endsWith('.md') ? (
+            {lessonData?.file_type === 'md' || lessonData?.file_type === 'text/markdown' || lessonData?.s3_key?.toLowerCase().endsWith('.md') ? (
               <MarkdownRenderer 
                 content={displayTextContent()}
                 showToc={false}
@@ -536,6 +536,7 @@ const TextSection = ({
       {(lessonData?.file_type === 'pdf' && pdfTextContent) || 
        (lessonData?.file_type === 'txt' && textContent) ||
        (lessonData?.file_type === 'md' && textContent) ||
+       (lessonData?.file_type === 'text/markdown' && textContent) ||
        (lessonData?.file_type === 'application/rtf' && textContent) ||
        (lessonData?.file_type === 'text/plain' && textContent) ? (
         <div className="mt-3 text-xs text-gray-500">

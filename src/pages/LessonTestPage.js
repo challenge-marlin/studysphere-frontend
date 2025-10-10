@@ -289,7 +289,7 @@ const LessonTestPage = () => {
           if (section.text_file_key) {
             try {
               // まずセッションストレージからコンテキスト化されたテキストを取得（厳密なマッチング）
-              let storedContext = SessionStorageManager.getContext(currentLesson, section.text_file_key);
+              let storedContext = SessionStorageManager.getContext(currentLesson, section.text_file_key, 'md');
               
               // メタデータから正確なレッスンIDを確認
               if (storedContext && storedContext.metadata && storedContext.metadata.lessonId !== currentLesson) {
@@ -868,6 +868,7 @@ const LessonTestPage = () => {
               lessonTitle: lessonData?.title || `第${currentLesson}回`,
               answers: submissionData.answers,
               testData: testData,
+              shuffledQuestions: submissionData.shuffledQuestions,
               score: result.data?.score || 0,
               totalQuestions: testData.questions.length,
               examResultId: result.data?.examResultId,

@@ -15,7 +15,7 @@
 ## Important Notes
 
 - API runs on separate server (backend.studysphere.ayatori-inc.co.jp)
-- API requests are automatically proxied via .htaccess configuration
+- API requests are sent directly to backend server (no proxy required)
 - React Router requires SPA configuration in .htaccess
 
 ## Troubleshooting

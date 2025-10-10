@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5050';
+import { API_BASE_URL } from '../../config/apiConfig';
 
 const ExamResultListModal = ({ isOpen, onClose, lesson, onViewDetail }) => {
   const [examResults, setExamResults] = useState([]);

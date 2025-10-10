@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/contexts/AuthContext';
 import { fetchStudentCourses, fetchStudentLessons } from '../utils/studentApi';
+import { API_BASE_URL } from '../config/apiConfig';
 import CourseHeader from '../components/student/CourseHeader';
 import CourseSelector from '../components/student/CourseSelector';
 import LessonTable from '../components/student/LessonTable';
@@ -132,7 +133,7 @@ const LessonList = ({ selectedCourseId }) => {
     try {
       console.log(`🔍 現在受講中レッスン取得開始: コースID ${courseId}`);
       
-      const response = await fetch(`http://localhost:5050/api/learning/current-lesson?courseId=${courseId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/current-lesson?courseId=${courseId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'
@@ -165,7 +166,7 @@ const LessonList = ({ selectedCourseId }) => {
     try {
       console.log('🔍 テスト結果取得開始');
       
-      const response = await fetch(`http://localhost:5050/api/learning/test/results/${currentUser.id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/test/results/${currentUser.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'
@@ -239,7 +240,7 @@ const LessonList = ({ selectedCourseId }) => {
       
       // 1. まず、利用者とコースの関連付けを確認・作成
       console.log('1. コース割り当て処理開始...');
-      const assignResponse = await fetch(`http://localhost:5050/api/learning/assign-course`, {
+      const assignResponse = await fetch(`${API_BASE_URL}/api/learning/assign-course`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
@@ -271,7 +272,7 @@ const LessonList = ({ selectedCourseId }) => {
       
       console.log(`🔄 進捗更新開始: レッスンID ${lesson.id}, ステータス ${targetStatus}`);
       
-      const response = await fetch(`http://localhost:5050/api/learning/progress/lesson`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/progress/lesson`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,

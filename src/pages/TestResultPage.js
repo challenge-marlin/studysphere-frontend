@@ -69,8 +69,6 @@ const TestResultPage = () => {
   useEffect(() => {
     const processTestResults = async () => {
       if (location.state) {
-<<<<<<< Updated upstream
-=======
         // LessonListから渡されるテスト結果データの場合
         if (location.state.testResult) {
           const { testResult, lessonTitle, courseTitle } = location.state;
@@ -174,7 +172,6 @@ const TestResultPage = () => {
         }
         
         // 従来のテスト結果データの場合
->>>>>>> Stashed changes
         const { 
           testType, 
           lessonId, 

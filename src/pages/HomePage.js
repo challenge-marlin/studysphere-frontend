@@ -110,9 +110,8 @@ const HomePage = () => {
                 利用者
               </Link>
               <a
-                href="https://drive.google.com/file/d/1hBn-q4GTexuB8zzv9MFYooGqm7Ie3yPz/view?usp=drive_link"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/support-app/StudySphereApp Setup 1.0.3.exe"
+                download="StudySphereApp Setup 1.0.3.exe"
                 className="bg-white/20 text-white px-8 py-4 rounded-full hover:bg-white/30 transition-all duration-300 font-semibold text-lg border-2 border-white/30 hover:border-white/50 transform hover:-translate-y-1 hover:shadow-xl backdrop-blur-sm flex items-center gap-3"
               >
                 <span className="text-2xl">⊞</span>

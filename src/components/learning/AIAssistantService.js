@@ -12,7 +12,7 @@ class AIAssistantService {
   async askQuestion(question, contextText, lessonTitle) {
     try {
       // コンテキストを適切な長さに制限（GPT-4oの制限を考慮）
-      const maxContextLength = 8000; // 安全マージンを取って8000文字
+      const maxContextLength = 40000;
       const truncatedContext = contextText.length > maxContextLength 
         ? contextText.substring(0, maxContextLength) + '...'
         : contextText;

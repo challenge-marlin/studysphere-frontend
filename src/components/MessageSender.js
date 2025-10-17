@@ -147,7 +147,7 @@ const MessageSender = () => {
                         placeholder="メッセージを入力してください"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                        ※ メッセージは当日の24:30に自動削除されます
+                        ※ メッセージは60日間保存されます
                     </p>
                 </div>
 

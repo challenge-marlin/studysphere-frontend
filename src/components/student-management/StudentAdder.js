@@ -18,6 +18,7 @@ const StudentAdder = ({ onStudentAdded, instructors }) => {
     instructor_id: '',
     tags: []
   });
+  const [tagsInput, setTagsInput] = useState('');
   const [bulkInputText, setBulkInputText] = useState('');
   const [bulkInstructorId, setBulkInstructorId] = useState('');
   const [companies, setCompanies] = useState([]);
@@ -35,11 +36,9 @@ const StudentAdder = ({ onStudentAdded, instructors }) => {
 
   // タグの変更を処理
   const handleTagChange = (e) => {
-    const tags = e.target.value.split(',').map(tag => tag.trim()).filter(tag => tag);
-    setNewStudent(prev => ({
-      ...prev,
-      tags
-    }));
+    console.log('タグ入力値:', e.target.value);
+    console.log('カンマの位置:', e.target.value.indexOf(','));
+    setTagsInput(e.target.value);
   };
 
   // 企業一覧を取得
@@ -87,13 +86,16 @@ const StudentAdder = ({ onStudentAdded, instructors }) => {
       console.error('selectedSatelliteの読み込みエラー:', error);
     }
     
+    // タグ文字列を配列に変換
+    const tags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag);
+    
     const studentData = {
       name: newStudent.name,
       email: newStudent.email,
       instructor_id: newStudent.instructor_id || null,
       company_id: companyId,
       satellite_id: satelliteId,
-      tags: newStudent.tags
+      tags: tags
     };
 
     try {
@@ -115,6 +117,7 @@ const StudentAdder = ({ onStudentAdded, instructors }) => {
           instructor_id: '',
           tags: []
         });
+        setTagsInput('');
         onStudentAdded(); // 親コンポーネントに更新を通知
       } else {
         const errorData = await response.json();
@@ -281,6 +284,8 @@ const StudentAdder = ({ onStudentAdded, instructors }) => {
     setBulkInputMode,
     newStudent,
     setNewStudent,
+    tagsInput,
+    setTagsInput,
     bulkInputText,
     setBulkInputText,
     bulkInstructorId,

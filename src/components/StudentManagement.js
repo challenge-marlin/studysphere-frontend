@@ -1115,10 +1115,30 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
                         type="text"
                         id="tags"
                         name="tags"
-                        value={studentAdder.newStudent.tags.join(', ')}
+                        value={studentAdder.tagsInput}
                         onChange={studentAdder.handleTagChange}
+                        onKeyDown={(e) => {
+                          console.log('キー押下:', e.key, 'コード:', e.keyCode);
+                          if (e.key === ',') {
+                            console.log('カンマキーが押されました');
+                          }
+                        }}
+                        onInput={(e) => {
+                          console.log('onInput:', e.target.value);
+                        }}
+                        onPaste={(e) => {
+                          console.log('ペースト:', e.clipboardData.getData('text'));
+                        }}
+                        onCompositionStart={(e) => {
+                          console.log('IME開始');
+                        }}
+                        onCompositionEnd={(e) => {
+                          console.log('IME終了:', e.target.value);
+                        }}
                         placeholder="優秀, 要フォロー"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        autoComplete="off"
+                        spellCheck="false"
                       />
                     </div>
                     <div className="flex justify-end gap-4">
@@ -1246,7 +1266,7 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
                       type="text"
                       id="edit_tags"
                       name="tags"
-                      value={studentEditor.editFormData.tags.join(', ')}
+                      value={studentEditor.tagsInput}
                       onChange={studentEditor.handleTagChange}
                       placeholder="優秀, 要フォロー"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"

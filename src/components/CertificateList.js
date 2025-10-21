@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import { printCertificate } from '../utils/certificatePrint';
+import { API_BASE_URL } from '../config/apiConfig';
 
 const CertificateList = () => {
   const { currentUser } = useAuth();
@@ -24,7 +25,7 @@ const CertificateList = () => {
         setLoading(true);
         setError(null);
 
-        const response = await fetch(`http://localhost:5050/api/learning/certificates/${currentUser.id}`, {
+        const response = await fetch(`${API_BASE_URL}/api/learning/certificates/${currentUser.id}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
             'Content-Type': 'application/json'

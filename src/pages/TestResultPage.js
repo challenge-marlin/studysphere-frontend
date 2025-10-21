@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { API_BASE_URL } from '../config/apiConfig';
 
 const TestResultPage = () => {
   const navigate = useNavigate();
@@ -28,7 +29,7 @@ const TestResultPage = () => {
       const userAnswer = question.options[userAnswerIndex];
       const correctAnswer = question.options[correctAnswerIndex];
       
-      const response = await fetch('http://localhost:5050/api/learning/generate-feedback', {
+      const response = await fetch(`${API_BASE_URL}/api/learning/generate-feedback`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
@@ -69,6 +70,109 @@ const TestResultPage = () => {
   useEffect(() => {
     const processTestResults = async () => {
       if (location.state) {
+        // LessonListから渡されるテスト結果データの場合
+        if (location.state.testResult) {
+          const { testResult, lessonTitle, courseTitle } = location.state;
+          console.log('TestResultPage: LessonListからのテスト結果データ:', testResult);
+          
+          // 実際のテスト結果詳細データを取得
+          try {
+            const response = await fetch(`/api/learning/test-results/${testResult.lessonId}`, {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+              }
+            });
+            
+            if (response.ok) {
+              const detailedResult = await response.json();
+              console.log('TestResultPage: 詳細テスト結果データ:', detailedResult);
+              
+              if (detailedResult.success && detailedResult.data) {
+                const detailData = detailedResult.data;
+                
+                // 詳細データから問題別結果を生成
+                const questionsToUse = detailData.shuffledQuestions || detailData.testData?.questions || [];
+                const answers = detailData.answers || {};
+                
+                const results = [];
+                for (let index = 0; index < questionsToUse.length; index++) {
+                  const question = questionsToUse[index];
+                  const userAnswerIndex = answers[question.id];
+                  const userAnswer = userAnswerIndex !== undefined ? 
+                    `${userAnswerIndex + 1}. ${question.options[userAnswerIndex]}` : 
+                    "未回答";
+                  const correctAnswer = `${question.correctAnswer + 1}. ${question.options[question.correctAnswer]}`;
+                  const isCorrect = userAnswerIndex === question.correctAnswer;
+                  
+                  results.push({
+                    questionId: index + 1,
+                    question: question.question,
+                    userAnswer,
+                    correctAnswer,
+                    feedback: isCorrect ? "正解です！よく理解できています。" : "不正解でした。",
+                    isCorrect,
+                    score: isCorrect ? 1 : 0
+                  });
+                }
+                
+                // スコアの整合性を確認
+                const calculatedScore = results.filter(r => r.isCorrect).length;
+                const finalScore = calculatedScore || testResult.score || 0;
+                
+                const result = {
+                  testType: testResult.testType || 'lesson',
+                  lessonId: testResult.lessonId || 0,
+                  sectionIndex: testResult.sectionIndex || null,
+                  lessonTitle: lessonTitle || 'レッスン名不明',
+                  sectionTitle: testResult.sectionTitle || '',
+                  score: finalScore,
+                  correctAnswers: finalScore,
+                  totalQuestions: testResult.totalQuestions || 0,
+                  passed: testResult.passed || false,
+                  percentage: testResult.totalQuestions > 0 ? Math.round((finalScore / testResult.totalQuestions) * 100) : 0,
+                  grade: testResult.passed ? "合格" : "不合格",
+                  gradeEmoji: testResult.passed ? "🎉" : "📘",
+                  submittedAt: testResult.submittedAt || new Date().toISOString(),
+                  testData: { questions: questionsToUse },
+                  answers: answers,
+                  results: results
+                };
+                
+                setResultData(result);
+                setLoading(false);
+                return;
+              }
+            }
+          } catch (error) {
+            console.error('TestResultPage: 詳細テスト結果取得エラー:', error);
+          }
+          
+          // フォールバック: 基本データのみで表示
+          const result = {
+            testType: testResult.testType || 'lesson',
+            lessonId: testResult.lessonId || 0,
+            sectionIndex: testResult.sectionIndex || null,
+            lessonTitle: lessonTitle || 'レッスン名不明',
+            sectionTitle: testResult.sectionTitle || '',
+            score: testResult.score || 0,
+            correctAnswers: testResult.score || 0,
+            totalQuestions: testResult.totalQuestions || 0,
+            passed: testResult.passed || false,
+            percentage: testResult.totalQuestions > 0 ? Math.round((testResult.score / testResult.totalQuestions) * 100) : 0,
+            grade: testResult.passed ? "合格" : "不合格",
+            gradeEmoji: testResult.passed ? "🎉" : "📘",
+            submittedAt: testResult.submittedAt || new Date().toISOString(),
+            testData: { questions: [] },
+            answers: {},
+            results: []
+          };
+          
+          setResultData(result);
+          setLoading(false);
+          return;
+        }
+        
+        // 従来のテスト結果データの場合
         const { 
           testType, 
           lessonId, 
@@ -83,9 +187,28 @@ const TestResultPage = () => {
           examResultId,
           s3Key
         } = location.state;
+        
+        console.log('TestResultPage: テスト完了直後のデータ:', {
+          testType,
+          lessonId,
+          sectionIndex,
+          lessonTitle,
+          sectionTitle,
+          hasAnswers: !!answers,
+          answersCount: answers ? Object.keys(answers).length : 0,
+          hasTestData: !!testData,
+          testDataQuestionsCount: testData?.questions?.length || 0,
+          hasShuffledQuestions: !!shuffledQuestions,
+          shuffledQuestionsCount: shuffledQuestions?.length || 0,
+          score,
+          totalQuestions,
+          examResultId,
+          s3Key,
+          locationState: location.state
+        });
       
-      // 正答数を計算（元の問題データを使用して結果表示の整合性を保つ）
-      const questionsToUse = testData.questions;
+      // 正答数を計算（シャッフルされた問題データを使用して結果表示の整合性を保つ）
+      const questionsToUse = shuffledQuestions && shuffledQuestions.length > 0 ? shuffledQuestions : testData.questions;
       const correctAnswers = score || 0;
       const total = totalQuestions || questionsToUse.length;
       const percentage = Math.round((correctAnswers / total) * 100);
@@ -102,7 +225,10 @@ const TestResultPage = () => {
         sectionIndex,
         lessonTitle,
         sectionTitle,
-        testData,
+        testData: {
+          ...testData,
+          questions: questionsToUse
+        },
         answers,
         correctAnswers,
         totalQuestions: total,
@@ -116,14 +242,29 @@ const TestResultPage = () => {
         results: []
       };
 
-      // 各問題の結果を生成（元の問題データを使用）
-      for (const question of questionsToUse) {
+      // 各問題の結果を生成（シャッフルされた問題データを使用）
+      console.log('TestResultPage: 問題別結果生成開始', {
+        questionsCount: questionsToUse.length,
+        answersCount: Object.keys(answers).length,
+        answers: answers
+      });
+      
+      for (let index = 0; index < questionsToUse.length; index++) {
+        const question = questionsToUse[index];
         const userAnswerIndex = answers[question.id];
         const userAnswer = userAnswerIndex !== undefined ? 
           `${userAnswerIndex + 1}. ${question.options[userAnswerIndex]}` : 
           "未回答";
         const correctAnswer = `${question.correctAnswer + 1}. ${question.options[question.correctAnswer]}`;
         const isCorrect = userAnswerIndex === question.correctAnswer;
+        
+        console.log(`TestResultPage: 問題${index + 1} (ID: ${question.id})`, {
+          userAnswerIndex,
+          correctAnswerIndex: question.correctAnswer,
+          isCorrect,
+          userAnswer,
+          correctAnswer
+        });
         
         let feedback = "";
         if (isCorrect) {
@@ -144,6 +285,33 @@ const TestResultPage = () => {
           isCorrect,
           score: isCorrect ? 1 : 0
         });
+      }
+      
+      console.log('TestResultPage: 問題別結果生成完了', {
+        totalResults: result.results.length,
+        correctResults: result.results.filter(r => r.isCorrect).length,
+        incorrectResults: result.results.filter(r => !r.isCorrect).length,
+        results: result.results.map(r => ({ questionId: r.questionId, isCorrect: r.isCorrect }))
+      });
+      
+      // スコアの整合性を確認
+      const calculatedCorrectAnswers = result.results.filter(r => r.isCorrect).length;
+      console.log('TestResultPage: スコア整合性チェック', {
+        originalScore: result.score,
+        calculatedScore: calculatedCorrectAnswers,
+        totalQuestions: result.totalQuestions,
+        isConsistent: result.score === calculatedCorrectAnswers
+      });
+      
+      // スコアが不一致の場合は再計算
+      if (result.score !== calculatedCorrectAnswers) {
+        console.warn('TestResultPage: スコア不一致を検出、再計算します', {
+          original: result.score,
+          calculated: calculatedCorrectAnswers
+        });
+        result.score = calculatedCorrectAnswers;
+        result.correctAnswers = calculatedCorrectAnswers;
+        result.percentage = Math.round((calculatedCorrectAnswers / result.totalQuestions) * 100);
       }
 
         setResultData(result);
@@ -373,21 +541,30 @@ const TestResultPage = () => {
           <div>
             <h3 className="text-xl font-bold text-gray-800 mb-6">問題別結果</h3>
             <div className="flex flex-wrap gap-2 mb-8">
-              {resultData.results.map((result, index) => (
-                <button
-                  key={result.questionId}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                    currentQuestion === index
-                      ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-lg'
-                      : result.isCorrect
-                        ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                        : 'bg-red-100 text-red-800 hover:bg-red-200'
-                  }`}
-                  onClick={() => setCurrentQuestion(index)}
-                >
-                  Q{index + 1}
-                </button>
-              ))}
+              {resultData.results.map((result, index) => {
+                console.log(`TestResultPage: 問題${index + 1}の色分け`, {
+                  questionId: result.questionId,
+                  isCorrect: result.isCorrect,
+                  currentQuestion: currentQuestion,
+                  index: index
+                });
+                
+                return (
+                  <button
+                    key={result.questionId}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                      currentQuestion === index
+                        ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-lg'
+                        : result.isCorrect
+                          ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                          : 'bg-red-100 text-red-800 hover:bg-red-200'
+                    }`}
+                    onClick={() => setCurrentQuestion(index)}
+                  >
+                    Q{index + 1}
+                  </button>
+                );
+              })}
             </div>
 
             <div className="border border-gray-200 rounded-xl p-6">

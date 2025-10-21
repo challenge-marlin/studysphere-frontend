@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import MultipleChoiceTest from '../components/learning/MultipleChoiceTest';
 import { SessionStorageManager } from '../utils/sessionStorage';
+import { API_BASE_URL } from '../config/apiConfig';
 
 const LessonTestPage = () => {
   const navigate = useNavigate();
@@ -34,7 +35,7 @@ const LessonTestPage = () => {
         setError(null);
         
         // レッスンデータを取得
-        const lessonResponse = await fetch(`http://localhost:5050/api/learning/lesson/${currentLesson}/content`, {
+        const lessonResponse = await fetch(`${API_BASE_URL}/api/learning/lesson/${currentLesson}/content`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
             'Content-Type': 'application/json'
@@ -51,7 +52,7 @@ const LessonTestPage = () => {
         }
 
         // セクションデータを取得
-        const sectionResponse = await fetch(`http://localhost:5050/api/lesson-text-video-links/lesson/${currentLesson}`, {
+        const sectionResponse = await fetch(`${API_BASE_URL}/api/lesson-text-video-links/lesson/${currentLesson}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
             'Content-Type': 'application/json'
@@ -169,7 +170,7 @@ const LessonTestPage = () => {
       };
       
       console.log('テスト生成APIリクエスト送信:', {
-        url: 'http://localhost:5050/api/test/learning/generate-test',
+        url: `${API_BASE_URL}/api/test/learning/generate-test`,
         requestBody: {
           ...requestBody,
           textContentLength: textContent?.length || 0,
@@ -179,7 +180,7 @@ const LessonTestPage = () => {
         }
       });
       
-      const response = await fetch('http://localhost:5050/api/test/learning/generate-test', {
+      const response = await fetch(`${API_BASE_URL}/api/test/learning/generate-test`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
@@ -289,7 +290,7 @@ const LessonTestPage = () => {
           if (section.text_file_key) {
             try {
               // まずセッションストレージからコンテキスト化されたテキストを取得（厳密なマッチング）
-              let storedContext = SessionStorageManager.getContext(currentLesson, section.text_file_key);
+              let storedContext = SessionStorageManager.getContext(currentLesson, section.text_file_key, 'md');
               
               // メタデータから正確なレッスンIDを確認
               if (storedContext && storedContext.metadata && storedContext.metadata.lessonId !== currentLesson) {
@@ -350,7 +351,7 @@ const LessonTestPage = () => {
               });
               
               // レッスンコンテンツAPIを呼び出してテキストコンテンツを取得
-              const response = await fetch(`http://localhost:5050/api/learning/lesson/${currentLesson}/content`, {
+              const response = await fetch(`${API_BASE_URL}/api/learning/lesson/${currentLesson}/content`, {
                 headers: {
                   'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
                   'Content-Type': 'application/json'
@@ -842,7 +843,7 @@ const LessonTestPage = () => {
       // 認証されたユーザーIDを使用するため、userIdはリクエストボディに含めない
       
       // テスト結果を提出
-      const response = await fetch('http://localhost:5050/api/learning/test/submit', {
+      const response = await fetch(`${API_BASE_URL}/api/learning/test/submit`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
@@ -868,6 +869,7 @@ const LessonTestPage = () => {
               lessonTitle: lessonData?.title || `第${currentLesson}回`,
               answers: submissionData.answers,
               testData: testData,
+              shuffledQuestions: submissionData.shuffledQuestions,
               score: result.data?.score || 0,
               totalQuestions: testData.questions.length,
               examResultId: result.data?.examResultId,

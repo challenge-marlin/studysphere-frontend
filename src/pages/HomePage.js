@@ -34,15 +34,15 @@ const HomePage = () => {
               </a>
             </div>
             <nav className="hidden md:flex items-center space-x-8">
-              <a href="#features" className="text-white hover:text-blue-400 transition-colors font-medium relative group">
+              <a href="https://ayatori-inc.co.jp/LP-AISchool/" className="text-white hover:text-blue-400 transition-colors font-medium relative group">
                 主要機能
                 <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-400 transition-all duration-300 group-hover:w-full"></span>
               </a>
-              <a href="#support" className="text-white hover:text-blue-400 transition-colors font-medium relative group">
+              <a href="https://www.ayatori-inc.co.jp/StudySphere-Support/" className="text-white hover:text-blue-400 transition-colors font-medium relative group">
                 サポート
                 <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-400 transition-all duration-300 group-hover:w-full"></span>
               </a>
-              <a href="#home-support" className="text-white hover:text-blue-400 transition-colors font-medium relative group">
+              <a href="https://ayatori-inc.co.jp/LP-remote-support/" className="text-white hover:text-blue-400 transition-colors font-medium relative group">
                 在宅支援
                 <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-400 transition-all duration-300 group-hover:w-full"></span>
               </a>
@@ -110,9 +110,8 @@ const HomePage = () => {
                 利用者
               </Link>
               <a
-                href="https://drive.google.com/file/d/1hBn-q4GTexuB8zzv9MFYooGqm7Ie3yPz/view?usp=drive_link"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/support-app/StudySphereApp Setup 1.0.3.exe"
+                download="StudySphereApp Setup 1.0.3.exe"
                 className="bg-white/20 text-white px-8 py-4 rounded-full hover:bg-white/30 transition-all duration-300 font-semibold text-lg border-2 border-white/30 hover:border-white/50 transform hover:-translate-y-1 hover:shadow-xl backdrop-blur-sm flex items-center gap-3"
               >
                 <span className="text-2xl">⊞</span>
@@ -153,19 +152,19 @@ const HomePage = () => {
                 {/* ボタン群 */}
                 <div className="flex flex-wrap justify-center gap-4 order-3">
                   <a 
-                    href="#features" 
+                    href="https://ayatori-inc.co.jp/LP-AISchool/" 
                     className="bg-transparent border-2 border-white text-white px-6 py-3 rounded hover:bg-white hover:text-black transition-all duration-300 font-semibold"
                   >
                     主要機能
                   </a>
                   <a 
-                    href="#support" 
+                    href="https://www.ayatori-inc.co.jp/StudySphere-Support/" 
                     className="bg-transparent border-2 border-white text-white px-6 py-3 rounded hover:bg-white hover:text-black transition-all duration-300 font-semibold"
                   >
                     サポート
                   </a>
                   <a 
-                    href="#home-support" 
+                    href="https://ayatori-inc.co.jp/LP-remote-support/" 
                     className="bg-transparent border-2 border-white text-white px-6 py-3 rounded hover:bg-white hover:text-black transition-all duration-300 font-semibold"
                   >
                     在宅支援

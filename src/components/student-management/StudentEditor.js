@@ -15,6 +15,7 @@ const StudentEditor = ({ student, onUpdate, onClose, instructors }) => {
     instructor_id: student?.instructor_id || '',
     tags: student?.tags || []
   });
+  const [tagsInput, setTagsInput] = useState('');
 
   const [supportPlanData, setSupportPlanData] = useState({
     long_term_goal: '',
@@ -36,6 +37,7 @@ const StudentEditor = ({ student, onUpdate, onClose, instructors }) => {
       instructor_id: student.instructor_id || '',
       tags: student.tags || []
     });
+    setTagsInput(student.tags ? student.tags.join(', ') : '');
     setShowEditModal(true);
     
     // 個別支援計画を取得
@@ -73,11 +75,14 @@ const StudentEditor = ({ student, onUpdate, onClose, instructors }) => {
     try {
       console.log('利用者情報更新開始:', editingStudent.id, editFormData);
       
+      // タグ文字列を配列に変換
+      const tags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag);
+      
       // 利用者情報を更新
       const updateResult = await updateUser(editingStudent.id, {
         name: editFormData.name,
         instructor_id: editFormData.instructor_id || null,
-        tags: editFormData.tags || []
+        tags: tags
       });
 
       if (updateResult.success) {
@@ -127,11 +132,7 @@ const StudentEditor = ({ student, onUpdate, onClose, instructors }) => {
 
   // タグの変更を処理
   const handleTagChange = (e) => {
-    const tags = e.target.value.split(',').map(tag => tag.trim()).filter(tag => tag);
-    setEditFormData(prev => ({
-      ...prev,
-      tags
-    }));
+    setTagsInput(e.target.value);
   };
 
   // 支援計画データの変更を処理
@@ -148,6 +149,8 @@ const StudentEditor = ({ student, onUpdate, onClose, instructors }) => {
     handleUpdateStudent,
     editFormData,
     setEditFormData,
+    tagsInput,
+    setTagsInput,
     supportPlanData,
     setSupportPlanData,
     existingSupportPlan,

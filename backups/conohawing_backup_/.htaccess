@@ -1,13 +1,11 @@
-# ConoHaWing用 .htaccess 設定
-# フロントエンド用設定
+# StudySphere ConoHaWing用 .htaccess 設定
 
 # React Router対応（SPA）
 RewriteEngine On
 RewriteBase /
 
-# APIリクエストをバックエンドにプロキシ
-RewriteCond %{REQUEST_URI} ^/api/
-RewriteRule ^api/(.*)$ http://backend.studysphere.ayatori-inc.co.jp/api/$1 [P,L]
+# APIリクエストは直接バックエンドにアクセス（プロキシ不要）
+# フロントエンドからhttps://backend.studysphere.ayatori-inc.co.jpに直接アクセスします
 
 # 静的ファイルのキャッシュ設定
 <IfModule mod_expires.c>
@@ -26,13 +24,18 @@ RewriteRule ^api/(.*)$ http://backend.studysphere.ayatori-inc.co.jp/api/$1 [P,L]
     ExpiresByType application/font-eot "access plus 1 month"
 </IfModule>
 
-# セキュリティヘッダー
+# セキュリティヘッダーとCORS設定
 <IfModule mod_headers.c>
     Header always set X-Frame-Options DENY
     Header always set X-Content-Type-Options nosniff
     Header always set X-XSS-Protection "1; mode=block"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    
+    # APIレスポンス用のCORSヘッダー（バックエンドで処理するため削除）
+    # バックエンドのCORS設定に委ねる
 </IfModule>
+
+# OPTIONSリクエスト（CORS preflight）の処理はバックエンドで処理
 
 # Gzip圧縮
 <IfModule mod_deflate.c>

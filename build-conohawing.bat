@@ -22,7 +22,7 @@ if exist "%DEPLOY_DIR%" (
         set "HH=%dt:~8,2%" & set "Min=%dt:~10,2%" & set "Sec=%dt:~12,2%"
         set "timestamp=%YYYY%%MM%%DD%_%HH%%Min%%Sec%"
         
-        xcopy "%DEPLOY_DIR%" "%BACKUP_DIR%\conohawing_backup_%timestamp%\" /E /I /Q
+        xcopy "%DEPLOY_DIR%" "%BACKUP_DIR%\conohawing_backup_%timestamp%\" /E /I /Q /Y
         echo Backup completed: %BACKUP_DIR%\conohawing_backup_%timestamp%\
     )
 )
@@ -85,7 +85,7 @@ if %errorlevel% neq 0 (
 
 REM ビルドファイルをデプロイディレクトリにコピー
 echo Copying build files...
-xcopy "%BUILD_DIR%\*" "%DEPLOY_DIR%\" /E /I /Q
+xcopy "%BUILD_DIR%\*" "%DEPLOY_DIR%\" /E /I /Q /Y
 
 REM ConoHaWing用設定ファイルをコピー
 echo Copying ConoHaWing configuration...
@@ -128,7 +128,7 @@ echo.
 echo ## Important Notes
 echo.
 echo - API runs on separate server ^(backend.studysphere.ayatori-inc.co.jp^)
-echo - API requests are automatically proxied via .htaccess configuration
+echo - API requests are sent directly to backend server ^(no proxy required^)
 echo - React Router requires SPA configuration in .htaccess
 echo.
 echo ## Troubleshooting

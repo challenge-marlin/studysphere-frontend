@@ -10,27 +10,37 @@
       }
     },
   // キー生成
-  generateKey: (lessonId, s3Key) => {
+  generateKey: (lessonId, s3Key, fileType = null) => {
     try {
       if (!s3Key) {
-        return `pdf_context_${lessonId}_unknown`;
+        return `context_${lessonId}_unknown`;
+      }
+      
+      // ファイルタイプに応じてプレフィックスを決定
+      let prefix = 'context';
+      if (fileType === 'pdf') {
+        prefix = 'pdf_context';
+      } else if (fileType === 'md' || fileType === 'text/markdown') {
+        prefix = 'md_context';
+      } else if (fileType === 'txt' || fileType === 'text/plain') {
+        prefix = 'txt_context';
       }
       
       // レッスンIDとS3キーの組み合わせでユニークなキーを生成
       // セクション変更時も異なるキーになるように
-      const key = `pdf_context_${lessonId}_${lessonId}_${s3Key.split('/').pop()}`;
+      const key = `${prefix}_${lessonId}_${lessonId}_${s3Key.split('/').pop()}`;
       return key;
     } catch (error) {
       console.error('キー生成エラー:', error);
       // フォールバック: タイムスタンプベースのキー生成
-      const fallbackKey = `pdf_context_${lessonId}_${Date.now()}`;
+      const fallbackKey = `context_${lessonId}_${Date.now()}`;
       return fallbackKey;
     }
   },
   
   // コンテキスト保存
   saveContext: (lessonId, s3Key, context, metadata = {}) => {
-    const key = SessionStorageManager.generateKey(lessonId, s3Key);
+    const key = SessionStorageManager.generateKey(lessonId, s3Key, metadata.fileType);
     
     // デバッグ情報を追加
     console.log('SessionStorageManager.saveContext - キー生成:', {
@@ -75,8 +85,8 @@
   },
   
   // コンテキスト取得
-  getContext: (lessonId, s3Key) => {
-    const key = SessionStorageManager.generateKey(lessonId, s3Key);
+  getContext: (lessonId, s3Key, fileType = null) => {
+    const key = SessionStorageManager.generateKey(lessonId, s3Key, fileType);
     
     // デバッグ情報を追加
     console.log('SessionStorageManager.getContext - キー生成:', {
@@ -100,8 +110,8 @@
   },
   
   // コンテキスト存在確認
-  hasContext: (lessonId, s3Key) => {
-    const key = SessionStorageManager.generateKey(lessonId, s3Key);
+  hasContext: (lessonId, s3Key, fileType = null) => {
+    const key = SessionStorageManager.generateKey(lessonId, s3Key, fileType);
     
     // デバッグ情報を追加
     console.log('SessionStorageManager.hasContext - キー生成:', {

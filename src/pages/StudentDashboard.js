@@ -4,6 +4,7 @@ import { useStudentGuard } from '../utils/hooks/useAuthGuard';
 import { useAuth } from '../components/contexts/AuthContext';
 import { verifyTemporaryPasswordAPI, apiGet } from '../utils/api';
 import { saveTempPasswordAuth } from '../utils/authUtils';
+import { API_BASE_URL } from '../config/apiConfig';
 import Dashboard from './Dashboard';
 import LessonList from './LessonList';
 import CareerAssessment from '../components/CareerAssessment';
@@ -28,7 +29,7 @@ const StudentDashboard = () => {
     const fetchUserCourses = async () => {
       if (currentUser?.id) {
         try {
-          const response = await fetch(`http://localhost:5050/api/learning/progress/${currentUser.id}`, {
+          const response = await fetch(`${API_BASE_URL}/api/learning/progress/${currentUser.id}`, {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
               'Content-Type': 'application/json'
@@ -102,8 +103,38 @@ const StudentDashboard = () => {
             const now = new Date();
             
             if (expiryDate > now) {
-              console.log('StudentDashboard: 一時パスワード認証情報が有効です - 認証状態を復元');
-              login(userData);
+              console.log('StudentDashboard: 一時パスワード認証情報が有効です - トークンを取得して認証状態を復元');
+              
+              // 既存のトークンを確認
+              const existingAccessToken = localStorage.getItem('accessToken');
+              const existingRefreshToken = localStorage.getItem('refreshToken');
+              
+              if (existingAccessToken && existingRefreshToken) {
+                console.log('StudentDashboard: 既存のトークンを使用して認証');
+                login(userData, existingAccessToken, existingRefreshToken);
+                return;
+              }
+              
+              // トークンがない場合は再取得
+              console.log('StudentDashboard: トークンがないため、再認証してトークンを取得します');
+              setIsAutoLoggingIn(true);
+              
+              try {
+                const result = await verifyTemporaryPasswordAPI(existingLoginCode, existingTempPassword);
+                
+                if (result.success && result.data.access_token && result.data.refresh_token) {
+                  console.log('StudentDashboard: 再認証成功、トークンを取得しました');
+                  login(userData, result.data.access_token, result.data.refresh_token);
+                } else {
+                  console.log('StudentDashboard: 再認証に失敗、トークンなしでログイン');
+                  login(userData);
+                }
+              } catch (error) {
+                console.error('StudentDashboard: 再認証エラー:', error);
+                login(userData);
+              } finally {
+                setIsAutoLoggingIn(false);
+              }
               return;
             } else {
               console.log('StudentDashboard: 一時パスワードの有効期限が切れています - 認証情報をクリア');
@@ -111,10 +142,42 @@ const StudentDashboard = () => {
               localStorage.removeItem('tempPassword');
               localStorage.removeItem('tempPasswordExpiry');
               localStorage.removeItem('currentUser');
+              localStorage.removeItem('accessToken');
+              localStorage.removeItem('refreshToken');
             }
           } else {
-            console.log('StudentDashboard: 一時パスワード認証情報が有効です（有効期限なし）- 認証状態を復元');
-            login(userData);
+            console.log('StudentDashboard: 一時パスワード認証情報が有効です（有効期限なし）- トークンを取得して認証状態を復元');
+            
+            // 既存のトークンを確認
+            const existingAccessToken = localStorage.getItem('accessToken');
+            const existingRefreshToken = localStorage.getItem('refreshToken');
+            
+            if (existingAccessToken && existingRefreshToken) {
+              console.log('StudentDashboard: 既存のトークンを使用して認証');
+              login(userData, existingAccessToken, existingRefreshToken);
+              return;
+            }
+            
+            // トークンがない場合は再取得
+            console.log('StudentDashboard: トークンがないため、再認証してトークンを取得します');
+            setIsAutoLoggingIn(true);
+            
+            try {
+              const result = await verifyTemporaryPasswordAPI(existingLoginCode, existingTempPassword);
+              
+              if (result.success && result.data.access_token && result.data.refresh_token) {
+                console.log('StudentDashboard: 再認証成功、トークンを取得しました');
+                login(userData, result.data.access_token, result.data.refresh_token);
+              } else {
+                console.log('StudentDashboard: 再認証に失敗、トークンなしでログイン');
+                login(userData);
+              }
+            } catch (error) {
+              console.error('StudentDashboard: 再認証エラー:', error);
+              login(userData);
+            } finally {
+              setIsAutoLoggingIn(false);
+            }
             return;
           }
         } catch (error) {
@@ -189,6 +252,7 @@ const StudentDashboard = () => {
               isTruthy: !!result.data.instructorName,
               fullData: result.data
             });
+            
             // ログイン成功
             const userData = {
               id: result.data.userId,
@@ -198,11 +262,31 @@ const StudentDashboard = () => {
               instructorName: result.data.instructorName
             };
             
-            // 一時パスワード認証情報を保存（有効期限付き）
-            saveTempPasswordAuth(finalLoginCode, finalTempPassword, userData, result.data.expiresAt);
+            // JWTトークンの有無をチェック
+            const hasAccessToken = result.data.access_token && result.data.access_token.trim().length > 0;
+            const hasRefreshToken = result.data.refresh_token && result.data.refresh_token.trim().length > 0;
             
-            // 認証処理を実行（トークンなしでログイン）
-            login(userData);
+            console.log('StudentDashboard: トークン情報:', {
+              hasAccessToken,
+              hasRefreshToken,
+              accessTokenLength: hasAccessToken ? result.data.access_token.length : 0,
+              refreshTokenLength: hasRefreshToken ? result.data.refresh_token.length : 0
+            });
+            
+            // JWTトークンがある場合は標準認証として処理
+            if (hasAccessToken && hasRefreshToken) {
+              console.log('StudentDashboard: JWTトークンを受信 - 標準認証として処理');
+              // 一時パスワード認証情報も保存（セッション復元用）
+              saveTempPasswordAuth(finalLoginCode, finalTempPassword, userData, result.data.expiresAt);
+              // トークンを使ってログイン
+              login(userData, result.data.access_token, result.data.refresh_token);
+            } else {
+              console.log('StudentDashboard: JWTトークンなし - 一時パスワード認証として処理');
+              // 一時パスワード認証情報を保存（有効期限付き）
+              saveTempPasswordAuth(finalLoginCode, finalTempPassword, userData, result.data.expiresAt);
+              // トークンなしでログイン（一時パスワード認証のみ）
+              login(userData);
+            }
             
             console.log('StudentDashboard: 自動ログイン成功:', userData);
             

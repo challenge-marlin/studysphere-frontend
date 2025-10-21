@@ -10,6 +10,7 @@ import FileUploadSection from './FileUploadSection';
 import UploadModal from './UploadModal';
 import AIAssistantService from './AIAssistantService';
 import { SessionStorageManager } from '../../utils/sessionStorage';
+import { API_BASE_URL } from '../../config/apiConfig';
 
 const EnhancedLearningPageRefactored = () => {
   const navigate = useNavigate();
@@ -82,7 +83,7 @@ const EnhancedLearningPageRefactored = () => {
     try {
       console.log(`📁 提出物確認ファイル取得開始: レッスンID ${targetLessonId}`);
       
-      const response = await fetch(`http://localhost:5050/api/learning/lesson/${targetLessonId}/uploaded-files`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/lesson/${targetLessonId}/uploaded-files`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'
@@ -121,7 +122,7 @@ const EnhancedLearningPageRefactored = () => {
     try {
       console.log(`🔍 課題提出状況確認開始: レッスンID ${targetLessonId} (currentLesson: ${currentLesson}), requestId: ${requestId}`);
       
-      const response = await fetch(`http://localhost:5050/api/learning/lesson/${targetLessonId}/assignment-status`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/lesson/${targetLessonId}/assignment-status`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'
@@ -183,7 +184,7 @@ const EnhancedLearningPageRefactored = () => {
       setLoading(true);
       setError(null);
       
-      const userId = localStorage.getItem('userId') || '1';
+      const userId = getUserId();
       
       console.log(`🚀 レッスンデータ取得開始:`, {
         currentLesson,
@@ -191,10 +192,10 @@ const EnhancedLearningPageRefactored = () => {
         userId,
         retryCount: retryCount + 1,
         requestId,
-        url: `http://localhost:5050/api/learning/lesson/${targetLessonId}/content`
+        url: `${API_BASE_URL}/api/learning/lesson/${targetLessonId}/content`
       });
       
-      const response = await fetch(`http://localhost:5050/api/learning/lesson/${targetLessonId}/content`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/lesson/${targetLessonId}/content`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'
@@ -402,21 +403,34 @@ const EnhancedLearningPageRefactored = () => {
      if (newSection.text_file_key && newSection.text_file_key !== lessonData?.s3_key) {
        console.log('セクション変更: 新しいテキストファイルを検出:', newSection.text_file_key);
        
+       // ファイルタイプを拡張子から判定
+       const fileExtension = newSection.text_file_key.split('.').pop().toLowerCase();
+       const detectedFileType = fileExtension === 'md' ? 'md' : 
+                               fileExtension === 'txt' ? 'text/plain' : 
+                               fileExtension === 'rtf' ? 'application/rtf' : 
+                               fileExtension === 'pdf' ? 'pdf' : 
+                               'pdf';  // デフォルトはpdf
+       
        // 新しいセクション用のlessonDataを設定
        setLessonData(prev => ({
          ...prev,
          s3_key: newSection.text_file_key, // セクション固有のS3キー
-         file_type: 'pdf'
+         file_type: detectedFileType
        }));
        
-       // PDF処理状態をリセット
-       setPdfProcessingStatus('processing');
-       setPdfTextExtracted(false);
-       setTextContent('');
-       setPdfTextContent('');
+       // ファイルタイプに応じて処理状態をリセット
+       if (detectedFileType === 'pdf') {
+         setPdfProcessingStatus('processing');
+         setPdfTextExtracted(false);
+         setTextContent('');
+         setPdfTextContent('');
+       } else {
+         // テキストファイルの場合は既存のtextContentを保持
+         console.log('テキストファイルのため、既存のtextContentを保持します');
+       }
        
-       // 前のセクションのコンテキストをクリア
-       if (lessonData?.id) {
+       // 前のセクションのコンテキストをクリア（PDFの場合のみ）
+       if (detectedFileType === 'pdf' && lessonData?.id) {
          SessionStorageManager.clearLessonContext(lessonData.id);
        }
      }
@@ -427,7 +441,7 @@ const EnhancedLearningPageRefactored = () => {
     try {
       console.log(`セクションデータを取得中: レッスンID ${lessonId} (試行回数: ${retryCount + 1})`);
       
-      const response = await fetch(`http://localhost:5050/api/lesson-text-video-links/lesson/${lessonId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/lesson-text-video-links/lesson/${lessonId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'
@@ -450,23 +464,43 @@ const EnhancedLearningPageRefactored = () => {
                      if (data.data.length > 0) {
              setCurrentSection(0);
              
-             // 最初のセクションのテキストファイルがある場合は、lessonDataを更新
-             const firstSection = data.data[0];
-             if (firstSection.text_file_key && firstSection.text_file_key !== lessonData?.s3_key) {
-               console.log('セクションデータ取得: 最初のセクションのテキストファイルを設定:', firstSection.text_file_key);
-               
-               setLessonData(prev => ({
-                 ...prev,
-                 s3_key: firstSection.text_file_key, // セクション固有のS3キー
-                 file_type: 'pdf'
-               }));
-               
-               // PDF処理状態をリセット
-               setPdfProcessingStatus('processing');
-               setPdfTextExtracted(false);
-               setTextContent('');
-               setPdfTextContent('');
-             }
+            // 最初のセクションのテキストファイルがある場合は、lessonDataを更新
+            const firstSection = data.data[0];
+            if (firstSection.text_file_key && firstSection.text_file_key !== lessonData?.s3_key) {
+              console.log('セクションデータ取得: 最初のセクションのテキストファイルを設定:', firstSection.text_file_key);
+              
+              // ファイルタイプを拡張子から判定
+              const fileExtension = firstSection.text_file_key.split('.').pop().toLowerCase();
+              const detectedFileType = fileExtension === 'md' ? 'md' : 
+                                      fileExtension === 'txt' ? 'text/plain' : 
+                                      fileExtension === 'rtf' ? 'application/rtf' : 
+                                      fileExtension === 'pdf' ? 'pdf' : 
+                                      lessonData?.file_type || 'pdf';  // 元のfile_typeを保持、なければpdf
+              
+              console.log('ファイルタイプ判定:', {
+                text_file_key: firstSection.text_file_key,
+                fileExtension: fileExtension,
+                detectedFileType: detectedFileType,
+                originalFileType: lessonData?.file_type
+              });
+              
+              setLessonData(prev => ({
+                ...prev,
+                s3_key: firstSection.text_file_key, // セクション固有のS3キー
+                file_type: detectedFileType  // 拡張子に基づいてfile_typeを設定
+              }));
+              
+              // 処理状態をリセット（PDFの場合のみPDF処理用の状態をリセット）
+              if (detectedFileType === 'pdf') {
+                setPdfProcessingStatus('processing');
+                setPdfTextExtracted(false);
+                setTextContent('');
+                setPdfTextContent('');
+              } else {
+                // テキストファイル（MD、TXT、RTF）の場合はtextContentを保持
+                console.log('テキストファイルのため、既存のtextContentを保持します');
+              }
+            }
              
              displaySectionContent(firstSection);
            }
@@ -525,14 +559,48 @@ const EnhancedLearningPageRefactored = () => {
 
      // セクションテキストコンテンツ取得は不要（PDF処理はTextSectionで自動実行）
 
+  // ユーザーIDを取得する関数
+  const getUserId = () => {
+    // 1. 認証コンテキストから取得
+    if (currentUser && currentUser.id) {
+      console.log('認証コンテキストからユーザーID取得:', currentUser.id);
+      return currentUser.id;
+    }
+    
+    // 2. localStorageのcurrentUserから取得
+    const storedUser = localStorage.getItem('currentUser');
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        if (userData && userData.id) {
+          console.log('localStorageのcurrentUserからユーザーID取得:', userData.id);
+          return userData.id;
+        }
+      } catch (error) {
+        console.error('localStorageのcurrentUserパースエラー:', error);
+      }
+    }
+    
+    // 3. フォールバック: localStorageのuserIdから取得
+    const fallbackUserId = localStorage.getItem('userId');
+    if (fallbackUserId) {
+      console.log('localStorageのuserIdからユーザーID取得:', fallbackUserId);
+      return fallbackUserId;
+    }
+    
+    // 4. 最終フォールバック
+    console.warn('ユーザーIDが取得できません。デフォルト値24を使用します。');
+    return '24'; // 現在受講しているユーザーID
+  };
+
   // コースデータを取得
   const fetchCourseData = async (courseId, retryCount = 0, searchParams = null) => {
     try {
-      const userId = localStorage.getItem('userId') || '1';
+      const userId = getUserId();
       
       console.log(`コースデータを取得中: コースID ${courseId}, 利用者ID ${userId} (試行回数: ${retryCount + 1})`);
       
-      const response = await fetch(`http://localhost:5050/api/learning/progress/${userId}/course/${courseId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/progress/${userId}/course/${courseId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'
@@ -607,7 +675,7 @@ const EnhancedLearningPageRefactored = () => {
              // PDFテキストの読み込み状態をチェック
        if (lessonData?.file_type === 'pdf' && !pdfTextContent) {
          // セッションストレージからコンテキストを確認
-         const hasStoredContext = SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key);
+         const hasStoredContext = SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type);
          if (!hasStoredContext) {
            alert('PDFファイルの読み込みが完了していません。しばらくお待ちください。');
            return;
@@ -699,7 +767,7 @@ const EnhancedLearningPageRefactored = () => {
   const getCurrentSectionText = () => {
     // セッションストレージからコンテキストを確認
     if (lessonData?.s3_key && lessonData?.id) {
-      const storedContext = SessionStorageManager.getContext(lessonData.id, lessonData.s3_key);
+      const storedContext = SessionStorageManager.getContext(lessonData.id, lessonData.s3_key, lessonData.file_type);
       if (storedContext) {
         console.log('AIサポート用にセッションストレージからコンテキスト取得:', {
           contextLength: storedContext.context.length
@@ -773,7 +841,7 @@ const EnhancedLearningPageRefactored = () => {
       formData.append('file', zipFiles[0]);
       formData.append('lessonId', currentLesson);
 
-      const response = await fetch(`http://localhost:5050/api/learning/upload-assignment`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/upload-assignment`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
@@ -827,7 +895,7 @@ const EnhancedLearningPageRefactored = () => {
     try {
       console.log(`🗑️ ファイル削除開始: ファイルID ${fileId}, レッスンID ${currentLesson}`);
       
-      const response = await fetch(`http://localhost:5050/api/learning/lesson/${currentLesson}/uploaded-files/${fileId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/learning/lesson/${currentLesson}/uploaded-files/${fileId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
@@ -927,13 +995,16 @@ const EnhancedLearningPageRefactored = () => {
         onSectionChange={changeSection}
         onUploadModalOpen={() => setShowUploadModal(true)}
         onTestNavigate={(lessonId) => navigate(`/student/test?lesson=${lessonId}`)}
-        isTestEnabled={pdfProcessingStatus === 'completed'} // PDF処理完了時のみテスト有効
+        isTestEnabled={
+          pdfProcessingStatus === 'completed' || // PDF処理完了時
+          (lessonData?.file_type !== 'pdf' && lessonData?.textContent) // テキストファイルの場合
+        }
         hasAssignment={assignmentStatus.hasAssignment}
         assignmentSubmitted={assignmentStatus.assignmentSubmitted}
       />
 
-      {/* PDF処理状態表示 */}
-      {pdfProcessingStatus === 'processing' && (
+      {/* PDF処理状態表示 - PDFファイルの場合のみ表示 */}
+      {pdfProcessingStatus === 'processing' && lessonData?.file_type === 'pdf' && (
         <div className="w-full bg-blue-50 border-b border-blue-200 px-4 py-2">
           <div className="flex items-center justify-center text-blue-600 text-sm">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
@@ -942,8 +1013,8 @@ const EnhancedLearningPageRefactored = () => {
         </div>
       )}
       
-      {/* PDF処理エラー表示 */}
-      {pdfProcessingStatus === 'error' && (
+      {/* PDF処理エラー表示 - PDFファイルの場合のみ表示 */}
+      {pdfProcessingStatus === 'error' && lessonData?.file_type === 'pdf' && (
         <div className="w-full bg-red-50 border-b border-red-200 px-4 py-2">
           <div className="flex items-center justify-center text-red-600 text-sm">
             <span className="mr-2">⚠️</span>
@@ -966,12 +1037,22 @@ const EnhancedLearningPageRefactored = () => {
         </div>
       )}
       
-      {/* PDF処理完了表示 */}
-      {pdfProcessingStatus === 'completed' && (
+      {/* PDF処理完了表示 - PDFファイルの場合のみ表示 */}
+      {pdfProcessingStatus === 'completed' && lessonData?.file_type === 'pdf' && (
         <div className="w-full bg-green-50 border-b border-green-200 px-4 py-2">
           <div className="flex items-center justify-center text-green-600 text-sm">
             <span className="mr-2">✓</span>
             PDFファイルの処理が完了しました。AIサポート機能が利用可能です
+          </div>
+        </div>
+      )}
+
+      {/* テキストファイル（MD、TXT、RTF）のAI利用可能表示 */}
+      {(lessonData?.file_type === 'md' || lessonData?.file_type === 'text/markdown' || lessonData?.file_type === 'txt' || lessonData?.file_type === 'application/rtf') && lessonData?.textContent && (
+        <div className="w-full bg-green-50 border-b border-green-200 px-4 py-2">
+          <div className="flex items-center justify-center text-green-600 text-sm">
+            <span className="mr-2">💡</span>
+            AIアシスタントが利用可能です。学習内容について質問してください。
           </div>
         </div>
       )}
@@ -1011,10 +1092,10 @@ const EnhancedLearningPageRefactored = () => {
                isAILoading={isAILoading}
                isAIEnabled={
                  pdfProcessingStatus === 'completed' || 
-                 (lessonData?.file_type === 'pdf' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key)) ||
-                 (lessonData?.file_type === 'txt' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key)) ||
-                 (lessonData?.file_type === 'md' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key)) ||
-                 (lessonData?.file_type === 'application/rtf' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key)) ||
+                 (lessonData?.file_type === 'pdf' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type)) ||
+                 (lessonData?.file_type === 'txt' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type)) ||
+                 (lessonData?.file_type === 'md' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type)) ||
+                 (lessonData?.file_type === 'application/rtf' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type)) ||
                  (lessonData?.file_type !== 'pdf' && lessonData?.textContent) // フォールバック: 通常のテキストファイルの場合
                }
              />

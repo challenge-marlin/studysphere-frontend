@@ -12,7 +12,7 @@ const HomeSupportDashboard = () => {
   const [activeTab, setActiveTab] = useState(() => {
     // sessionStorageからタブの状態を復元
     const savedTab = sessionStorage.getItem('homeSupportDashboardActiveTab');
-    return savedTab && ['overview', 'users', 'attendance', 'evidence', 'evaluations', 'evaluation-history'].includes(savedTab) 
+    return savedTab && ['overview', 'users', 'evidence', 'evaluations', 'evaluation-history', 'attendance'].includes(savedTab) 
       ? savedTab 
       : 'overview';
   });
@@ -20,6 +20,8 @@ const HomeSupportDashboard = () => {
   const [showHomeSupportModal, setShowHomeSupportModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showUserDetailModal, setShowUserDetailModal] = useState(false);
+  const [showSupportPlanModal, setShowSupportPlanModal] = useState(false);
+  const [showCertificateModal, setShowCertificateModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [localUser, setLocalUser] = useState(null);
@@ -85,6 +87,16 @@ const HomeSupportDashboard = () => {
     setShowUserDetailModal(true);
   };
 
+  const handleSupportPlanClick = (user) => {
+    setSelectedUser(user);
+    setShowSupportPlanModal(true);
+  };
+
+  const handleCertificateClick = (user) => {
+    setSelectedUser(user);
+    setShowCertificateModal(true);
+  };
+
   // 在宅利用者追加モーダルを開く関数をグローバルに公開
   useEffect(() => {
     window.openHomeSupportModal = () => {
@@ -113,15 +125,15 @@ const HomeSupportDashboard = () => {
       <div className="flex flex-col flex-1 h-[calc(100vh-80px)] overflow-hidden">
         <aside className="w-full bg-white text-gray-800 flex-shrink-0 overflow-y-auto border-b border-gray-200">
           <nav className="p-4 flex flex-row gap-2 overflow-x-auto">
-            <button 
-              className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'overview' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
-              onClick={() => {
-                setActiveTab('overview');
-                sessionStorage.setItem('homeSupportDashboardActiveTab', 'overview');
-              }}
-            >
-              🏠 在宅支援概要
-            </button>
+                <button
+                  className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'overview' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
+                  onClick={() => {
+                    setActiveTab('overview');
+                    sessionStorage.setItem('homeSupportDashboardActiveTab', 'overview');
+                  }}
+                >
+                  🏠 在宅支援メイン
+                </button>
             <button 
               className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'users' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
               onClick={() => {
@@ -131,16 +143,7 @@ const HomeSupportDashboard = () => {
             >
               👥 利用者管理
             </button>
-            <button 
-              className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'attendance' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
-              onClick={() => {
-                setActiveTab('attendance');
-                sessionStorage.setItem('homeSupportDashboardActiveTab', 'attendance');
-              }}
-            >
-              ⏰ 勤怠管理
-            </button>
-            <button 
+            <button
               className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'evidence' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
               onClick={() => {
                 setActiveTab('evidence');
@@ -156,7 +159,7 @@ const HomeSupportDashboard = () => {
                     sessionStorage.setItem('homeSupportDashboardActiveTab', 'evaluations');
                   }}
                 >
-                  📝 評価予定
+                  📋 評価記録
                 </button>
                 <button
                   className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'evaluation-history' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
@@ -165,7 +168,16 @@ const HomeSupportDashboard = () => {
                     sessionStorage.setItem('homeSupportDashboardActiveTab', 'evaluation-history');
                   }}
                 >
-                  📚 評価履歴
+                  📊 評価履歴
+                </button>
+                <button
+                  className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'attendance' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
+                  onClick={() => {
+                    setActiveTab('attendance');
+                    sessionStorage.setItem('homeSupportDashboardActiveTab', 'attendance');
+                  }}
+                >
+                  ⏰ 勤怠管理
                 </button>
           </nav>
         </aside>
@@ -557,24 +569,14 @@ const HomeSupportDashboard = () => {
           {activeTab === 'evidence' && (
             <div className="space-y-6">
               <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-                <div className="flex justify-between items-center mb-6">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">📷 記録・証拠</h2>
-                    <p className="text-lg text-gray-600">デスクトップ画面とカメラで学習状況を記録・管理</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                      📷 カメラ撮影
-                    </button>
-                    <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-                      🖥️ 画面キャプチャ
-                    </button>
-                  </div>
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">📷 記録・証拠</h2>
+                  <p className="text-lg text-gray-600">デスクトップ画面とカメラで学習状況を記録・管理</p>
                 </div>
 
                 {/* 検索・フィルター機能 */}
                 <div className="bg-gray-50 rounded-xl p-4 mb-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">利用者</label>
                       <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -587,13 +589,20 @@ const HomeSupportDashboard = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">期間</label>
-                      <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="today">今日</option>
-                        <option value="week">今週</option>
-                        <option value="month">今月</option>
-                        <option value="custom">カスタム</option>
-                      </select>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">開始日</label>
+                      <input 
+                        type="date" 
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        defaultValue={new Date().toISOString().split('T')[0]}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">終了日</label>
+                      <input 
+                        type="date" 
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="終了日（空欄可）"
+                      />
                     </div>
                     <div className="flex items-end">
                       <button className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
@@ -838,13 +847,7 @@ const HomeSupportDashboard = () => {
                               担当指導員
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              状態
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              作業時間
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              備考
+                              受給者証備考
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               操作
@@ -870,27 +873,31 @@ const HomeSupportDashboard = () => {
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                作業中
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm text-gray-900">
-                                10:00 - 16:00
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">
-                                -
+                                在宅支援開始
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               <div className="flex space-x-2">
-                                <button className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200">
-                                  詳細
+                                <button 
+                                  onClick={() => handleSupportPlanClick({
+                                    id: 'tanaka',
+                                    name: '田中 太郎',
+                                    certificate: '1234567890'
+                                  })}
+                                  className="text-white text-sm px-3 py-1 rounded bg-purple-600 hover:bg-purple-700 transition-colors duration-200"
+                                >
+                                  支援計画
                                 </button>
-                                <button className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200">
-                                  書類
+                                <button 
+                                  onClick={() => handleCertificateClick({
+                                    id: 'tanaka',
+                                    name: '田中 太郎',
+                                    certificate: '1234567890'
+                                  })}
+                                  className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200"
+                                >
+                                  受給者証
                                 </button>
                               </div>
                             </td>
@@ -914,27 +921,31 @@ const HomeSupportDashboard = () => {
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                                休憩中
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm text-gray-900">
-                                09:00 - 11:00
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">
-                                体調不良で早退
+                                体調管理が必要
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               <div className="flex space-x-2">
-                                <button className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200">
-                                  詳細
+                                <button 
+                                  onClick={() => handleSupportPlanClick({
+                                    id: 'sato',
+                                    name: '佐藤 花子',
+                                    certificate: '2345678901'
+                                  })}
+                                  className="text-white text-sm px-3 py-1 rounded bg-purple-600 hover:bg-purple-700 transition-colors duration-200"
+                                >
+                                  支援計画
                                 </button>
-                                <button className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200">
-                                  書類
+                                <button 
+                                  onClick={() => handleCertificateClick({
+                                    id: 'sato',
+                                    name: '佐藤 花子',
+                                    certificate: '2345678901'
+                                  })}
+                                  className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200"
+                                >
+                                  受給者証
                                 </button>
                               </div>
                             </td>
@@ -958,27 +969,31 @@ const HomeSupportDashboard = () => {
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
-                                未開始
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-500">
-                                -
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm text-gray-900">
-                                連絡待ち
+                                初回利用者
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               <div className="flex space-x-2">
-                                <button className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200">
-                                  詳細
+                                <button 
+                                  onClick={() => handleSupportPlanClick({
+                                    id: 'suzuki',
+                                    name: '鈴木 一郎',
+                                    certificate: '3456789012'
+                                  })}
+                                  className="text-white text-sm px-3 py-1 rounded bg-purple-600 hover:bg-purple-700 transition-colors duration-200"
+                                >
+                                  支援計画
                                 </button>
-                                <button className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200">
-                                  書類
+                                <button 
+                                  onClick={() => handleCertificateClick({
+                                    id: 'suzuki',
+                                    name: '鈴木 一郎',
+                                    certificate: '3456789012'
+                                  })}
+                                  className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200"
+                                >
+                                  受給者証
                                 </button>
                               </div>
                             </td>
@@ -1002,27 +1017,31 @@ const HomeSupportDashboard = () => {
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                作業中
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm text-gray-900">
-                                09:00 - 15:00
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">
-                                -
+                                順調に作業中
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               <div className="flex space-x-2">
-                                <button className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200">
-                                  詳細
+                                <button 
+                                  onClick={() => handleSupportPlanClick({
+                                    id: 'takahashi',
+                                    name: '高橋 美咲',
+                                    certificate: '4567890123'
+                                  })}
+                                  className="text-white text-sm px-3 py-1 rounded bg-purple-600 hover:bg-purple-700 transition-colors duration-200"
+                                >
+                                  支援計画
                                 </button>
-                                <button className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200">
-                                  書類
+                                <button 
+                                  onClick={() => handleCertificateClick({
+                                    id: 'takahashi',
+                                    name: '高橋 美咲',
+                                    certificate: '4567890123'
+                                  })}
+                                  className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200"
+                                >
+                                  受給者証
                                 </button>
                               </div>
                             </td>
@@ -1046,27 +1065,31 @@ const HomeSupportDashboard = () => {
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                作業中
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm text-gray-900">
-                                11:00 - 17:00
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">
-                                -
+                                コミュニケーション向上中
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               <div className="flex space-x-2">
-                                <button className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200">
-                                  詳細
+                                <button 
+                                  onClick={() => handleSupportPlanClick({
+                                    id: 'ito',
+                                    name: '伊藤 健太',
+                                    certificate: '5678901234'
+                                  })}
+                                  className="text-white text-sm px-3 py-1 rounded bg-purple-600 hover:bg-purple-700 transition-colors duration-200"
+                                >
+                                  支援計画
                                 </button>
-                                <button className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200">
-                                  書類
+                                <button 
+                                  onClick={() => handleCertificateClick({
+                                    id: 'ito',
+                                    name: '伊藤 健太',
+                                    certificate: '5678901234'
+                                  })}
+                                  className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200"
+                                >
+                                  受給者証
                                 </button>
                               </div>
                             </td>
@@ -1371,7 +1394,7 @@ const HomeSupportDashboard = () => {
               <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
                 <div className="flex justify-between items-center mb-6">
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">📝 評価予定</h2>
+                    <h2 className="text-2xl font-bold text-gray-800 mb-2">📋 評価記録</h2>
                     <p className="text-lg text-gray-600">今日やるべき評価と今後の評価予定を管理します</p>
                   </div>
                   <div className="flex gap-3">
@@ -2082,6 +2105,225 @@ const HomeSupportDashboard = () => {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 個別支援計画モーダル */}
+      {showSupportPlanModal && selectedUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-800">{selectedUser.name} 個別支援計画</h3>
+                  <p className="text-gray-600">受給者証: {selectedUser.certificate}</p>
+                </div>
+                <button 
+                  onClick={() => setShowSupportPlanModal(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-all duration-200"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              {/* 長期目標 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">長期目標</label>
+                <textarea 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none"
+                  placeholder="就労移行支援の長期目標を入力してください"
+                  defaultValue="就労継続支援A型事業所への就職を目指す"
+                />
+              </div>
+
+              {/* 短期目標 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">短期目標</label>
+                <textarea 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none"
+                  placeholder="3ヶ月以内の短期目標を入力してください"
+                  defaultValue="パソコン操作スキルの向上とコミュニケーション能力の向上"
+                />
+              </div>
+
+              {/* 本人のニーズ */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">本人のニーズ</label>
+                <textarea 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none"
+                  placeholder="利用者のニーズや希望を入力してください"
+                  defaultValue="在宅での作業を通じて社会参加したい。パソコンを使った仕事に興味がある。"
+                />
+              </div>
+
+              {/* 個別支援内容 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">個別支援内容</label>
+                <textarea 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-32 resize-none"
+                  placeholder="具体的な支援内容を入力してください"
+                  defaultValue="1. パソコン基本操作の指導\n2. 在宅での作業環境整備\n3. コミュニケーションスキルの向上\n4. 就労に向けた準備支援"
+                />
+              </div>
+
+              {/* 目標達成時期 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">目標達成時期</label>
+                <input 
+                  type="date" 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  defaultValue="2025-12-31"
+                />
+              </div>
+
+              {/* 支援計画の状況 */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-gray-800 mb-3">支援計画の状況</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-white p-3 rounded-lg border">
+                    <div className="text-xs text-gray-500">個別支援計画書作成日</div>
+                    <input 
+                      type="date" 
+                      className="w-full text-sm font-medium border-none bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                      defaultValue="2025-01-15"
+                      onChange={(e) => {
+                        // 作成日が変更されたら、3ヶ月後の日付を次回更新日に設定
+                        const createDate = new Date(e.target.value);
+                        const updateDate = new Date(createDate);
+                        updateDate.setMonth(updateDate.getMonth() + 3);
+                        const updateDateInput = document.querySelector('input[data-field="next-update"]');
+                        if (updateDateInput) {
+                          updateDateInput.value = updateDate.toISOString().split('T')[0];
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="bg-white p-3 rounded-lg border">
+                    <div className="text-xs text-gray-500">次回更新日</div>
+                    <input 
+                      type="date" 
+                      className="w-full text-sm font-medium border-none bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+                      defaultValue="2025-04-15"
+                      data-field="next-update"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => setShowSupportPlanModal(false)}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => {
+                  // 保存処理
+                  setShowSupportPlanModal(false);
+                  alert('個別支援計画を保存しました');
+                }}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 受給者証番号入力モーダル */}
+      {showCertificateModal && selectedUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-gray-800">{selectedUser.name} 受給者証情報</h3>
+                <button 
+                  onClick={() => setShowCertificateModal(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-all duration-200"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">受給者証番号</label>
+                <input 
+                  type="text" 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="受給者証番号を入力してください"
+                  defaultValue={selectedUser.certificate}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">有効期限</label>
+                <input 
+                  type="date" 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  defaultValue="2025-12-31"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">障害種別</label>
+                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">選択してください</option>
+                  <option value="physical">身体障害</option>
+                  <option value="intellectual">知的障害</option>
+                  <option value="mental">精神障害</option>
+                  <option value="developmental">発達障害</option>
+                  <option value="multiple">重複障害</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">障害等級</label>
+                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">選択してください</option>
+                  <option value="1">1級</option>
+                  <option value="2">2級</option>
+                  <option value="3">3級</option>
+                  <option value="4">4級</option>
+                  <option value="5">5級</option>
+                  <option value="6">6級</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">備考</label>
+                <textarea 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-20 resize-none"
+                  placeholder="受給者証に関する備考を入力してください"
+                />
+              </div>
+            </div>
+            
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => setShowCertificateModal(false)}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => {
+                  // 保存処理
+                  setShowCertificateModal(false);
+                  alert('受給者証情報を保存しました');
+                }}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                保存
+              </button>
             </div>
           </div>
         </div>

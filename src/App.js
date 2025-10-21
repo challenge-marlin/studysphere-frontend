@@ -19,6 +19,7 @@ import HomeSupportUserDetailPage from './pages/HomeSupportUserDetailPage';
 import DailyRecordsPage from './pages/DailyRecordsPage';
 import HomeSupportDailyRecordsPage from './pages/HomeSupportDailyRecordsPage';
 import HomeSupportEvaluationsPage from './pages/HomeSupportEvaluationsPage';
+import HomeSupportDashboard from './pages/HomeSupportDashboard';
 import InstructorStudentDetail from './pages/InstructorStudentDetail';
 import './App.css';
 
@@ -35,9 +36,12 @@ const TestComponent = () => (
 
 function App() {
   // 環境に応じてbasenameを設定
-  const basename = process.env.NODE_ENV === 'production' 
-    ? process.env.PUBLIC_URL || '/'  // 本番環境ではプレフィックスなし
-    : '/studysphere';  // 開発環境では/studysphereプレフィックス
+  // const basename = process.env.NODE_ENV === 'production' 
+  //   ? process.env.PUBLIC_URL || '/'  // 本番環境ではプレフィックスなし
+  //   : '/studysphere';  // 開発環境では/studysphereプレフィックス
+  
+  // 開発環境でも "/" を使用（localhost:3000/ でアクセスするため）
+  const basename = process.env.PUBLIC_URL || '/';
 
   return (
     <Router 
@@ -62,6 +66,8 @@ function App() {
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
             {/* 指導員用ダッシュボード */}
             <Route path="/instructor/dashboard" element={<InstructorDashboard />} />
+            {/* 在宅支援専用ダッシュボード */}
+            <Route path="/instructor/home-support" element={<HomeSupportDashboard />} />
             {/* 互換性のため古いパスも残す */}
             <Route path="/teacher/dashboard" element={<InstructorDashboard />} />
             {/* 利用者用ログイン（トークンベース） */}

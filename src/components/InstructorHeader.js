@@ -9,7 +9,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL ||
     ? 'https://backend.studysphere.ayatori-inc.co.jp' 
     : 'http://localhost:5050');
 
-const InstructorHeader = ({ user, onLocationChange }) => {
+const InstructorHeader = ({ user, onLocationChange, showBackButton = false, backButtonText = "戻る", onBackClick }) => {
   const [isSwitchModalOpen, setIsSwitchModalOpen] = useState(false);
   const [currentCompany, setCurrentCompany] = useState(null);
   const [currentSatellite, setCurrentSatellite] = useState(null);
@@ -447,6 +447,17 @@ const InstructorHeader = ({ user, onLocationChange }) => {
     <header className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white py-4 shadow-lg">
       <div className="max-w-7xl mx-auto px-5 flex justify-between items-center">
         <div className="flex items-center gap-4">
+          {showBackButton && (
+            <button
+              onClick={onBackClick}
+              className="flex items-center gap-2 px-3 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition-all duration-200 text-sm font-medium"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              {backButtonText}
+            </button>
+          )}
           <h1 className="text-2xl font-bold text-white m-0">Study Sphere</h1>
         </div>
         <div className="flex items-center gap-4">

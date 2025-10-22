@@ -60,7 +60,7 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
   };
 
   const handleDelete = () => {
-    if (window.confirm('この月次評価を削除しますか？')) {
+    if (window.confirm('この達成度評価を削除しますか？')) {
       onDelete(report?.id);
     }
   };
@@ -86,7 +86,7 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
       <div className="max-w-4xl mx-auto">
         <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-2xl font-bold text-gray-800">📈 月次評価（在宅における就労達成度評価シート）</h3>
+            <h3 className="text-2xl font-bold text-gray-800">📈 達成度評価（在宅における就労達成度評価シート）</h3>
             <div className="flex gap-2">
               {!isEditing ? (
                 <>

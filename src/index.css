@@ -109,4 +109,59 @@ h1, h2, h3, h4, h5, h6 {
 
 .text-shadow-lg {
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* 印刷用スタイル */
+@media print {
+  /* ページ設定 */
+  @page {
+    size: A4;
+    margin: 20mm;
+  }
+
+  /* 画面表示要素を非表示 */
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* 印刷用要素を表示 */
+  .print\:block {
+    display: block !important;
+  }
+
+  /* 改ページ制御 */
+  .print\:break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print\:page-break-inside-avoid {
+    page-break-inside: avoid;
+  }
+
+  /* 背景色を保持 */
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* 影を削除してインクを節約 */
+  .print\:shadow-none {
+    box-shadow: none !important;
+  }
+
+  .print\:rounded-none {
+    border-radius: 0 !important;
+  }
+
+  /* 余白調整 */
+  body, html {
+    margin: 0;
+    padding: 0;
+  }
+
+  /* リンクのURL表示を無効化 */
+  a[href]:after {
+    content: none !important;
+  }
 } 

@@ -20,6 +20,11 @@ import DailyRecordsPage from './pages/DailyRecordsPage';
 import HomeSupportDailyRecordsPage from './pages/HomeSupportDailyRecordsPage';
 import HomeSupportEvaluationsPage from './pages/HomeSupportEvaluationsPage';
 import HomeSupportDashboard from './pages/HomeSupportDashboard';
+import WeeklyEvaluationPage from './pages/WeeklyEvaluationPage';
+import MonthlyEvaluationPage from './pages/MonthlyEvaluationPage';
+import MonthlyEvaluationHistoryPage from './pages/MonthlyEvaluationHistoryPage';
+import MonthlyAttendancePage from './pages/MonthlyAttendancePage';
+import HomeSupportRecordsPage from './pages/HomeSupportRecordsPage';
 import InstructorStudentDetail from './pages/InstructorStudentDetail';
 import './App.css';
 
@@ -99,6 +104,16 @@ function App() {
             {/* 在宅支援管理：達成度評価管理 */}
             <Route path="/instructor/evaluations" element={<HomeSupportEvaluationsPage />} />
             <Route path="/instructor/home-support-evaluations" element={<HomeSupportEvaluationsPage />} />
+            {/* 在宅支援管理：週次評価作成 */}
+            <Route path="/instructor/home-support/weekly-evaluation/:studentId" element={<WeeklyEvaluationPage />} />
+            {/* 在宅支援管理：月次評価作成 */}
+            <Route path="/instructor/home-support/monthly-evaluation/:studentId" element={<MonthlyEvaluationPage />} />
+            {/* 在宅支援管理：月次達成度評価確認・履歴 */}
+            <Route path="/instructor/home-support/monthly-evaluation-history/:userId" element={<MonthlyEvaluationHistoryPage />} />
+            {/* 在宅支援管理：月次勤怠管理 */}
+            <Route path="/instructor/home-support/monthly-attendance" element={<MonthlyAttendancePage />} />
+            {/* 在宅支援管理：記録確認（日次＋週次統合表示） */}
+            <Route path="/instructor/home-support/records/:userId" element={<HomeSupportRecordsPage />} />
             {/* 在宅支援管理：利用者詳細画面 */}
             <Route path="/instructor/student-detail/:studentId" element={<HomeSupportUserDetailPage />} />
           </Routes>

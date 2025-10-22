@@ -48,14 +48,14 @@ const WeeklyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, onD
   };
 
   const handleDelete = () => {
-    if (window.confirm('この週次評価を削除しますか？')) {
+    if (window.confirm('この評価(週次)を削除しますか？')) {
       onDelete(report?.id);
     }
   };
 
   // AIアシスト機能（モック）
   const handleAiAssist = async () => {
-    const suggestion = `・${student?.name}の週次評価について
+    const suggestion = `・${student?.name}の評価(週次)について
 ・期間：${formData.period.start} ～ ${formData.period.end}
 ・学習進捗：${student?.class}の内容を着実に習得
 ・体調管理：良好な状態を維持
@@ -69,7 +69,7 @@ const WeeklyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, onD
       <div className="max-w-4xl mx-auto">
         <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-2xl font-bold text-gray-800">📅 週次評価（在宅における就労支援記録・評価）</h3>
+            <h3 className="text-2xl font-bold text-gray-800">📅 評価(週次)（在宅における就労支援記録・評価）</h3>
             <div className="flex gap-2">
               {!isEditing ? (
                 <>

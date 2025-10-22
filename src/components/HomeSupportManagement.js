@@ -140,7 +140,7 @@ const HomeSupportManagement = () => {
     const { type, field, period } = params;
     const suggestions = {
       weekly: {
-        content: `${selectedStudentForEvaluation?.name}さんの週次評価について\n\n期間：${period?.start} ～ ${period?.end}\n\n学習進捗：\n・${selectedStudentForEvaluation?.class}の内容を着実に習得\n・基礎知識の理解が深まっている\n・実践的な作業も順調に進んでいる\n\n体調管理：\n・良好な状態を維持\n・適切な休憩を取っている\n・学習意欲が高い\n\n次回目標：\n・より高度な内容への挑戦\n・実践的なスキルの向上\n・継続的な学習習慣の維持\n\n指導員からのコメント：\n学習態度が非常に良好で、着実にスキルアップしています。今後も継続的なサポートを行い、さらなる成長を支援していきます。`
+        content: `${selectedStudentForEvaluation?.name}さんの評価(週次)について\n\n期間：${period?.start} ～ ${period?.end}\n\n学習進捗：\n・${selectedStudentForEvaluation?.class}の内容を着実に習得\n・基礎知識の理解が深まっている\n・実践的な作業も順調に進んでいる\n\n体調管理：\n・良好な状態を維持\n・適切な休憩を取っている\n・学習意欲が高い\n\n次回目標：\n・より高度な内容への挑戦\n・実践的なスキルの向上\n・継続的な学習習慣の維持\n\n指導員からのコメント：\n学習態度が非常に良好で、着実にスキルアップしています。今後も継続的なサポートを行い、さらなる成長を支援していきます。`
       },
       monthly: {
         goal: `${selectedStudentForEvaluation?.class}の習得と実践的なスキルアップ`,
@@ -360,13 +360,13 @@ const HomeSupportManagement = () => {
                         className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all duration-200 text-sm"
                         onClick={() => startWeeklyEvaluation(student)}
                       >
-                        📊 週次評価
+                        📊 評価(週次)
                       </button>
                       <button
                         className="px-3 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg font-medium transition-all duration-200 text-sm"
                         onClick={() => startMonthlyEvaluation(student)}
                       >
-                        📈 月次評価
+                        📈 達成度評価
                       </button>
                       <button
                         className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-all duration-200"
@@ -406,7 +406,7 @@ const HomeSupportManagement = () => {
             setSelectedStudentForEvaluation(null);
           }}
           onSave={(data) => {
-            console.log('週次評価を保存:', data);
+            console.log('評価(週次)を保存:', data);
             setShowWeeklyModal(false);
             setSelectedStudentForEvaluation(null);
           }}
@@ -424,7 +424,7 @@ const HomeSupportManagement = () => {
             setSelectedStudentForEvaluation(null);
           }}
           onSave={(data) => {
-            console.log('月次評価を保存:', data);
+            console.log('達成度評価を保存:', data);
             setShowMonthlyModal(false);
             setSelectedStudentForEvaluation(null);
           }}

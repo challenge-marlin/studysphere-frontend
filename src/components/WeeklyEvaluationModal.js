@@ -23,6 +23,7 @@ const WeeklyEvaluationModal = ({
   const [period, setPeriod] = useState(defaultPeriod || { start: '', end: '' });
   const [content, setContent] = useState('');
   const [instructor, setInstructor] = useState(defaultInstructor || instructorList[0]);
+  const [confirmer, setConfirmer] = useState('');
 
   const handleAiAssist = async () => {
     if (aiAssist) {
@@ -44,6 +45,7 @@ const WeeklyEvaluationModal = ({
       period,
       content,
       instructor,
+      confirmer,
     });
   };
 
@@ -54,7 +56,10 @@ const WeeklyEvaluationModal = ({
       <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[95vh] flex flex-col">
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-800">週次評価（在宅における就労支援記録・評価）</h2>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800">評価(週次)</h2>
+              <p className="text-sm text-gray-600 mt-1">在宅における就労支援記録（評価）</p>
+            </div>
             <button 
               className="text-gray-400 hover:text-gray-600 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-all duration-200"
               onClick={onClose}
@@ -65,6 +70,13 @@ const WeeklyEvaluationModal = ({
         </div>
         
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* 注意事項 */}
+          <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
+            <p className="text-sm text-blue-800">
+              <span className="font-semibold">※ 評価は作業・訓練対象日（期間最終日）の1週間以内に実施すること</span>
+            </p>
+          </div>
+          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">評価実施日</label>
             <input 
@@ -153,23 +165,23 @@ const WeeklyEvaluationModal = ({
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">評価内容</label>
-            <div className="flex gap-2">
-              <textarea 
-                value={content} 
-                onChange={e => setContent(e.target.value)} 
-                rows={6} 
-                placeholder="評価内容を入力してください" 
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-              />
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              評価内容
               <button 
                 type="button" 
-                className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-all duration-200 text-sm font-medium"
+                className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200"
                 onClick={handleAiAssist}
               >
-                AIアシスト
+                🤖 AI提案
               </button>
-            </div>
+            </label>
+            <textarea 
+              value={content} 
+              onChange={e => setContent(e.target.value)} 
+              rows={8} 
+              placeholder="例：&#10;・対象期間中の作業の進め方や、設定した個数目標の達成度をお互いに確認。&#10;・目標に届かなかった日がある。意欲はあるが、集中力が途切れたことが原因であり、効果的なリフレッシュ方法を考えていく。&#10;・生活面では、たまにスマホゲームに没頭してしまい、夜更かししてしまうことがあるため、特に夜間の生活リズムを崩さないよう助言する。" 
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+            />
           </div>
           
           <div>
@@ -183,6 +195,21 @@ const WeeklyEvaluationModal = ({
                 <option key={name} value={name}>{name}</option>
               ))}
             </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              確認者（サービス管理責任者）
+              <span className="text-red-500 ml-1">*</span>
+            </label>
+            <input
+              type="text"
+              value={confirmer}
+              onChange={e => setConfirmer(e.target.value)}
+              placeholder="サービス管理責任者名を入力"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            />
+            <p className="mt-1 text-xs text-gray-500">※ 評価内容はサービス管理責任者が必ず確認すること</p>
           </div>
         </div>
         

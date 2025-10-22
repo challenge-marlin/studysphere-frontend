@@ -4,6 +4,7 @@ import { useInstructorGuard } from '../utils/hooks/useAuthGuard';
 import InstructorHeader from '../components/InstructorHeader';
 import HomeSupportManagement from '../components/HomeSupportManagement';
 import HomeSupportUserAdditionModal from '../components/HomeSupportUserAdditionModal';
+import DailySupportRecordModal from '../components/DailySupportRecordModal';
 import { getCurrentUser } from '../utils/userContext';
 
 const HomeSupportDashboard = () => {
@@ -12,7 +13,7 @@ const HomeSupportDashboard = () => {
   const [activeTab, setActiveTab] = useState(() => {
     // sessionStorageからタブの状態を復元
     const savedTab = sessionStorage.getItem('homeSupportDashboardActiveTab');
-    return savedTab && ['overview', 'users', 'evidence', 'evaluations', 'evaluation-history', 'attendance'].includes(savedTab) 
+    return savedTab && ['overview', 'users', 'evidence', 'evaluations', 'attendance'].includes(savedTab) 
       ? savedTab 
       : 'overview';
   });
@@ -21,10 +22,13 @@ const HomeSupportDashboard = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showUserDetailModal, setShowUserDetailModal] = useState(false);
   const [showSupportPlanModal, setShowSupportPlanModal] = useState(false);
-  const [showCertificateModal, setShowCertificateModal] = useState(false);
+  const [showDailySupportRecordModal, setShowDailySupportRecordModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [localUser, setLocalUser] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
   const navigate = useNavigate();
   const { currentUser: authUser, logout } = useInstructorGuard();
@@ -92,9 +96,167 @@ const HomeSupportDashboard = () => {
     setShowSupportPlanModal(true);
   };
 
-  const handleCertificateClick = (user) => {
+
+  // 日次支援記録モーダルを開く
+  const handleDailySupportRecordClick = (user) => {
     setSelectedUser(user);
-    setShowCertificateModal(true);
+    setShowDailySupportRecordModal(true);
+  };
+
+  // 日次支援記録を保存
+  const handleSaveDailySupportRecord = (data) => {
+    console.log('日次支援記録を保存:', data);
+    // TODO: APIに保存処理を実装
+    alert('日次支援記録を保存しました。');
+    setShowDailySupportRecordModal(false);
+    setSelectedUser(null);
+  };
+
+  // AI提案機能（日次支援記録用）
+  const handleDailyRecordAIAssist = (field, context) => {
+    const { student, record, date } = context;
+    
+    // フィールドごとのAI提案ロジック
+    let suggestion = '';
+    
+    switch (field) {
+      case 'workContent':
+        suggestion = `・ITリテラシー・AIの基本の学習を実施\n・HTML/CSS基礎学習とレスポンシブデザイン実習を行い、基本概念を理解\n・Webページ作成の基礎を習得`;
+        break;
+      case 'supportContent':
+        suggestion = `・9:00　利用者から作業開始の連絡。本日の学習内容と目標を確認（${student?.name || '対象者'}さん）\n・12:00　午前中の学習進捗を電話で確認。HTML基礎の理解が進んでいることを確認\n・15:00　午後の学習内容について助言。CSS実習の注意点を説明\n・16:00　本日の学習成果を確認。次回の目標設定と、生活リズムを保つよう助言`;
+        break;
+      case 'healthStatus':
+        suggestion = `・9:00　体温36.2℃、睡眠時間7時間と確認。体調は良好な様子\n・16:00　長時間の学習でやや疲労感があるとのこと。適度な休憩を取りながら、メリハリをつけて学習することを助言\n・生活リズムを保つために、就寝・起床時間を守ることを助言`;
+        break;
+      default:
+        suggestion = 'AI提案を生成中...';
+    }
+    
+    return suggestion;
+  };
+
+  // 評価データ（モック）
+  const evaluationUsers = [
+    {
+      id: 'tanaka',
+      name: '田中 太郎',
+      recipientNumber: '1234567890',
+      dailyStatus: '未完了',
+      weeklyStatus: '完了',
+      monthlyStatus: '完了',
+      dailyPriority: 1, // 未完了は優先度高
+      weeklyPriority: 0,
+      monthlyPriority: 0
+    },
+    {
+      id: 'sato',
+      name: '佐藤 花子',
+      recipientNumber: '2345678901',
+      dailyStatus: '完了',
+      weeklyStatus: '未完了',
+      monthlyStatus: '未完了',
+      dailyPriority: 0,
+      weeklyPriority: 1,
+      monthlyPriority: 1
+    },
+    {
+      id: 'suzuki',
+      name: '鈴木 一郎',
+      recipientNumber: '3456789012',
+      dailyStatus: '完了',
+      weeklyStatus: '完了',
+      monthlyStatus: '未完了',
+      dailyPriority: 0,
+      weeklyPriority: 0,
+      monthlyPriority: 1
+    },
+    {
+      id: 'takahashi',
+      name: '高橋 美咲',
+      recipientNumber: '4567890123',
+      dailyStatus: '完了',
+      weeklyStatus: '完了',
+      monthlyStatus: '完了',
+      dailyPriority: 0,
+      weeklyPriority: 0,
+      monthlyPriority: 0
+    },
+    {
+      id: 'ito',
+      name: '伊藤 健太',
+      recipientNumber: '5678901234',
+      dailyStatus: '未完了',
+      weeklyStatus: '-',
+      monthlyStatus: '-',
+      dailyPriority: 1,
+      weeklyPriority: -1,
+      monthlyPriority: -1
+    }
+  ];
+
+  // ソート機能
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  // フィルタリングとソート
+  const getFilteredAndSortedUsers = () => {
+    let filteredUsers = [...evaluationUsers];
+
+    // 検索フィルタリング
+    if (searchTerm) {
+      filteredUsers = filteredUsers.filter(user =>
+        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.recipientNumber.includes(searchTerm)
+      );
+    }
+
+    // ソート
+    if (sortConfig.key) {
+      filteredUsers.sort((a, b) => {
+        let aValue, bValue;
+        
+        if (sortConfig.key === 'name') {
+          aValue = a.name;
+          bValue = b.name;
+        } else if (sortConfig.key === 'recipientNumber') {
+          aValue = a.recipientNumber;
+          bValue = b.recipientNumber;
+        } else if (sortConfig.key === 'daily') {
+          aValue = a.dailyPriority;
+          bValue = b.dailyPriority;
+        } else if (sortConfig.key === 'weekly') {
+          aValue = a.weeklyPriority;
+          bValue = b.weeklyPriority;
+        } else if (sortConfig.key === 'monthly') {
+          aValue = a.monthlyPriority;
+          bValue = b.monthlyPriority;
+        }
+
+        if (aValue < bValue) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+
+    return filteredUsers;
+  };
+
+  // ソートアイコンの表示
+  const getSortIcon = (key) => {
+    if (sortConfig.key !== key) {
+      return '⇅';
+    }
+    return sortConfig.direction === 'asc' ? '▲' : '▼';
   };
 
   // 在宅利用者追加モーダルを開く関数をグローバルに公開
@@ -162,15 +324,6 @@ const HomeSupportDashboard = () => {
                   📋 評価記録
                 </button>
                 <button
-                  className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'evaluation-history' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
-                  onClick={() => {
-                    setActiveTab('evaluation-history');
-                    sessionStorage.setItem('homeSupportDashboardActiveTab', 'evaluation-history');
-                  }}
-                >
-                  📊 評価履歴
-                </button>
-                <button
                   className={`flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5 ${activeTab === 'attendance' ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' : ''}`}
                   onClick={() => {
                     setActiveTab('attendance');
@@ -231,33 +384,6 @@ const HomeSupportDashboard = () => {
                   </div>
                 </div>
 
-
-                {/* 今週・今月の評価予定 */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                  <div className="bg-gradient-to-r from-indigo-50 to-indigo-100 p-4 rounded-xl border border-indigo-200">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-indigo-600 text-xl">📅</span>
-                      <h3 className="font-semibold text-indigo-800">今週の評価予定</h3>
-                    </div>
-                    <p className="text-indigo-700 text-sm mb-2">2名の週次評価が予定されています</p>
-                    <div className="flex gap-2">
-                      <span className="px-2 py-1 bg-indigo-200 text-indigo-800 rounded-full text-xs">田中さん</span>
-                      <span className="px-2 py-1 bg-indigo-200 text-indigo-800 rounded-full text-xs">佐藤さん</span>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-xl border border-purple-200">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-purple-600 text-xl">📊</span>
-                      <h3 className="font-semibold text-purple-800">今月の評価予定</h3>
-                    </div>
-                    <p className="text-purple-700 text-sm mb-2">1名の月次評価が予定されています</p>
-                    <div className="flex gap-2">
-                      <span className="px-2 py-1 bg-purple-200 text-purple-800 rounded-full text-xs">鈴木さん</span>
-                    </div>
-                  </div>
-                </div>
-
                     {/* 今日の利用者状況 */}
                     <div className="bg-gray-50 rounded-xl p-6">
                       <h3 className="text-lg font-semibold text-gray-800 mb-4">📝 今日の利用者状況</h3>
@@ -267,9 +393,6 @@ const HomeSupportDashboard = () => {
                             <tr>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 名前
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                受給者証
                               </th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 開始時間
@@ -294,11 +417,6 @@ const HomeSupportDashboard = () => {
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm font-medium text-gray-900">
                                   田中 太郎
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-900">
-                                  1234567890
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
@@ -328,18 +446,32 @@ const HomeSupportDashboard = () => {
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                <button 
-                                  onClick={() => handleUserDetailClick({
-                                    id: 'tanaka',
-                                    name: '田中 太郎',
-                                    certificate: '1234567890',
-                                    status: '作業中',
-                                    startTime: '10:00'
-                                  })}
-                                  className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
-                                >
-                                  詳細
-                                </button>
+                                <div className="flex gap-2">
+                                  <button 
+                                    onClick={() => handleDailySupportRecordClick({
+                                      id: 'tanaka',
+                                      name: '田中 太郎',
+                                      recipientNumber: '1234567890',
+                                      status: '作業中',
+                                      startTime: '10:00'
+                                    })}
+                                    className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200"
+                                  >
+                                    📝 支援記録
+                                  </button>
+                                  <button 
+                                    onClick={() => handleUserDetailClick({
+                                      id: 'tanaka',
+                                      name: '田中 太郎',
+                                      certificate: '1234567890',
+                                      status: '作業中',
+                                      startTime: '10:00'
+                                    })}
+                                    className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
+                                  >
+                                    詳細
+                                  </button>
+                                </div>
                               </td>
                             </tr>
 
@@ -348,11 +480,6 @@ const HomeSupportDashboard = () => {
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm font-medium text-gray-900">
                                   佐藤 花子
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-900">
-                                  2345678901
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
@@ -382,18 +509,32 @@ const HomeSupportDashboard = () => {
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                <button 
-                                  onClick={() => handleUserDetailClick({
-                                    id: 'sato',
-                                    name: '佐藤 花子',
-                                    certificate: '2345678901',
-                                    status: '休憩中',
-                                    startTime: '09:00'
-                                  })}
-                                  className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
-                                >
-                                  詳細
-                                </button>
+                                <div className="flex gap-2">
+                                  <button 
+                                    onClick={() => handleDailySupportRecordClick({
+                                      id: 'sato',
+                                      name: '佐藤 花子',
+                                      recipientNumber: '2345678901',
+                                      status: '休憩中',
+                                      startTime: '09:00'
+                                    })}
+                                    className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200"
+                                  >
+                                    📝 支援記録
+                                  </button>
+                                  <button 
+                                    onClick={() => handleUserDetailClick({
+                                      id: 'sato',
+                                      name: '佐藤 花子',
+                                      certificate: '2345678901',
+                                      status: '休憩中',
+                                      startTime: '09:00'
+                                    })}
+                                    className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
+                                  >
+                                    詳細
+                                  </button>
+                                </div>
                               </td>
                             </tr>
 
@@ -402,11 +543,6 @@ const HomeSupportDashboard = () => {
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm font-medium text-gray-900">
                                   鈴木 一郎
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-900">
-                                  3456789012
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
@@ -435,18 +571,32 @@ const HomeSupportDashboard = () => {
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                <button 
-                                  onClick={() => handleUserDetailClick({
-                                    id: 'suzuki',
-                                    name: '鈴木 一郎',
-                                    certificate: '3456789012',
-                                    status: '未開始',
-                                    startTime: '-'
-                                  })}
-                                  className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
-                                >
-                                  詳細
-                                </button>
+                                <div className="flex gap-2">
+                                  <button 
+                                    onClick={() => handleDailySupportRecordClick({
+                                      id: 'suzuki',
+                                      name: '鈴木 一郎',
+                                      recipientNumber: '3456789012',
+                                      status: '未開始',
+                                      startTime: '-'
+                                    })}
+                                    className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200"
+                                  >
+                                    📝 支援記録
+                                  </button>
+                                  <button 
+                                    onClick={() => handleUserDetailClick({
+                                      id: 'suzuki',
+                                      name: '鈴木 一郎',
+                                      certificate: '3456789012',
+                                      status: '未開始',
+                                      startTime: '-'
+                                    })}
+                                    className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
+                                  >
+                                    詳細
+                                  </button>
+                                </div>
                               </td>
                             </tr>
 
@@ -455,11 +605,6 @@ const HomeSupportDashboard = () => {
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm font-medium text-gray-900">
                                   高橋 美咲
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-900">
-                                  4567890123
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
@@ -489,18 +634,32 @@ const HomeSupportDashboard = () => {
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                <button 
-                                  onClick={() => handleUserDetailClick({
-                                    id: 'takahashi',
-                                    name: '高橋 美咲',
-                                    certificate: '4567890123',
-                                    status: '作業中',
-                                    startTime: '09:00'
-                                  })}
-                                  className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
-                                >
-                                  詳細
-                                </button>
+                                <div className="flex gap-2">
+                                  <button 
+                                    onClick={() => handleDailySupportRecordClick({
+                                      id: 'takahashi',
+                                      name: '高橋 美咲',
+                                      recipientNumber: '4567890123',
+                                      status: '作業中',
+                                      startTime: '09:00'
+                                    })}
+                                    className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200"
+                                  >
+                                    📝 支援記録
+                                  </button>
+                                  <button 
+                                    onClick={() => handleUserDetailClick({
+                                      id: 'takahashi',
+                                      name: '高橋 美咲',
+                                      certificate: '4567890123',
+                                      status: '作業中',
+                                      startTime: '09:00'
+                                    })}
+                                    className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
+                                  >
+                                    詳細
+                                  </button>
+                                </div>
                               </td>
                             </tr>
 
@@ -509,11 +668,6 @@ const HomeSupportDashboard = () => {
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm font-medium text-gray-900">
                                   伊藤 健太
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-900">
-                                  5678901234
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
@@ -543,18 +697,32 @@ const HomeSupportDashboard = () => {
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                <button 
-                                  onClick={() => handleUserDetailClick({
-                                    id: 'ito',
-                                    name: '伊藤 健太',
-                                    certificate: '5678901234',
-                                    status: '作業中',
-                                    startTime: '11:00'
-                                  })}
-                                  className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
-                                >
-                                  詳細
-                                </button>
+                                <div className="flex gap-2">
+                                  <button 
+                                    onClick={() => handleDailySupportRecordClick({
+                                      id: 'ito',
+                                      name: '伊藤 健太',
+                                      recipientNumber: '5678901234',
+                                      status: '作業中',
+                                      startTime: '11:00'
+                                    })}
+                                    className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200"
+                                  >
+                                    📝 支援記録
+                                  </button>
+                                  <button 
+                                    onClick={() => handleUserDetailClick({
+                                      id: 'ito',
+                                      name: '伊藤 健太',
+                                      certificate: '5678901234',
+                                      status: '作業中',
+                                      startTime: '11:00'
+                                    })}
+                                    className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
+                                  >
+                                    詳細
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           </tbody>
@@ -647,7 +815,6 @@ const HomeSupportDashboard = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-gray-900">田中 太郎</div>
-                            <div className="text-sm text-gray-500">受給者証: 1234567890</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="w-16 h-12 bg-gray-200 rounded-lg flex items-center justify-center cursor-pointer hover:opacity-80">
@@ -681,7 +848,6 @@ const HomeSupportDashboard = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-gray-900">佐藤 花子</div>
-                            <div className="text-sm text-gray-500">受給者証: 2345678901</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="w-16 h-12 bg-gray-200 rounded-lg flex items-center justify-center cursor-pointer hover:opacity-80">
@@ -715,7 +881,6 @@ const HomeSupportDashboard = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-gray-900">高橋 美咲</div>
-                            <div className="text-sm text-gray-500">受給者証: 4567890123</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="w-16 h-12 bg-gray-200 rounded-lg flex items-center justify-center cursor-pointer hover:opacity-80">
@@ -749,7 +914,6 @@ const HomeSupportDashboard = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-gray-900">伊藤 健太</div>
-                            <div className="text-sm text-gray-500">受給者証: 5678901234</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="w-16 h-12 bg-gray-200 rounded-lg flex items-center justify-center cursor-pointer hover:opacity-80">
@@ -783,7 +947,6 @@ const HomeSupportDashboard = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-gray-900">鈴木 一郎</div>
-                            <div className="text-sm text-gray-500">受給者証: 3456789012</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="w-16 h-12 bg-gray-200 rounded-lg flex items-center justify-center cursor-pointer hover:opacity-80">
@@ -841,13 +1004,10 @@ const HomeSupportDashboard = () => {
                               名前
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              受給者証
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               担当指導員
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              受給者証備考
+                              備考
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               操作
@@ -860,11 +1020,6 @@ const HomeSupportDashboard = () => {
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm font-medium text-gray-900">
                                 田中 太郎
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">
-                                1234567890
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
@@ -889,16 +1044,6 @@ const HomeSupportDashboard = () => {
                                 >
                                   支援計画
                                 </button>
-                                <button 
-                                  onClick={() => handleCertificateClick({
-                                    id: 'tanaka',
-                                    name: '田中 太郎',
-                                    certificate: '1234567890'
-                                  })}
-                                  className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200"
-                                >
-                                  受給者証
-                                </button>
                               </div>
                             </td>
                           </tr>
@@ -908,11 +1053,6 @@ const HomeSupportDashboard = () => {
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm font-medium text-gray-900">
                                 佐藤 花子
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">
-                                2345678901
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
@@ -937,16 +1077,6 @@ const HomeSupportDashboard = () => {
                                 >
                                   支援計画
                                 </button>
-                                <button 
-                                  onClick={() => handleCertificateClick({
-                                    id: 'sato',
-                                    name: '佐藤 花子',
-                                    certificate: '2345678901'
-                                  })}
-                                  className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200"
-                                >
-                                  受給者証
-                                </button>
                               </div>
                             </td>
                           </tr>
@@ -956,11 +1086,6 @@ const HomeSupportDashboard = () => {
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm font-medium text-gray-900">
                                 鈴木 一郎
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">
-                                3456789012
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
@@ -985,16 +1110,6 @@ const HomeSupportDashboard = () => {
                                 >
                                   支援計画
                                 </button>
-                                <button 
-                                  onClick={() => handleCertificateClick({
-                                    id: 'suzuki',
-                                    name: '鈴木 一郎',
-                                    certificate: '3456789012'
-                                  })}
-                                  className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200"
-                                >
-                                  受給者証
-                                </button>
                               </div>
                             </td>
                           </tr>
@@ -1004,11 +1119,6 @@ const HomeSupportDashboard = () => {
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm font-medium text-gray-900">
                                 高橋 美咲
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">
-                                4567890123
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
@@ -1033,16 +1143,6 @@ const HomeSupportDashboard = () => {
                                 >
                                   支援計画
                                 </button>
-                                <button 
-                                  onClick={() => handleCertificateClick({
-                                    id: 'takahashi',
-                                    name: '高橋 美咲',
-                                    certificate: '4567890123'
-                                  })}
-                                  className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200"
-                                >
-                                  受給者証
-                                </button>
                               </div>
                             </td>
                           </tr>
@@ -1052,11 +1152,6 @@ const HomeSupportDashboard = () => {
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm font-medium text-gray-900">
                                 伊藤 健太
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">
-                                5678901234
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
@@ -1081,16 +1176,6 @@ const HomeSupportDashboard = () => {
                                 >
                                   支援計画
                                 </button>
-                                <button 
-                                  onClick={() => handleCertificateClick({
-                                    id: 'ito',
-                                    name: '伊藤 健太',
-                                    certificate: '5678901234'
-                                  })}
-                                  className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200"
-                                >
-                                  受給者証
-                                </button>
                               </div>
                             </td>
                           </tr>
@@ -1110,10 +1195,63 @@ const HomeSupportDashboard = () => {
                     <p className="text-lg text-gray-600">在宅支援利用者の勤怠状況を管理できます</p>
                   </div>
                   <div className="flex gap-3">
-                    <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                    <button 
+                      onClick={() => navigate('/instructor/home-support/monthly-attendance')}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    >
                       月次勤怠管理
                     </button>
                   </div>
+                </div>
+
+                {/* 日付選択 */}
+                <div className="mb-6 flex items-center justify-center gap-3">
+                  <button 
+                    onClick={() => {
+                      const date = new Date(selectedDate);
+                      date.setDate(date.getDate() - 1);
+                      setSelectedDate(date.toISOString().split('T')[0]);
+                    }}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                  >
+                    ← 前日
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="date" 
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-gray-700"
+                    />
+                    <button
+                      onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
+                      className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                    >
+                      今日
+                    </button>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      const date = new Date(selectedDate);
+                      date.setDate(date.getDate() + 1);
+                      setSelectedDate(date.toISOString().split('T')[0]);
+                    }}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                  >
+                    翌日 →
+                  </button>
+                </div>
+
+                {/* 選択日付の表示 */}
+                <div className="mb-4 text-center">
+                  <p className="text-lg font-semibold text-gray-700">
+                    📅 {new Date(selectedDate + 'T00:00:00').toLocaleDateString('ja-JP', { 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric',
+                      weekday: 'short'
+                    })}
+                  </p>
                 </div>
 
                 {/* 勤怠一覧テーブル */}
@@ -1134,7 +1272,10 @@ const HomeSupportDashboard = () => {
                           終了時間
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          休憩
+                          休憩開始
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          休憩終了
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           勤務時間
@@ -1172,7 +1313,12 @@ const HomeSupportDashboard = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">
-                            1時間
+                            12:00
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            13:00
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -1218,8 +1364,13 @@ const HomeSupportDashboard = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">
-                            0時間
+                          <div className="text-sm text-gray-500">
+                            -
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500">
+                            -
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -1261,6 +1412,11 @@ const HomeSupportDashboard = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-500">
+                            -
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500">
                             -
                           </div>
                         </td>
@@ -1313,7 +1469,12 @@ const HomeSupportDashboard = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">
-                            1時間
+                            12:00
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            13:00
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -1360,7 +1521,12 @@ const HomeSupportDashboard = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">
-                            1時間
+                            13:00
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            14:00
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -1395,15 +1561,29 @@ const HomeSupportDashboard = () => {
                 <div className="flex justify-between items-center mb-6">
                   <div>
                     <h2 className="text-2xl font-bold text-gray-800 mb-2">📋 評価記録</h2>
-                    <p className="text-lg text-gray-600">今日やるべき評価と今後の評価予定を管理します</p>
+                    <p className="text-lg text-gray-600">利用者別の評価状況を管理します</p>
                   </div>
-                  <div className="flex gap-3">
-                    <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-                      新規評価
-                    </button>
-                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                      評価カレンダー
-                    </button>
+                </div>
+
+                {/* 検索バー */}
+                <div className="mb-6">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="利用者名または受給者証番号で検索..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                    <span className="absolute left-3 top-3.5 text-gray-400">🔍</span>
+                    {searchTerm && (
+                      <button
+                        onClick={() => setSearchTerm('')}
+                        className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1414,347 +1594,164 @@ const HomeSupportDashboard = () => {
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            利用者
+                          <th 
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => handleSort('name')}
+                          >
+                            <div className="flex items-center gap-2">
+                              利用者
+                              <span className="text-xs">{getSortIcon('name')}</span>
+                            </div>
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            受給者証
+                          <th 
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => handleSort('recipientNumber')}
+                          >
+                            <div className="flex items-center gap-2">
+                              受給者証
+                              <span className="text-xs">{getSortIcon('recipientNumber')}</span>
+                            </div>
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            日次評価
+                          <th 
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => handleSort('daily')}
+                          >
+                            <div className="flex items-center gap-2">
+                              日次評価
+                              <span className="text-xs">{getSortIcon('daily')}</span>
+                            </div>
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            週次評価
+                          <th 
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => handleSort('weekly')}
+                          >
+                            <div className="flex items-center gap-2">
+                              週次評価
+                              <span className="text-xs">{getSortIcon('weekly')}</span>
+                            </div>
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            月次評価
+                          <th 
+                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => handleSort('monthly')}
+                          >
+                            <div className="flex items-center gap-2">
+                              月次評価
+                              <span className="text-xs">{getSortIcon('monthly')}</span>
+                            </div>
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             操作
                           </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            確認
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {/* 田中さん - 週次・月次は完了済み、今日の日次がない */}
-                        <tr className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">田中 太郎</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">1234567890</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                              📝 未完了
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                              ✅ 完了
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                              ✅ 完了
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex space-x-2">
-                              <button className="text-white text-sm px-3 py-1 rounded bg-red-600 hover:bg-red-700 transition-colors duration-200">
-                                日次評価
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-
-                        {/* 佐藤さん - 日次評価完了、週次・月次未完了 */}
-                        <tr className="hover:bg-gray-50 bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">佐藤 花子</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">2345678901</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                              ✅ 完了
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                              📝 未完了
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                              📝 未完了
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex space-x-2">
-                              <button className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200">
-                                週次評価
-                              </button>
-                              <button className="text-white text-sm px-3 py-1 rounded bg-purple-600 hover:bg-purple-700 transition-colors duration-200">
-                                月次評価
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-
-                        {/* 鈴木さん - 日次・週次完了、月次未完了 */}
-                        <tr className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">鈴木 一郎</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">3456789012</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                              ✅ 完了
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                              ✅ 完了
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                              📝 未完了
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex space-x-2">
-                              <button className="text-white text-sm px-3 py-1 rounded bg-purple-600 hover:bg-purple-700 transition-colors duration-200">
-                                月次評価
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-
-                        {/* 高橋さん - 全て完了 */}
-                        <tr className="hover:bg-gray-50 bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">高橋 美咲</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">4567890123</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                              ✅ 完了
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                              ✅ 完了
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                              ✅ 完了
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex space-x-2">
-                              <button className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200">
-                                詳細
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-
-                        {/* 伊藤さん - 初回利用者（週次・月次はハイフン） */}
-                        <tr className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">伊藤 健太</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">5678901234</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                              📝 未完了
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-500">-</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-500">-</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex space-x-2">
-                              <button className="text-white text-sm px-3 py-1 rounded bg-red-600 hover:bg-red-700 transition-colors duration-200">
-                                日次評価
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                        {getFilteredAndSortedUsers().length === 0 ? (
+                          <tr>
+                            <td colSpan="7" className="px-6 py-8 text-center text-gray-500">
+                              {searchTerm ? '検索結果がありません' : '評価対象の利用者がいません'}
+                            </td>
+                          </tr>
+                        ) : (
+                          getFilteredAndSortedUsers().map((user, index) => (
+                            <tr key={user.id} className={`hover:bg-gray-50 ${index % 2 === 1 ? 'bg-gray-50' : ''}`}>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">{user.recipientNumber}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                {user.dailyStatus === '未完了' ? (
+                                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                    📝 未完了
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                    ✅ 完了
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                {user.weeklyStatus === '-' ? (
+                                  <div className="text-sm text-gray-500">-</div>
+                                ) : user.weeklyStatus === '未完了' ? (
+                                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                    📝 未完了
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                    ✅ 完了
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                {user.monthlyStatus === '-' ? (
+                                  <div className="text-sm text-gray-500">-</div>
+                                ) : user.monthlyStatus === '未完了' ? (
+                                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                    📝 未完了
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                    ✅ 完了
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <div className="flex flex-wrap gap-2">
+                                  <button 
+                                    onClick={() => handleDailySupportRecordClick({
+                                      id: user.id,
+                                      name: user.name,
+                                      recipientNumber: user.recipientNumber
+                                    })}
+                                    className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200"
+                                  >
+                                    📝 支援記録
+                                  </button>
+                                  {user.weeklyStatus === '未完了' && (
+                                    <button 
+                                      onClick={() => navigate(`/instructor/home-support/weekly-evaluation/${user.id}`)}
+                                      className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
+                                    >
+                                      📊 評価(週次)
+                                    </button>
+                                  )}
+                                  {user.monthlyStatus === '未完了' && (
+                                    <button 
+                                      onClick={() => navigate(`/instructor/home-support/monthly-evaluation/${user.id}`)}
+                                      className="text-white text-sm px-3 py-1 rounded bg-purple-600 hover:bg-purple-700 transition-colors duration-200"
+                                    >
+                                      📈 達成度評価
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <div className="flex flex-wrap gap-2">
+                                  <button 
+                                    onClick={() => navigate(`/instructor/home-support/records/${user.id}`)}
+                                    className="text-white text-sm px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 transition-colors duration-200"
+                                  >
+                                    🔍 記録確認
+                                  </button>
+                                  <button 
+                                    onClick={() => navigate(`/instructor/home-support/monthly-evaluation-history/${user.id}`)}
+                                    className="text-white text-sm px-3 py-1 rounded bg-purple-600 hover:bg-purple-700 transition-colors duration-200"
+                                  >
+                                    📊 達成度確認
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
-                </div>
-
-                {/* 今後の評価予定 */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">📊 今後の評価予定</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-gradient-to-r from-indigo-50 to-indigo-100 p-4 rounded-xl border border-indigo-200">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold text-indigo-800">週次評価</h4>
-                        <span className="px-2 py-1 bg-indigo-200 text-indigo-800 rounded-full text-xs">2名</span>
-                      </div>
-                      <p className="text-sm text-indigo-700">来週の評価予定</p>
-                    </div>
-                    <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-xl border border-purple-200">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold text-purple-800">月次評価</h4>
-                        <span className="px-2 py-1 bg-purple-200 text-purple-800 rounded-full text-xs">1名</span>
-                      </div>
-                      <p className="text-sm text-purple-700">今月末の評価予定</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'evaluation-history' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-                <div className="flex justify-between items-center mb-6">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">📚 評価履歴</h2>
-                    <p className="text-lg text-gray-600">過去の評価記録と書類を管理します</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                      検索
-                    </button>
-                    <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-                      一括出力
-                    </button>
-                  </div>
-                </div>
-
-                {/* 評価履歴一覧 */}
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          利用者
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          評価種別
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          評価期間
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          完了日
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          担当者
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          操作
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      <tr className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">田中 太郎</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                            日次評価
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">2025/01/15</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">2025/01/15</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">山田 指導員</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex space-x-2">
-                            <button className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200">
-                              詳細
-                            </button>
-                            <button className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200">
-                              書類出力
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      <tr className="hover:bg-gray-50 bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">佐藤 花子</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                            週次評価
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">2025/01/13 - 01/17</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">2025/01/17</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">山田 指導員</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex space-x-2">
-                            <button className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200">
-                              詳細
-                            </button>
-                            <button className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200">
-                              書類出力
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      <tr className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">鈴木 一郎</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
-                            月次評価
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">2025/01/01 - 01/31</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">2025/01/31</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">山田 指導員</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex space-x-2">
-                            <button className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200">
-                              詳細
-                            </button>
-                            <button className="text-white text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 transition-colors duration-200">
-                              書類出力
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
                 </div>
               </div>
             </div>
@@ -1779,7 +1776,6 @@ const HomeSupportDashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-2xl font-bold text-gray-800">{selectedUser.name} 詳細</h3>
-                  <p className="text-gray-600">受給者証: {selectedUser.certificate}</p>
                 </div>
                 <button 
                   onClick={() => setShowUserDetailModal(false)}
@@ -2078,32 +2074,13 @@ const HomeSupportDashboard = () => {
               </div>
 
               {/* 操作ボタン */}
-              <div className="flex justify-between items-center">
-                <div className="flex gap-3">
-                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                    📷 カメラ撮影
-                  </button>
-                  <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-                    🖥️ 画面キャプチャ
-                  </button>
-                  <button className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
-                    📊 書類作成
-                  </button>
-                </div>
-                <div className="flex gap-3">
-                  <button className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">
-                    閉じる
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setActiveTab('evidence');
-                      setShowUserDetailModal(false);
-                    }}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                  >
-                    記録・証拠管理
-                  </button>
-                </div>
+              <div className="flex justify-end">
+                <button 
+                  onClick={() => setShowUserDetailModal(false)}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                >
+                  閉じる
+                </button>
               </div>
             </div>
           </div>
@@ -2118,7 +2095,6 @@ const HomeSupportDashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-2xl font-bold text-gray-800">{selectedUser.name} 個別支援計画</h3>
-                  <p className="text-gray-600">受給者証: {selectedUser.certificate}</p>
                 </div>
                 <button 
                   onClick={() => setShowSupportPlanModal(false)}
@@ -2237,97 +2213,6 @@ const HomeSupportDashboard = () => {
         </div>
       )}
 
-      {/* 受給者証番号入力モーダル */}
-      {showCertificateModal && selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold text-gray-800">{selectedUser.name} 受給者証情報</h3>
-                <button 
-                  onClick={() => setShowCertificateModal(false)}
-                  className="text-gray-400 hover:text-gray-600 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-all duration-200"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-            
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">受給者証番号</label>
-                <input 
-                  type="text" 
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="受給者証番号を入力してください"
-                  defaultValue={selectedUser.certificate}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">有効期限</label>
-                <input 
-                  type="date" 
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  defaultValue="2025-12-31"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">障害種別</label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">選択してください</option>
-                  <option value="physical">身体障害</option>
-                  <option value="intellectual">知的障害</option>
-                  <option value="mental">精神障害</option>
-                  <option value="developmental">発達障害</option>
-                  <option value="multiple">重複障害</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">障害等級</label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">選択してください</option>
-                  <option value="1">1級</option>
-                  <option value="2">2級</option>
-                  <option value="3">3級</option>
-                  <option value="4">4級</option>
-                  <option value="5">5級</option>
-                  <option value="6">6級</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">備考</label>
-                <textarea 
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-20 resize-none"
-                  placeholder="受給者証に関する備考を入力してください"
-                />
-              </div>
-            </div>
-            
-            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-              <button
-                onClick={() => setShowCertificateModal(false)}
-                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={() => {
-                  // 保存処理
-                  setShowCertificateModal(false);
-                  alert('受給者証情報を保存しました');
-                }}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-              >
-                保存
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 勤怠修正モーダル */}
       {showEditModal && (
@@ -2373,25 +2258,23 @@ const HomeSupportDashboard = () => {
                 </div>
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">休憩時間</label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="0">0時間</option>
-                  <option value="0.5">30分</option>
-                  <option value="1" selected>1時間</option>
-                  <option value="1.5">1時間30分</option>
-                  <option value="2">2時間</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">状態</label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="working" selected>作業中</option>
-                  <option value="break">休憩中</option>
-                  <option value="not-started">未開始</option>
-                  <option value="completed">完了</option>
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">休憩開始</label>
+                  <input 
+                    type="time" 
+                    defaultValue="12:00"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">休憩終了</label>
+                  <input 
+                    type="time" 
+                    defaultValue="13:00"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
               
               <div>
@@ -2423,6 +2306,21 @@ const HomeSupportDashboard = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 日次支援記録モーダル */}
+      {showDailySupportRecordModal && selectedUser && (
+        <DailySupportRecordModal
+          isOpen={showDailySupportRecordModal}
+          onClose={() => {
+            setShowDailySupportRecordModal(false);
+            setSelectedUser(null);
+          }}
+          onSave={handleSaveDailySupportRecord}
+          student={selectedUser}
+          date={new Date().toISOString().split('T')[0]}
+          aiAssist={handleDailyRecordAIAssist}
+        />
       )}
     </div>
   );

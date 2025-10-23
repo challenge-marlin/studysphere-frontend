@@ -233,28 +233,13 @@ const LoginPage = () => {
         console.log('Role >= 4:', user.role >= 4);
         console.log('Role >= 6:', user.role >= 6);
         
-        // ロール9以上（システム管理者）の場合は企業・拠点選択を表示
+        // ロール9以上（システム管理者）の場合はダッシュボード選択を表示
         if (user.role >= 9) {
-          console.log('Showing company/satellite selection for role 9+');
+          console.log('Showing dashboard selection for role 9+');
           setUserData(user);
-          
-          // 企業・拠点情報を取得
-          console.log('Fetching companies data for admin user:', credentials.id);
-          const companiesData = await getUserCompaniesAPI(credentials.id);
-          console.log('Companies data response for admin:', companiesData);
-          
-          if (companiesData.success && companiesData.data.companies.length > 0) {
-            console.log('Companies found for admin:', companiesData.data.companies.length);
-            setCompanies(companiesData.data.companies);
-            setShowCompanySelection(true);
-            setIsLoading(false);
-            return;
-          } else {
-            console.log('No companies found for admin, showing dashboard selection');
-            setShowDashboardSelection(true);
-            setIsLoading(false);
-            return;
-          }
+          setShowDashboardSelection(true);
+          setIsLoading(false);
+          return;
         }
         
         // ロール4-5（指導員）の場合は拠点選択を表示
@@ -495,82 +480,15 @@ const LoginPage = () => {
       
       if (companiesData.success && companiesData.data.companies.length > 0) {
         console.log('Companies found for instructor selection:', companiesData.data.companies.length);
+        console.log('Setting up company selection screen...');
         
-        // 指導員は所属企業をまたがないので、最初の企業の拠点のみを表示
-        const firstCompany = companiesData.data.companies[0];
-        const satellites = firstCompany.satellites || [];
-        
-        // 拠点が1個のみの場合は自動選択して直接ダッシュボードへ
-        if (satellites.length === 1) {
-          console.log('Single satellite found in dashboard selection, auto-selecting and proceeding to dashboard');
-          const singleSatellite = satellites[0];
-          
-          try {
-            const instructorData = await instructorLoginAPI(
-              credentials.id, 
-              credentials.password, 
-              firstCompany.id.toString(), 
-              singleSatellite.id.toString()
-            );
-
-            if (instructorData.success && instructorData.data) {
-              const user = instructorData.data;
-                             const userData = {
-                 id: user.user_id,
-                 name: user.user_name,
-                 email: user.email || '',
-                 login_code: user.login_code,
-                 role: user.role,
-                 company_id: user.company_id,
-                 company_name: user.company_name,
-                 satellite_id: user.satellite_id,
-                 satellite_name: user.satellite_name,
-                 satellite_ids: [user.satellite_id], // 拠点IDを配列として保存
-                 passwordResetRequired: user.password_reset_required || false,
-                 access_token: user.access_token,
-                 refresh_token: user.refresh_token
-               };
-               
-               // 全ユーザー共通で拠点・企業情報をセッションストレージに保存
-               const selectedSatelliteInfo = {
-                 id: user.satellite_id,
-                 name: user.satellite_name,
-                 company_id: user.company_id,
-                 company_name: user.company_name
-               };
-               sessionStorage.setItem('selectedSatellite', JSON.stringify(selectedSatelliteInfo));
-               console.log('ダッシュボード選択時自動選択: selectedSatelliteを保存:', selectedSatelliteInfo);
-               
-               login(userData, user.access_token, user.refresh_token);
-              
-              await addOperationLog({
-                action: 'ログイン',
-                details: `指導員「${user.user_name}」が${user.company_name}の${user.satellite_name}でログインしました（ダッシュボード選択時自動選択）`,
-                adminId: user.user_id,
-                adminName: user.user_name
-              });
-              
-              // 指導員ダッシュボード選択フラグをクリア
-              sessionStorage.removeItem('instructorDashboardSelection');
-              navigate('/instructor/dashboard');
-              return;
-            }
-          } catch (error) {
-            console.error('Auto-login failed in dashboard selection, falling back to manual selection:', error);
-            // 自動ログインに失敗した場合は手動選択にフォールバック
-          }
-        }
-        
-        // 拠点が複数ある場合または自動選択に失敗した場合は手動選択画面を表示
-        if (satellites.length > 1) {
-          setCompanies(companiesData.data.companies);
-          setShowDashboardSelection(false);
-          setShowCompanySelection(true);
-        } else {
-          // 拠点が1個のみで自動選択に失敗した場合はエラーメッセージを表示
-          setError('拠点情報の取得に失敗しました。システム管理者にお問い合わせください。');
-          setIsLoading(false);
-        }
+        // 管理者が指導員ダッシュボードを選択した場合は企業・拠点選択画面を表示
+        setCompanies(companiesData.data.companies);
+        setShowDashboardSelection(false);
+        setShowCompanySelection(true);
+        setIsLoading(false);
+        console.log('Company selection screen should be displayed now');
+        return;
       } else {
         console.log('No companies found for instructor selection, proceeding to instructor dashboard');
         // 企業・拠点が割り当てられていない場合は直接指導員ダッシュボードへ
@@ -895,6 +813,8 @@ const LoginPage = () => {
   }
 
   // 企業・拠点選択画面（管理者用）
+  console.log('Render check - showCompanySelection:', showCompanySelection);
+  console.log('Render check - companies:', companies);
   if (showCompanySelection) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-purple-600 flex items-center justify-center p-5">

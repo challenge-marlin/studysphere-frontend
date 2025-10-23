@@ -233,13 +233,28 @@ const LoginPage = () => {
         console.log('Role >= 4:', user.role >= 4);
         console.log('Role >= 6:', user.role >= 6);
         
-        // ロール9以上（システム管理者）の場合はダッシュボード選択を表示
+        // ロール9以上（システム管理者）の場合は企業・拠点選択を表示
         if (user.role >= 9) {
-          console.log('Showing dashboard selection for role 9+');
+          console.log('Showing company/satellite selection for role 9+');
           setUserData(user);
-          setShowDashboardSelection(true);
-          setIsLoading(false);
-          return;
+          
+          // 企業・拠点情報を取得
+          console.log('Fetching companies data for admin user:', credentials.id);
+          const companiesData = await getUserCompaniesAPI(credentials.id);
+          console.log('Companies data response for admin:', companiesData);
+          
+          if (companiesData.success && companiesData.data.companies.length > 0) {
+            console.log('Companies found for admin:', companiesData.data.companies.length);
+            setCompanies(companiesData.data.companies);
+            setShowCompanySelection(true);
+            setIsLoading(false);
+            return;
+          } else {
+            console.log('No companies found for admin, showing dashboard selection');
+            setShowDashboardSelection(true);
+            setIsLoading(false);
+            return;
+          }
         }
         
         // ロール4-5（指導員）の場合は拠点選択を表示
@@ -887,7 +902,7 @@ const LoginPage = () => {
           <div className="text-center mb-8">
             <h1 className="text-4xl font-bold text-indigo-600 mb-2">Study Sphere</h1>
             <h2 className="text-2xl font-semibold text-gray-800 mb-2">企業・拠点選択</h2>
-            <p className="text-gray-600">ログインする企業と拠点を選択してください（管理者用）</p>
+            <p className="text-gray-600">ログインする企業と拠点を選択してください</p>
           </div>
 
           {error && (

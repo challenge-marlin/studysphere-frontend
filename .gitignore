@@ -29,7 +29,10 @@ yarn-error.log*
 # OS generated files
 Thumbs.db 
 /conohawing-deploy
-/backups
-/backups/conohawing_backup_
 conohawing-deploy-_.zip
 public/support-app/StudySphereApp Setup 1.0.3.exe
+
+# backups directory and all its contents
+backups/
+/backups/
+**/backups/

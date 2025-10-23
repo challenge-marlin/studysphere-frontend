@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getCompanies, getSatellites } from '../utils/api';
+import { getCompanies, getSatellites, getSatellitesByCompany } from '../utils/api';
 
 const CompanySatelliteSwitchModal = ({ 
   isOpen, 
@@ -52,7 +52,7 @@ const CompanySatelliteSwitchModal = ({
         setCompanies(Array.isArray(companiesArray) ? companiesArray : []);
       }
       
-      // アドミン権限の場合は全拠点を取得、そうでなければユーザーの所属拠点のみ
+      // アドミン権限の場合は全拠点を取得、そうでなければ現在の企業に紐づいた拠点のみ
       if (userRole >= 9) {
         const satellitesData = await getSatellites();
         console.log('拠点データ取得結果:', satellitesData);
@@ -69,6 +69,25 @@ const CompanySatelliteSwitchModal = ({
         console.log('処理後の拠点データの長さ:', satellitesArray?.length);
         
         setSatellites(Array.isArray(satellitesArray) ? satellitesArray : []);
+      } else if (currentCompany && currentCompany.id) {
+        // 指導員の場合は現在の企業に紐づいた拠点のみを取得
+        console.log('現在の企業に紐づいた拠点を取得:', currentCompany.id);
+        try {
+          const satellitesData = await getSatellitesByCompany(currentCompany.id);
+          console.log('企業拠点データ取得結果:', satellitesData);
+          
+          const satellitesArray = satellitesData.success ? satellitesData.data : satellitesData;
+          console.log('処理後の企業拠点データ:', satellitesArray);
+          
+          setSatellites(Array.isArray(satellitesArray) ? satellitesArray : []);
+        } catch (error) {
+          console.error('企業拠点データ取得エラー:', error);
+          // フォールバック: ユーザーの所属拠点を使用
+          if (userSatellites && userSatellites.length > 0) {
+            console.log('フォールバック: ユーザー拠点データ設定:', userSatellites);
+            setSatellites(Array.isArray(userSatellites) ? userSatellites : []);
+          }
+        }
       } else if (userSatellites && userSatellites.length > 0) {
         console.log('ユーザー拠点データ設定:', userSatellites);
         setSatellites(Array.isArray(userSatellites) ? userSatellites : []);
@@ -105,7 +124,7 @@ const CompanySatelliteSwitchModal = ({
 
   // 拠点切り替えの権限チェック
   const canSwitchSatelliteForAdmin = userRole >= 9 && satellites.length > 0;
-  const canSwitchSatelliteForUser = Array.isArray(userSatellites) && userSatellites.length > 0;
+  const canSwitchSatelliteForUser = (userRole < 9 && satellites.length > 0) || (Array.isArray(userSatellites) && userSatellites.length > 0);
   const canSwitchSatellite = canSwitchSatelliteForAdmin || canSwitchSatelliteForUser;
 
   // デバッグ情報を追加
@@ -193,7 +212,7 @@ const CompanySatelliteSwitchModal = ({
             {activeTab === 'satellite' && canSwitchSatellite && (
               <div className="space-y-4">
                 <h3 className="font-medium text-gray-700">
-                  {userRole >= 9 ? '全拠点から選択' : '所属拠点から選択'}
+                  {userRole >= 9 ? '全拠点から選択' : '現在の企業の拠点から選択'}
                 </h3>
                 {userRole < 9 && userSatellites && userSatellites.length === 1 && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
@@ -204,7 +223,7 @@ const CompanySatelliteSwitchModal = ({
                 )}
                 <div className="grid grid-cols-1 gap-3">
                   {(() => {
-                    const satelliteList = userRole >= 9 ? (satellites || []) : (userSatellites || []);
+                    const satelliteList = satellites || [];
                     console.log('拠点リスト表示:', {
                       userRole,
                       satellites,

@@ -361,6 +361,13 @@ export const getSatellites = () => {
 };
 
 /**
+ * 現在の企業に紐づいた拠点一覧を取得
+ */
+export const getSatellitesByCompany = (companyId) => {
+  return apiGet(`/api/companies/${companyId}/satellites`);
+};
+
+/**
  * 現在のユーザーの企業・拠点情報を取得
  */
 export const getUserInfo = () => {

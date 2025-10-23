@@ -28,10 +28,8 @@ const formatTempPasswordExpiry = (expiryTime) => {
 const StudentTable = ({
   students,
   onIssueTemporaryPassword,
-  onEditStudent,
   onToggleStatus,
   onDeleteStudent,
-  onViewDailyReports,
   onViewTestResults,
   onTestApproval,
   onSubmissionApproval
@@ -228,20 +226,6 @@ const StudentTable = ({
                 </td>
                 <td className="px-4 py-3">
                   <div className="grid grid-cols-2 gap-1">
-                    <button 
-                      className="px-2 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 transition-all duration-200"
-                      onClick={() => onEditStudent(student)}
-                      title="利用者情報と個別支援計画を編集"
-                    >
-                      ✏️ 編集
-                    </button>
-                    <button 
-                      className="px-2 py-1 bg-orange-600 text-white rounded text-xs font-medium hover:bg-orange-700 transition-all duration-200"
-                      onClick={() => onViewDailyReports(student)}
-                      title="日報確認・編集・コメント"
-                    >
-                      📊 日報確認
-                    </button>
                     <button 
                       className="px-2 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 transition-all duration-200"
                       onClick={() => onTestApproval && onTestApproval(student)}

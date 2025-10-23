@@ -23,6 +23,7 @@ const HomeSupportDashboard = () => {
   const [showUserDetailModal, setShowUserDetailModal] = useState(false);
   const [showSupportPlanModal, setShowSupportPlanModal] = useState(false);
   const [showDailySupportRecordModal, setShowDailySupportRecordModal] = useState(false);
+  const [showUserInputModal, setShowUserInputModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [localUser, setLocalUser] = useState(null);
@@ -101,6 +102,12 @@ const HomeSupportDashboard = () => {
   const handleDailySupportRecordClick = (user) => {
     setSelectedUser(user);
     setShowDailySupportRecordModal(true);
+  };
+
+  // 利用者入力確認モーダルを開く
+  const handleUserInputClick = (user) => {
+    setSelectedUser(user);
+    setShowUserInputModal(true);
   };
 
   // 日次支援記録を保存
@@ -407,6 +414,9 @@ const HomeSupportDashboard = () => {
                                 備考
                               </th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                確認
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 操作
                               </th>
                             </tr>
@@ -444,6 +454,20 @@ const HomeSupportDashboard = () => {
                                 <div className="text-sm text-gray-900">
                                   今日の目標を達成しました
                                 </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button 
+                                  onClick={() => handleUserInputClick({
+                                    id: 'tanaka',
+                                    name: '田中 太郎',
+                                    recipientNumber: '1234567890',
+                                    status: '作業中',
+                                    startTime: '10:00'
+                                  })}
+                                  className="text-white text-sm px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 transition-colors duration-200"
+                                >
+                                  📋 本人記録
+                                </button>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                 <div className="flex gap-2">
@@ -509,6 +533,20 @@ const HomeSupportDashboard = () => {
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button 
+                                  onClick={() => handleUserInputClick({
+                                    id: 'sato',
+                                    name: '佐藤 花子',
+                                    recipientNumber: '2345678901',
+                                    status: '休憩中',
+                                    startTime: '09:00'
+                                  })}
+                                  className="text-white text-sm px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 transition-colors duration-200"
+                                >
+                                  📋 本人記録
+                                </button>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                 <div className="flex gap-2">
                                   <button 
                                     onClick={() => handleDailySupportRecordClick({
@@ -569,6 +607,21 @@ const HomeSupportDashboard = () => {
                                 <div className="text-sm text-gray-900">
                                   まだ作業開始の連絡なし
                                 </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button 
+                                  onClick={() => handleUserInputClick({
+                                    id: 'suzuki',
+                                    name: '鈴木 一郎',
+                                    recipientNumber: '3456789012',
+                                    status: '未開始',
+                                    startTime: '-'
+                                  })}
+                                  className="text-white text-sm px-3 py-1 rounded bg-gray-400 hover:bg-gray-500 transition-colors duration-200"
+                                  disabled
+                                >
+                                  📋 本人記録
+                                </button>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                 <div className="flex gap-2">
@@ -634,6 +687,20 @@ const HomeSupportDashboard = () => {
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button 
+                                  onClick={() => handleUserInputClick({
+                                    id: 'takahashi',
+                                    name: '高橋 美咲',
+                                    recipientNumber: '4567890123',
+                                    status: '作業中',
+                                    startTime: '09:00'
+                                  })}
+                                  className="text-white text-sm px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 transition-colors duration-200"
+                                >
+                                  📋 本人記録
+                                </button>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                 <div className="flex gap-2">
                                   <button 
                                     onClick={() => handleDailySupportRecordClick({
@@ -695,6 +762,20 @@ const HomeSupportDashboard = () => {
                                 <div className="text-sm text-gray-900">
                                   -
                                 </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button 
+                                  onClick={() => handleUserInputClick({
+                                    id: 'ito',
+                                    name: '伊藤 健太',
+                                    recipientNumber: '5678901234',
+                                    status: '作業中',
+                                    startTime: '11:00'
+                                  })}
+                                  className="text-white text-sm px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 transition-colors duration-200"
+                                >
+                                  📋 本人記録
+                                </button>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                 <div className="flex gap-2">
@@ -825,18 +906,32 @@ const HomeSupportDashboard = () => {
                             <div className="text-sm text-gray-900">作業中の画面</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button 
-                              onClick={() => handleUserDetailClick({
-                                id: 'tanaka',
-                                name: '田中 太郎',
-                                certificate: '1234567890',
-                                status: '作業中',
-                                startTime: '10:00'
-                              })}
-                              className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
-                            >
-                              詳細
-                            </button>
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => handleUserInputClick({
+                                  id: 'tanaka',
+                                  name: '田中 太郎',
+                                  recipientNumber: '1234567890',
+                                  status: '作業中',
+                                  startTime: '10:00'
+                                })}
+                                className="text-white text-sm px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 transition-colors duration-200"
+                              >
+                                📋 本人記録
+                              </button>
+                              <button 
+                                onClick={() => handleUserDetailClick({
+                                  id: 'tanaka',
+                                  name: '田中 太郎',
+                                  certificate: '1234567890',
+                                  status: '作業中',
+                                  startTime: '10:00'
+                                })}
+                                className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
+                              >
+                                詳細
+                              </button>
+                            </div>
                           </td>
                         </tr>
 
@@ -858,18 +953,32 @@ const HomeSupportDashboard = () => {
                             <div className="text-sm text-gray-900">学習状況</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button 
-                              onClick={() => handleUserDetailClick({
-                                id: 'sato',
-                                name: '佐藤 花子',
-                                certificate: '2345678901',
-                                status: '休憩中',
-                                startTime: '09:00'
-                              })}
-                              className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
-                            >
-                              詳細
-                            </button>
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => handleUserInputClick({
+                                  id: 'sato',
+                                  name: '佐藤 花子',
+                                  recipientNumber: '2345678901',
+                                  status: '休憩中',
+                                  startTime: '09:00'
+                                })}
+                                className="text-white text-sm px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 transition-colors duration-200"
+                              >
+                                📋 本人記録
+                              </button>
+                              <button 
+                                onClick={() => handleUserDetailClick({
+                                  id: 'sato',
+                                  name: '佐藤 花子',
+                                  certificate: '2345678901',
+                                  status: '休憩中',
+                                  startTime: '09:00'
+                                })}
+                                className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
+                              >
+                                詳細
+                              </button>
+                            </div>
                           </td>
                         </tr>
 
@@ -891,18 +1000,32 @@ const HomeSupportDashboard = () => {
                             <div className="text-sm text-gray-900">作業完了画面</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button 
-                              onClick={() => handleUserDetailClick({
-                                id: 'takahashi',
-                                name: '高橋 美咲',
-                                certificate: '4567890123',
-                                status: '作業中',
-                                startTime: '09:00'
-                              })}
-                              className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
-                            >
-                              詳細
-                            </button>
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => handleUserInputClick({
+                                  id: 'takahashi',
+                                  name: '高橋 美咲',
+                                  recipientNumber: '4567890123',
+                                  status: '作業中',
+                                  startTime: '09:00'
+                                })}
+                                className="text-white text-sm px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 transition-colors duration-200"
+                              >
+                                📋 本人記録
+                              </button>
+                              <button 
+                                onClick={() => handleUserDetailClick({
+                                  id: 'takahashi',
+                                  name: '高橋 美咲',
+                                  certificate: '4567890123',
+                                  status: '作業中',
+                                  startTime: '09:00'
+                                })}
+                                className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
+                              >
+                                詳細
+                              </button>
+                            </div>
                           </td>
                         </tr>
 
@@ -924,18 +1047,32 @@ const HomeSupportDashboard = () => {
                             <div className="text-sm text-gray-900">学習状況確認</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button 
-                              onClick={() => handleUserDetailClick({
-                                id: 'ito',
-                                name: '伊藤 健太',
-                                certificate: '5678901234',
-                                status: '作業中',
-                                startTime: '11:00'
-                              })}
-                              className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
-                            >
-                              詳細
-                            </button>
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => handleUserInputClick({
+                                  id: 'ito',
+                                  name: '伊藤 健太',
+                                  recipientNumber: '5678901234',
+                                  status: '作業中',
+                                  startTime: '11:00'
+                                })}
+                                className="text-white text-sm px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 transition-colors duration-200"
+                              >
+                                📋 本人記録
+                              </button>
+                              <button 
+                                onClick={() => handleUserDetailClick({
+                                  id: 'ito',
+                                  name: '伊藤 健太',
+                                  certificate: '5678901234',
+                                  status: '作業中',
+                                  startTime: '11:00'
+                                })}
+                                className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
+                              >
+                                詳細
+                              </button>
+                            </div>
                           </td>
                         </tr>
 
@@ -957,18 +1094,33 @@ const HomeSupportDashboard = () => {
                             <div className="text-sm text-gray-900">作業中の画面</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button 
-                              onClick={() => handleUserDetailClick({
-                                id: 'suzuki',
-                                name: '鈴木 一郎',
-                                certificate: '3456789012',
-                                status: '未開始',
-                                startTime: '-'
-                              })}
-                              className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
-                            >
-                              詳細
-                            </button>
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => handleUserInputClick({
+                                  id: 'suzuki',
+                                  name: '鈴木 一郎',
+                                  recipientNumber: '3456789012',
+                                  status: '未開始',
+                                  startTime: '-'
+                                })}
+                                className="text-white text-sm px-3 py-1 rounded bg-gray-400 hover:bg-gray-500 transition-colors duration-200"
+                                disabled
+                              >
+                                📋 本人記録
+                              </button>
+                              <button 
+                                onClick={() => handleUserDetailClick({
+                                  id: 'suzuki',
+                                  name: '鈴木 一郎',
+                                  certificate: '3456789012',
+                                  status: '未開始',
+                                  startTime: '-'
+                                })}
+                                className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
+                              >
+                                詳細
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       </tbody>
@@ -2156,6 +2308,16 @@ const HomeSupportDashboard = () => {
                 />
               </div>
 
+              {/* 備考 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">備考</label>
+                <textarea 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none"
+                  placeholder="利用者に関する特記事項や注意点を入力してください"
+                  defaultValue="在宅での作業環境が整っており、パソコン操作に積極的に取り組んでいる。コミュニケーション能力の向上が課題。"
+                />
+              </div>
+
               {/* 支援計画の状況 */}
               <div className="bg-gray-50 rounded-lg p-4">
                 <h4 className="text-sm font-medium text-gray-800 mb-3">支援計画の状況</h4>
@@ -2277,13 +2439,6 @@ const HomeSupportDashboard = () => {
                 </div>
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">備考</label>
-                <textarea 
-                  placeholder="体調や作業内容の備考を入力してください"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-20 resize-none"
-                />
-              </div>
             </div>
             
             <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
@@ -2321,6 +2476,105 @@ const HomeSupportDashboard = () => {
           date={new Date().toISOString().split('T')[0]}
           aiAssist={handleDailyRecordAIAssist}
         />
+      )}
+
+      {/* 利用者入力確認モーダル */}
+      {showUserInputModal && selectedUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* ヘッダー */}
+            <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6">
+              <h2 className="text-2xl font-bold mb-2">📋 ご本人の記録確認</h2>
+              <div className="text-indigo-100 text-sm space-y-1">
+                <p>対象者名: <span className="font-semibold text-white">{selectedUser?.name || '未設定'}</span></p>
+                <p>受給者証番号: <span className="font-semibold text-white">{selectedUser?.recipientNumber || '未設定'}</span></p>
+                <p>記録日: <span className="font-semibold text-white">{new Date().toLocaleDateString('ja-JP')}</span></p>
+              </div>
+            </div>
+
+            {/* コンテンツ */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="space-y-6">
+                {/* 体調管理セクション */}
+                <div className="bg-blue-50 rounded-xl p-6 border border-blue-200">
+                  <h3 className="text-lg font-bold text-blue-900 mb-4 flex items-center gap-2">
+                    <span>🏥</span>
+                    <span>体調管理</span>
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div className="bg-white rounded-lg p-4 border border-blue-100">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">体温</label>
+                      <div className="text-2xl font-bold text-blue-600">36.2°C</div>
+                      <p className="text-xs text-gray-500 mt-1">記録時刻: 09:00</p>
+                    </div>
+                    
+                    <div className="bg-white rounded-lg p-4 border border-blue-100">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">睡眠時間</label>
+                      <div className="text-2xl font-bold text-blue-600">7時間</div>
+                      <p className="text-xs text-gray-500 mt-1">就寝: 23:00 / 起床: 06:00</p>
+                    </div>
+                    
+                    <div className="bg-white rounded-lg p-4 border border-blue-100">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">体調</label>
+                      <div className="inline-flex px-3 py-1 rounded-full bg-green-100 text-green-800 font-semibold">
+                        😊 良好
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white rounded-lg p-4 border border-blue-100">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">体調の詳細</label>
+                    <p className="text-gray-800">
+                      昨夜はよく眠れました。朝から体調も良く、集中して作業に取り組めそうです。
+                      ストレッチも行い、準備万端です。
+                    </p>
+                  </div>
+                </div>
+
+                {/* 作業予定セクション */}
+                <div className="bg-green-50 rounded-xl p-6 border border-green-200">
+                  <h3 className="text-lg font-bold text-green-900 mb-4 flex items-center gap-2">
+                    <span>💼</span>
+                    <span>作業内容</span>
+                  </h3>
+                  
+                  <div className="bg-white rounded-lg p-4 border border-green-100">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">今日の予定作業</label>
+                    <p className="text-gray-800">
+                      ・ITリテラシー・AIの基本の学習（第3回）<br/>
+                      ・HTML/CSS基礎学習の復習<br/>
+                      ・簡単なWebページ作成の練習
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* フッター */}
+            <div className="border-t border-gray-200 p-6 bg-gray-50">
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowUserInputModal(false);
+                    setSelectedUser(null);
+                  }}
+                  className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-all duration-200"
+                >
+                  閉じる
+                </button>
+                <button
+                  onClick={() => {
+                    alert('コメント機能は今後実装予定です');
+                  }}
+                  className="px-6 py-2 bg-indigo-500 text-white rounded-lg font-medium hover:bg-indigo-600 transition-all duration-200"
+                >
+                  💬 コメントを追加
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

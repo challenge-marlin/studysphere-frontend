@@ -18,7 +18,6 @@ import PendingSubmissionAlert from './student-management/PendingSubmissionAlert'
 import ModalErrorDisplay from './common/ModalErrorDisplay';
 
 import TodayActiveModal from './student-management/TodayActiveModal';
-import DailyReportManagement from './DailyReportManagement';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 
   (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
@@ -53,9 +52,6 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
   const [showCourseAssignmentModal, setShowCourseAssignmentModal] = useState(false);
   const [showCourseManagerModal, setShowCourseManagerModal] = useState(false);
 
-  // 日報管理モーダルの状態
-  const [showDailyReportModal, setShowDailyReportModal] = useState(false);
-  const [selectedStudentForReports, setSelectedStudentForReports] = useState(null);
 
   // 合格承認モーダルの状態
   const [showTestApprovalModal, setShowTestApprovalModal] = useState(false);
@@ -425,22 +421,6 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
     }
   };
 
-  // 編集モーダルを開く
-  const openEditModal = (student) => {
-    studentEditor.openEditModal(student);
-  };
-
-  // 日報確認モーダルを開く
-  const openDailyReportModal = (student) => {
-    setSelectedStudentForReports(student);
-    setShowDailyReportModal(true);
-  };
-
-  // 日報確認モーダルを閉じる
-  const closeDailyReportModal = () => {
-    setShowDailyReportModal(false);
-    setSelectedStudentForReports(null);
-  };
 
   // フィルター機能
   const getFilteredStudents = () => {
@@ -750,10 +730,8 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
           <StudentTable
             students={filteredStudents}
             onIssueTemporaryPassword={tempPasswordManager.issueTemporaryPassword}
-            onEditStudent={openEditModal}
             onToggleStatus={toggleStudentStatus}
             onDeleteStudent={deleteStudent}
-            onViewDailyReports={openDailyReportModal}
             onViewTestResults={handleViewTestResults}
             onTestApproval={handleTestApprovalInternal}
             onSubmissionApproval={handleSubmissionApprovalInternal}
@@ -1382,13 +1360,6 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
           </div>
         )}
 
-        {/* 日報管理モーダル */}
-        {showDailyReportModal && selectedStudentForReports && (
-          <DailyReportManagement
-            student={selectedStudentForReports}
-            onClose={closeDailyReportModal}
-          />
-        )}
 
         {/* 合格承認モーダル */}
         {showTestApprovalModal && selectedStudentForApproval && (

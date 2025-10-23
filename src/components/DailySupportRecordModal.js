@@ -21,7 +21,8 @@ const DailySupportRecordModal = ({
     workContent: '',
     supportContent: '',
     healthStatus: '',
-    responder: ''
+    responder: '',
+    remarks: ''
   });
 
   // サンプル支援員リスト
@@ -248,6 +249,19 @@ const DailySupportRecordModal = ({
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* 備考 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                備考
+              </label>
+              <textarea
+                value={record.remarks}
+                onChange={(e) => updateRecord('remarks', e.target.value)}
+                placeholder="支援に関する特記事項や注意点を入力してください"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent h-24 resize-none"
+              />
             </div>
           </div>
         </div>

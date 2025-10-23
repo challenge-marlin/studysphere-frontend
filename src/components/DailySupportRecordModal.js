@@ -24,6 +24,20 @@ const DailySupportRecordModal = ({
     responder: ''
   });
 
+  // サンプル支援員リスト
+  const sampleSupporters = [
+    '山田 太郎',
+    '佐藤 花子',
+    '鈴木 一郎',
+    '高橋 美咲',
+    '伊藤 健太',
+    '田中 由美',
+    '小林 正雄',
+    '中村 智子',
+    '松本 和也',
+    '森 恵子'
+  ];
+
   if (!isOpen) return null;
 
   // 支援方法の選択肢
@@ -222,13 +236,18 @@ const DailySupportRecordModal = ({
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 対応・記録者 <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
+              <select
                 value={record.responder}
                 onChange={(e) => updateRecord('responder', e.target.value)}
-                placeholder="例：○○○　○○（午前）、△△△　△△（午後）"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
+              >
+                <option value="">支援員を選択してください</option>
+                {sampleSupporters.map((supporter, index) => (
+                  <option key={index} value={supporter}>
+                    {supporter}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>

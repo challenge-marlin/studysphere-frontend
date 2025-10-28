@@ -441,6 +441,15 @@ export const AuthProvider = ({ children }) => {
       console.error('ログアウトログの記録に失敗しました:', error);
     }
     
+    // 一時パスワード認証情報を保持するため、特定の項目のみクリア
+    const tempPasswordAuth = {
+      loginCode: localStorage.getItem('loginCode'),
+      tempPassword: localStorage.getItem('tempPassword'),
+      tempPasswordExpiry: localStorage.getItem('tempPasswordExpiry'),
+      autoLoginCode: localStorage.getItem('autoLoginCode'),
+      temp_password: localStorage.getItem('temp_password')
+    };
+    
     // ローカルストレージをクリア
     localStorage.removeItem('currentUser');
     clearStoredTokens();
@@ -448,6 +457,23 @@ export const AuthProvider = ({ children }) => {
     // 追加のクリア処理（確実性のため）
     localStorage.clear();
     sessionStorage.clear();
+    
+    // 一時パスワード認証情報を復元（利用者ログイン用）
+    if (tempPasswordAuth.loginCode) {
+      localStorage.setItem('loginCode', tempPasswordAuth.loginCode);
+    }
+    if (tempPasswordAuth.tempPassword) {
+      localStorage.setItem('tempPassword', tempPasswordAuth.tempPassword);
+    }
+    if (tempPasswordAuth.tempPasswordExpiry) {
+      localStorage.setItem('tempPasswordExpiry', tempPasswordAuth.tempPasswordExpiry);
+    }
+    if (tempPasswordAuth.autoLoginCode) {
+      localStorage.setItem('autoLoginCode', tempPasswordAuth.autoLoginCode);
+    }
+    if (tempPasswordAuth.temp_password) {
+      localStorage.setItem('temp_password', tempPasswordAuth.temp_password);
+    }
     
     console.log('LocalStorageとSessionStorageを完全にクリアしました');
     

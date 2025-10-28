@@ -297,7 +297,17 @@ const InstructorManagement = () => {
             } else if (user.satellite_ids) {
               // satellite_detailsが空の場合、satellite_idsから拠点情報を取得
               try {
-                const satelliteIds = Array.isArray(user.satellite_ids) ? user.satellite_ids : JSON.parse(user.satellite_ids);
+                let satelliteIds;
+                if (Array.isArray(user.satellite_ids)) {
+                  satelliteIds = user.satellite_ids;
+                } else if (typeof user.satellite_ids === 'string') {
+                  satelliteIds = JSON.parse(user.satellite_ids);
+                } else {
+                  satelliteIds = [user.satellite_ids];
+                }
+                if (!Array.isArray(satelliteIds)) {
+                  satelliteIds = [satelliteIds];
+                }
                 facilityLocationIds = satelliteIds.map(id => id.toString());
                 
                 // 拠点名を取得（facilityLocationsから）
@@ -336,7 +346,14 @@ const InstructorManagement = () => {
             } else if (user.satellite_ids) {
               // satellite_detailsが空の場合、satellite_idsから拠点情報を取得
               try {
-                const parsed = Array.isArray(user.satellite_ids) ? user.satellite_ids : JSON.parse(user.satellite_ids);
+                let parsed;
+                if (Array.isArray(user.satellite_ids)) {
+                  parsed = user.satellite_ids;
+                } else if (typeof user.satellite_ids === 'string') {
+                  parsed = JSON.parse(user.satellite_ids);
+                } else {
+                  parsed = [user.satellite_ids];
+                }
                 const satelliteIds = Array.isArray(parsed) ? parsed : [parsed];
                 facilityLocationIds = satelliteIds.map(id => id.toString());
                 

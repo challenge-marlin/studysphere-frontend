@@ -1,8 +1,8 @@
 import React from 'react';
-import HomeSupportManagement from '../components/HomeSupportManagement';
+import HomeSupportTab from '../components/tabs/HomeSupportTab';
 
 const HomeSupportEvaluationsPage = () => {
-  return <HomeSupportManagement />;
+  return <HomeSupportTab />;
 };
 
 export default HomeSupportEvaluationsPage; 

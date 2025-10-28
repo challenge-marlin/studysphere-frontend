@@ -30,6 +30,49 @@ export const apiCall = async (endpoint, options = {}, retryCount = 0) => {
   // 認証トークンを取得
   const accessToken = localStorage.getItem('accessToken');
   
+  // デバッグ用：認証トークンの詳細情報をログ出力
+  console.log('API呼び出し認証情報:', {
+    endpoint,
+    hasToken: !!accessToken,
+    tokenLength: accessToken ? accessToken.length : 0,
+    tokenPreview: accessToken ? accessToken.substring(0, 50) + '...' : 'なし',
+    method: options.method || 'GET'
+  });
+  
+  // 認証が必要なエンドポイントかどうかをチェック
+  const authRequiredEndpoints = [
+    '/api/users/',
+    '/api/satellites/',
+    '/api/companies/',
+    '/api/learning/',
+    '/api/test/',
+    '/api/submissions/',
+    '/api/ai/'
+  ];
+  
+  // 認証が不要なエンドポイントのリスト
+  const authExcludedEndpoints = [
+    '/api/users/verify-temp-password',
+    '/api/users/login',
+    '/api/users/instructor-login',
+    '/api/users/refresh',
+    '/api/users/register',
+    '/api/users/forgot-password',
+    '/api/messages/unread-count',
+    '/api/remote-support/login',
+    '/api/remote-support/check-temp-password',
+    '/api/remote-support/auto-login'
+  ];
+  
+  const isAuthRequired = authRequiredEndpoints.some(authEndpoint => endpoint.includes(authEndpoint));
+  const isAuthExcluded = authExcludedEndpoints.some(excludedEndpoint => endpoint.includes(excludedEndpoint));
+  
+  // 認証が必要なエンドポイントで、かつ認証除外エンドポイントでない場合のみ認証チェック
+  if (isAuthRequired && !isAuthExcluded && !accessToken) {
+    console.error('認証が必要なエンドポイントにトークンがありません:', endpoint);
+    throw new Error('認証トークンが見つかりません。ログインし直してください。');
+  }
+  
   const defaultOptions = {
     headers: {
       ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
@@ -363,8 +406,24 @@ export const getSatellites = () => {
 /**
  * 現在の企業に紐づいた拠点一覧を取得
  */
-export const getSatellitesByCompany = (companyId) => {
-  return apiGet(`/api/companies/${companyId}/satellites`);
+export const getSatellitesByCompany = async (companyId) => {
+  try {
+    // 新しいエンドポイントを試す
+    const result = await apiGet(`/api/companies/${companyId}/satellites`);
+    return result;
+  } catch (error) {
+    // エンドポイントが存在しない場合は、全拠点を取得してフィルタリング
+    console.log('新しいエンドポイントが使用できないため、全拠点からフィルタリングします');
+    const allSatellites = await getSatellites();
+    if (allSatellites.success && allSatellites.data) {
+      const filteredSatellites = allSatellites.data.filter(satellite => satellite.company_id === companyId);
+      return {
+        success: true,
+        data: filteredSatellites
+      };
+    }
+    return allSatellites;
+  }
 };
 
 /**
@@ -603,6 +662,79 @@ export const getSatelliteHomeSupportUsers = (satelliteId, instructorIds = null) 
 };
 
 /**
+ * 拠点内の在宅支援利用者一覧を取得（日次記録情報を含む）
+ */
+export const getSatelliteHomeSupportUsersWithDailyRecords = (satelliteId, instructorIds = null, date = null) => {
+  const params = new URLSearchParams();
+  if (instructorIds) {
+    params.append('instructorIds', instructorIds.join(','));
+  }
+  if (date) {
+    params.append('date', date);
+  }
+  const queryString = params.toString();
+  return apiGet(`/api/users/satellite/${satelliteId}/home-support-users-with-records${queryString ? `?${queryString}` : ''}`);
+};
+
+/**
+ * 拠点内の在宅支援利用者の評価状況を取得
+ */
+export const getSatelliteEvaluationStatus = (satelliteId, instructorIds = null, date = null) => {
+  const params = new URLSearchParams();
+  if (instructorIds) {
+    params.append('instructorIds', instructorIds.join(','));
+  }
+  if (date) {
+    params.append('date', date);
+  }
+  const queryString = params.toString();
+  return apiGet(`/api/users/satellite/${satelliteId}/evaluation-status${queryString ? `?${queryString}` : ''}`);
+};
+
+/**
+ * 在宅支援利用者の日次勤怠データを取得
+ */
+export const getDailyAttendance = (satelliteId, date) => {
+  return apiGet(`/api/remote-support/daily-attendance/${satelliteId}?date=${date}`);
+};
+
+/**
+ * 勤怠データを更新
+ */
+export const updateDailyAttendance = (recordId, data) => {
+  return apiPut(`/api/remote-support/daily-attendance/${recordId}`, data);
+};
+
+/**
+ * 月次勤怠データを取得
+ */
+export const getMonthlyAttendance = (userId, year, month) => {
+  return apiGet(`/api/remote-support/monthly-attendance/${userId}?year=${year}&month=${month}`);
+};
+
+/**
+ * 記録・証拠データを取得
+ */
+export const getCaptureRecords = (userId = null, startDate = null, endDate = null, satelliteId = null, page = 1, limit = 20) => {
+  const params = new URLSearchParams();
+  if (userId) {
+    params.append('userId', userId);
+  }
+  if (startDate) {
+    params.append('startDate', startDate);
+  }
+  if (endDate) {
+    params.append('endDate', endDate);
+  }
+  if (satelliteId) {
+    params.append('satelliteId', satelliteId);
+  }
+  params.append('page', page);
+  params.append('limit', limit);
+  return apiGet(`/api/remote-support/capture-records?${params.toString()}`);
+};
+
+/**
  * 拠点内の指導員一覧を取得（在宅支援用）
  */
 export const getSatelliteInstructorsForHomeSupport = (satelliteId) => {
@@ -742,4 +874,59 @@ export const approveSubmission = async (submissionId, studentId, lessonId, comme
 
 export const getPendingSubmissionCount = async (satelliteId) => {
   return apiGet(`/api/submissions/instructor/pending-count/${satelliteId}`);
+};
+
+/**
+ * 通所記録を作成
+ */
+export const createOfficeVisitRecord = async (userId, visitDate) => {
+  return apiPost('/api/users/office-visit', {
+    userId,
+    visitDate
+  });
+};
+
+/**
+ * 特定日の通所記録を取得
+ */
+export const getOfficeVisitRecord = async (userId, visitDate) => {
+  return apiGet(`/api/users/office-visit/${userId}/${visitDate}`);
+};
+
+/**
+ * 通所記録を削除
+ */
+export const deleteOfficeVisitRecord = async (recordId) => {
+  return apiDelete(`/api/users/office-visit/${recordId}`);
+};
+
+/**
+ * 受給者証番号を更新
+ */
+export const updateRecipientNumber = async (userId, recipientNumber) => {
+  return apiPut(`/api/users/${userId}`, {
+    recipient_number: recipientNumber
+  });
+};
+
+/**
+ * 個別支援計画を取得
+ */
+export const getSupportPlan = async (userId) => {
+  return apiGet(`/api/support-plans/user/${userId}`);
+};
+
+
+/**
+ * 拠点内の在宅支援利用者の個別支援計画の目標達成予定日を取得
+ */
+export const getSatelliteSupportPlanGoalDates = async (satelliteId) => {
+  return apiGet(`/api/support-plans/satellite/${satelliteId}/goal-dates`);
+};
+
+/**
+ * 拠点内の在宅支援利用者の個別支援計画状況を取得（記録がない利用者も含む）
+ */
+export const getSatelliteSupportPlanStatus = async (satelliteId) => {
+  return apiGet(`/api/support-plans/satellite/${satelliteId}/status`);
 };

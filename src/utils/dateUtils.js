@@ -228,6 +228,63 @@ export const formatUTCToJapanTimeString = (utcDate) => {
 };
 
 /**
+ * UTC時刻をHH:MM形式の日本時間に変換（勤怠管理用）
+ * @param {string} utcISOString - UTC時刻（ISO文字列）
+ * @returns {string} HH:MM形式の日本時間（存在しない場合はnull）
+ */
+export const formatUTCToJSTTimeOnly = (utcISOString) => {
+  if (!utcISOString) return null;
+  try {
+    const utcDate = new Date(utcISOString);
+    if (isNaN(utcDate.getTime())) {
+      return null;
+    }
+    
+    // JSTに変換して時刻を取得（Asia/Tokyoタイムゾーンで）
+    const jstHours = utcDate.toLocaleString('en-US', {
+      timeZone: 'Asia/Tokyo',
+      hour: '2-digit',
+      hour12: false
+    });
+    const jstMinutes = utcDate.toLocaleString('en-US', {
+      timeZone: 'Asia/Tokyo',
+      minute: '2-digit'
+    });
+    
+    // HH:MM形式を返す
+    return `${jstHours.padStart(2, '0')}:${jstMinutes.padStart(2, '0')}`;
+  } catch (e) {
+    console.warn('UTC→JST時刻変換エラー:', { utcISOString, error: e.message });
+    return null;
+  }
+};
+
+/**
+ * JST時刻（HH:MM形式）と日付を組み合わせてUTC時刻のISO文字列に変換
+ * @param {string} dateStr - 日付文字列（YYYY-MM-DD）
+ * @param {string} timeStr - JST時刻文字列（HH:MM）
+ * @returns {string} UTC時刻のISO文字列（存在しない場合はnull）
+ */
+export const convertJSTTimeToUTCISO = (dateStr, timeStr) => {
+  if (!dateStr || !timeStr) return null;
+  try {
+    // JST時刻として解釈
+    const jstDateTimeString = `${dateStr}T${timeStr}:00+09:00`;
+    const jstDate = new Date(jstDateTimeString);
+    
+    if (isNaN(jstDate.getTime())) {
+      return null;
+    }
+    
+    // UTC時刻のISO文字列を返す
+    return jstDate.toISOString();
+  } catch (e) {
+    console.warn('JST→UTC変換エラー:', { dateStr, timeStr, error: e.message });
+    return null;
+  }
+};
+
+/**
  * UTC時刻を日本時間に変換
  * @param {Date|string} utcDate - UTC時刻
  * @returns {Date} 日本時間のDateオブジェクト

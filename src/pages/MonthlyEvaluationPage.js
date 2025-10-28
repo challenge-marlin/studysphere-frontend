@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useInstructorGuard } from '../utils/hooks/useAuthGuard';
+import { apiCall } from '../utils/api';
+import { getSupportPlanByUserId } from '../utils/api';
 
 /**
  * 達成度評価作成画面（在宅における就労達成度評価シート）
@@ -11,6 +14,29 @@ const MonthlyEvaluationPage = () => {
   const navigate = useNavigate();
   const { studentId } = useParams();
   const [searchParams] = useSearchParams();
+  const { currentUser } = useInstructorGuard();
+  
+  // 戻る際に拠点情報を保存する関数
+  const saveLocationAndNavigate = () => {
+    if (currentUser) {
+      const savedSatellite = sessionStorage.getItem('selectedSatellite');
+      if (savedSatellite) {
+        // 既存の拠点情報をそのまま保持
+        const satellite = JSON.parse(savedSatellite);
+        sessionStorage.setItem('selectedSatellite', JSON.stringify(satellite));
+      } else if (currentUser.satellite_id) {
+        // ユーザー情報から拠点情報を保存
+        const currentLocation = {
+          id: currentUser.satellite_id,
+          name: currentUser.satellite_name,
+          company_id: currentUser.company_id,
+          company_name: currentUser.company_name
+        };
+        sessionStorage.setItem('selectedSatellite', JSON.stringify(currentLocation));
+      }
+    }
+    navigate('/instructor/home-support');
+  };
   
   // 期間の状態管理
   const [periodStart, setPeriodStart] = useState('');
@@ -47,23 +73,95 @@ const MonthlyEvaluationPage = () => {
   });
   
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatingField, setGeneratingField] = useState(null); // 現在生成中のフィールド
+  const [isLoading, setIsLoading] = useState(true);
   
   // 指導員リスト
   const [instructors, setInstructors] = useState([]);
 
+  // 利用者情報を取得
   useEffect(() => {
-    // 指導員リストを取得（モックデータ）
-    setInstructors([
-      { id: 'inst001', name: '佐藤指導員' },
-      { id: 'inst002', name: '田中指導員' },
-      { id: 'inst003', name: '山田指導員' },
-      { id: 'inst004', name: '鈴木指導員' },
-      { id: 'inst005', name: '高橋指導員' }
-    ]);
-  }, []);
+    const fetchStudentInfo = async () => {
+      if (!studentId) return;
+      
+      try {
+        const response = await apiCall(`/api/users/${studentId}`, { method: 'GET' });
+        if (response.success && response.data) {
+          const userData = response.data;
+          setStudent({
+            id: userData.id,
+            name: userData.name,
+            recipientNumber: userData.recipient_number || '',
+            instructorName: userData.instructor_name || '',
+            satellite_id: (() => {
+              if (!userData.satellite_ids) return null;
+              if (Array.isArray(userData.satellite_ids)) return userData.satellite_ids[0];
+              if (typeof userData.satellite_ids === 'string') {
+                try {
+                  const parsed = JSON.parse(userData.satellite_ids);
+                  return Array.isArray(parsed) ? parsed[0] : parsed;
+                } catch (error) {
+                  console.error('satellite_idsパースエラー:', error);
+                  return null;
+                }
+              }
+              return userData.satellite_ids;
+            })()
+          });
+
+          // 拠点IDがある場合、指導員リストを取得
+          const satelliteId = (() => {
+            if (!userData.satellite_ids) return null;
+            if (Array.isArray(userData.satellite_ids)) return userData.satellite_ids[0];
+            if (typeof userData.satellite_ids === 'string') {
+              try {
+                const parsed = JSON.parse(userData.satellite_ids);
+                return Array.isArray(parsed) ? parsed[0] : parsed;
+              } catch (error) {
+                console.error('satellite_idsパースエラー:', error);
+                return null;
+              }
+            }
+            return userData.satellite_ids;
+          })();
+          if (satelliteId) {
+            try {
+              const instructorResponse = await apiCall(`/api/users/satellite/${satelliteId}/weekly-evaluation-instructors`, {
+                method: 'GET'
+              });
+              if (instructorResponse.success && instructorResponse.data) {
+                setInstructors(instructorResponse.data);
+              }
+            } catch (error) {
+              console.error('指導員リスト取得エラー:', error);
+            }
+          }
+
+          // 前回評価日を取得
+          try {
+            const prevEvalResponse = await apiCall(`/api/monthly-evaluations/user/${studentId}/latest`, {
+              method: 'GET'
+            });
+            if (prevEvalResponse.success && prevEvalResponse.data?.date) {
+              setPrevEvalDate(prevEvalResponse.data.date);
+            }
+          } catch (error) {
+            console.error('前回評価日取得エラー:', error);
+          }
+        }
+      } catch (error) {
+        console.error('利用者情報取得エラー:', error);
+        alert('利用者情報の取得に失敗しました。');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchStudentInfo();
+  }, [studentId]);
 
   useEffect(() => {
-    // URLパラメータから期間を取得、なければ今月の1日〜末日を設定
+    // URLパラメータから期間を取得、なければ昨日の1カ月前〜昨日を設定
     const start = searchParams.get('start');
     const end = searchParams.get('end');
     
@@ -71,89 +169,99 @@ const MonthlyEvaluationPage = () => {
       setPeriodStart(start);
       setPeriodEnd(end);
     } else {
-      // 今月の1日〜末日を設定
-      const today = new Date();
-      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      // 昨日の1カ月前〜昨日を設定
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      yesterday.setHours(0, 0, 0, 0);
       
-      setPeriodStart(firstDay.toISOString().split('T')[0]);
-      setPeriodEnd(lastDay.toISOString().split('T')[0]);
+      const oneMonthAgo = new Date(yesterday);
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+      
+      setPeriodStart(oneMonthAgo.toISOString().split('T')[0]);
+      setPeriodEnd(yesterday.toISOString().split('T')[0]);
     }
-
-    // 生徒情報を取得（モックデータ）
-    setStudent({
-      id: studentId || 'student001',
-      name: '田中 太郎',
-      recipientNumber: '1234567890',
-      instructorName: '佐藤指導員'
-    });
-
-    // 前回評価日を設定（仮）
-    const prevDate = new Date();
-    prevDate.setMonth(prevDate.getMonth() - 1);
-    setPrevEvalDate(prevDate.toISOString().split('T')[0]);
-  }, [studentId, searchParams]);
+  }, [searchParams]);
 
   useEffect(() => {
-    if (periodStart && periodEnd) {
+    if (periodStart && periodEnd && studentId) {
       fetchSupportPlan();
       fetchWeeklyEvaluations();
     }
-  }, [periodStart, periodEnd]);
+  }, [periodStart, periodEnd, studentId]);
 
   // 個別支援計画を取得
-  const fetchSupportPlan = () => {
-    // モックデータ
-    setSupportPlan({
-      longTermGoal: 'しっかりと就労できるよう、心身の健康を維持する',
-      shortTermGoal: '新しい環境や就労のスタイルに慣れる',
-      needs: [
-        'いずれはスキルアップしたい',
-        '天候が悪くなると頭痛などで体調が悪くなることがある'
-      ],
-      supportContent: [
-        '生成AIを使用したHP作成、及びアプリの開発がスムーズに行えるよう、声掛け、助言、アドバイスを行います。また、休憩などを取らずオーバーワーク気味の際には休憩を促し、体調のコントロールを図ります',
-        '体調不良時には適宜休憩を促し、体調管理に努めます。また、在宅就労システムを導入した際には在宅の作業が出来るよう対応を行います'
-      ],
-      targetDate: '2025/07/31'
-    });
+  const fetchSupportPlan = async () => {
+    if (!studentId) return;
+    
+    try {
+      const response = await getSupportPlanByUserId(studentId);
+      if (response.success && response.data) {
+        const plan = response.data;
+        // needsとsupport_contentは改行区切りの文字列の可能性があるため、配列に変換
+        const needsArray = plan.needs ? (Array.isArray(plan.needs) ? plan.needs : plan.needs.split('\n').filter(n => n.trim())) : [];
+        const supportContentArray = plan.support_content ? (Array.isArray(plan.support_content) ? plan.support_content : plan.support_content.split('\n').filter(c => c.trim())) : [];
+        
+        setSupportPlan({
+          longTermGoal: plan.long_term_goal || '',
+          shortTermGoal: plan.short_term_goal || '',
+          needs: needsArray,
+          supportContent: supportContentArray,
+          targetDate: plan.goal_date ? new Date(plan.goal_date).toLocaleDateString('ja-JP') : ''
+        });
+      } else {
+        // 個別支援計画が見つからない場合の処理
+        setSupportPlan({
+          longTermGoal: '',
+          shortTermGoal: '',
+          needs: [],
+          supportContent: [],
+          targetDate: ''
+        });
+      }
+    } catch (error) {
+      console.error('個別支援計画取得エラー:', error);
+      setSupportPlan({
+        longTermGoal: '',
+        shortTermGoal: '',
+        needs: [],
+        supportContent: [],
+        targetDate: ''
+      });
+    }
   };
 
   // 週次評価一覧を取得
-  const fetchWeeklyEvaluations = () => {
-    // モックデータ
-    const mockWeekly = [
-      {
-        id: 'weekly001',
-        period: '2024-10-01 〜 2024-10-06',
-        evalDate: '2024-10-07',
-        method: '通所',
-        content: '・HTML/CSS基礎学習を開始し、基本的なタグの理解が進んでいる\n・学習意欲が高く、自主的に質問する姿勢が見られる\n・生活リズムは概ね安定している',
-        recorder: '佐藤指導員'
-      },
-      {
-        id: 'weekly002',
-        period: '2024-10-07 〜 2024-10-13',
-        evalDate: '2024-10-14',
-        method: '電話',
-        content: '・レスポンシブデザインの学習に進み、理解が深まっている\n・作業時間の管理がうまくできるようになってきた\n・体調も安定しており、集中力も維持できている',
-        recorder: '佐藤指導員'
-      },
-      {
-        id: 'weekly003',
-        period: '2024-10-14 〜 2024-10-20',
-        evalDate: '2024-10-21',
-        method: '電話',
-        content: '・JavaScriptの基礎に入り、プログラミング的思考が身についてきた\n・課題に対して自分で調べて解決する力が向上している\n・継続的な学習習慣が確立されてきている',
-        recorder: '佐藤指導員'
+  const fetchWeeklyEvaluations = async () => {
+    if (!studentId || !periodStart || !periodEnd) return;
+    
+    try {
+      const response = await apiCall(`/api/weekly-evaluations/user/${studentId}?periodStart=${periodStart}&periodEnd=${periodEnd}`, {
+        method: 'GET'
+      });
+      
+      if (response.success && response.data) {
+        // バックエンドのデータ形式をフロントエンドの表示形式に変換
+        const weeklyData = response.data.map(weekly => ({
+          id: weekly.id,
+          period: `${weekly.period_start} 〜 ${weekly.period_end}`,
+          evalDate: weekly.date,
+          method: weekly.evaluation_method === 'その他' && weekly.method_other ? weekly.method_other : weekly.evaluation_method,
+          content: weekly.evaluation_content || '',
+          recorder: weekly.recorder_name || ''
+        }));
+        
+        setWeeklyEvaluations(weeklyData);
+        
+        // デフォルトで最初の評価を展開
+        if (weeklyData.length > 0) {
+          setExpandedWeekly({ [weeklyData[0].id]: true });
+        }
+      } else {
+        setWeeklyEvaluations([]);
       }
-    ];
-    
-    setWeeklyEvaluations(mockWeekly);
-    
-    // デフォルトで最初の評価を展開
-    if (mockWeekly.length > 0) {
-      setExpandedWeekly({ [mockWeekly[0].id]: true });
+    } catch (error) {
+      console.error('週次評価取得エラー:', error);
+      setWeeklyEvaluations([]);
     }
   };
 
@@ -182,64 +290,203 @@ const MonthlyEvaluationPage = () => {
     }));
   };
 
-  // AIで評価案を生成
-  const generateEvaluationWithAI = () => {
-    setIsGenerating(true);
+  // AIで評価案を生成（段階的に各項目を生成）
+  const generateEvaluationWithAI = async () => {
+    if (!studentId || !supportPlan) {
+      alert('利用者情報または個別支援計画が取得できません。');
+      return;
+    }
     
-    // AIによる評価案生成のシミュレーション
-    setTimeout(() => {
-      // 訓練目標の提案
-      const goalSuggestion = `${supportPlan.shortTermGoal}を達成するため、具体的には以下を目標とします：\n・Webページ制作の基礎スキル（HTML/CSS/JavaScript）を習得する\n・学習時間の自己管理ができるようになる\n・規則正しい生活リズムを維持する`;
+    setIsGenerating(true);
+    setGeneratingField(null);
+    
+    try {
+      // 1. 訓練目標を生成（個別支援計画の短期目標に基づく）
+      setGeneratingField('訓練目標');
+      const goalResponse = await apiCall('/api/monthly-evaluation-ai/generate-goal', {
+        method: 'POST',
+        body: JSON.stringify({ user_id: studentId })
+      });
       
-      // 取組内容の提案
-      const workSuggestion = `・HTML/CSSの基礎から応用まで段階的に学習\n・レスポンシブデザインの実践的な演習\n・JavaScriptの基礎学習と簡単なプログラム作成\n・毎日の学習時間の記録と振り返り`;
+      if (goalResponse.success && goalResponse.data?.goal) {
+        setEvaluationData(prev => ({
+          ...prev,
+          trainingGoal: goalResponse.data.goal
+        }));
+      }
       
-      // 達成度の提案
-      const achievementSuggestion = `・HTML/CSSの基礎スキルは概ね習得できた\n・レスポンシブデザインの理解も深まり、簡単なWebページを作成できるようになった\n・JavaScriptは基礎に入ったばかりで、継続学習が必要\n・学習時間の自己管理は徐々にできるようになってきた\n・生活リズムは安定して維持できている`;
+      // 2. 取組内容を生成（対象期間中の週報を基に）
+      setGeneratingField('取り組み内容');
+      const workResponse = await apiCall('/api/monthly-evaluation-ai/generate-effort', {
+        method: 'POST',
+        body: JSON.stringify({
+          user_id: studentId,
+          period_start: periodStart,
+          period_end: periodEnd
+        })
+      });
       
-      // 課題の提案
-      const issuesSuggestion = `・JavaScriptのプログラミング的思考にまだ慣れていない部分がある\n・複雑な課題に取り組む際、時間配分に課題が残る\n・天候による体調への影響について、引き続き注意が必要`;
+      if (workResponse.success && workResponse.data?.effort) {
+        setEvaluationData(prev => ({
+          ...prev,
+          workContent: workResponse.data.effort
+        }));
+      }
       
-      // 改善方針の提案
-      const improvementSuggestion = `・来月はJavaScriptの学習を重点的に進め、実践的なプログラム作成に取り組む\n・課題解決のためのタイムマネジメントスキルの向上を図る\n・天候と体調の関係を記録し、予防的な対策を検討する\n・引き続き規則正しい生活リズムの維持を支援する`;
+      // 3. 訓練目標に対する達成度を生成（訓練目標と取組内容を比較）
+      setGeneratingField('訓練目標に対する達成度');
+      const achievementResponse = await apiCall('/api/monthly-evaluation-ai/generate-achievement', {
+        method: 'POST',
+        body: JSON.stringify({
+          goal: goalResponse.success ? goalResponse.data?.goal : '',
+          effort: workResponse.success ? workResponse.data?.effort : ''
+        })
+      });
       
-      // 健康面の提案
-      const healthSuggestion = `・体調は概ね良好で、安定した学習が継続できている\n・天候の変化による影響は見られるものの、適切に休憩を取ることで対応できている\n・生活リズムが安定しており、睡眠も十分に取れている`;
+      if (achievementResponse.success && achievementResponse.data?.achievement) {
+        setEvaluationData(prev => ({
+          ...prev,
+          achievement: achievementResponse.data.achievement
+        }));
+      }
       
-      // 継続妥当性の提案
-      const validitySuggestion = `個別支援計画に掲げた目標に対し、着実に進捗しています。新しい環境での学習スタイルにも適応し、自主的な学習姿勢が身についてきています。体調面も安定しており、在宅での就労訓練が効果的に機能していると判断できます。今後も継続的な支援により、さらなるスキルアップが期待できるため、在宅就労による支援を継続することが妥当であると判断します。`;
+      // 4. 課題を生成（訓練目標と達成度を比較）
+      setGeneratingField('課題');
+      const issueResponse = await apiCall('/api/monthly-evaluation-ai/generate-issues', {
+        method: 'POST',
+        body: JSON.stringify({
+          goal: goalResponse.success ? goalResponse.data?.goal : '',
+          achievement: achievementResponse.success ? achievementResponse.data?.achievement : ''
+        })
+      });
       
-      setEvaluationData(prev => ({
-        ...prev,
-        trainingGoal: goalSuggestion,
-        workContent: workSuggestion,
-        achievement: achievementSuggestion,
-        issues: issuesSuggestion,
-        improvementPlan: improvementSuggestion,
-        healthNotes: healthSuggestion,
-        continuityValidity: validitySuggestion
-      }));
+      if (issueResponse.success && issueResponse.data?.issues) {
+        setEvaluationData(prev => ({
+          ...prev,
+          issues: issueResponse.data.issues
+        }));
+      }
       
+      // 5. 今後における課題の改善方針を生成（課題と個別支援計画書から）
+      setGeneratingField('今後における課題の改善方針');
+      const improvementResponse = await apiCall('/api/monthly-evaluation-ai/generate-improvement', {
+        method: 'POST',
+        body: JSON.stringify({
+          user_id: studentId,
+          issues: issueResponse.success ? issueResponse.data?.issues : ''
+        })
+      });
+      
+      if (improvementResponse.success && improvementResponse.data?.improvement) {
+        setEvaluationData(prev => ({
+          ...prev,
+          improvementPlan: improvementResponse.data.improvement
+        }));
+      }
+      
+      // 6. 健康・体調面での留意事項を生成（対象期間中の週報を基に）
+      setGeneratingField('健康・体調面での留意事項');
+      const healthResponse = await apiCall('/api/monthly-evaluation-ai/generate-health', {
+        method: 'POST',
+        body: JSON.stringify({
+          user_id: studentId,
+          period_start: periodStart,
+          period_end: periodEnd
+        })
+      });
+      
+      if (healthResponse.success && healthResponse.data?.health) {
+        setEvaluationData(prev => ({
+          ...prev,
+          healthNotes: healthResponse.data.health
+        }));
+      }
+      
+      // 7. 在宅就労継続の妥当性を生成（個別支援計画書と訓練目標～その他特記事項の内容を総合的に勘案）
+      setGeneratingField('在宅就労継続の妥当性');
+      const validityResponse = await apiCall('/api/monthly-evaluation-ai/generate-appropriateness', {
+        method: 'POST',
+        body: JSON.stringify({
+          user_id: studentId,
+          goal: goalResponse.success ? goalResponse.data?.goal : '',
+          effort: workResponse.success ? workResponse.data?.effort : '',
+          achievement: achievementResponse.success ? achievementResponse.data?.achievement : '',
+          issues: issueResponse.success ? issueResponse.data?.issues : '',
+          improvement: improvementResponse.success ? improvementResponse.data?.improvement : '',
+          health: healthResponse.success ? healthResponse.data?.health : '',
+          other_notes: evaluationData.otherNotes || ''
+        })
+      });
+      
+      if (validityResponse.success && validityResponse.data?.appropriateness) {
+        setEvaluationData(prev => ({
+          ...prev,
+          continuityValidity: validityResponse.data.appropriateness
+        }));
+      }
+      
+      alert('評価案の生成が完了しました。');
+    } catch (error) {
+      console.error('AI評価案生成エラー:', error);
+      alert(`AI評価案の生成中にエラーが発生しました: ${error.message}`);
+    } finally {
       setIsGenerating(false);
-    }, 2000);
+      setGeneratingField(null);
+    }
   };
 
   // 保存
-  const handleSave = () => {
-    const data = {
-      studentId: student.id,
-      studentName: student.name,
-      recipientNumber: student.recipientNumber,
-      periodStart,
-      periodEnd,
-      prevEvalDate,
-      evalDate: new Date().toISOString().split('T')[0],
-      ...evaluationData
-    };
-    
-    console.log('達成度評価を保存:', data);
-    alert('達成度評価を保存しました。');
-    navigate('/instructor/dashboard?tab=home-support');
+  const handleSave = async () => {
+    if (!student?.id) {
+      alert('利用者情報が取得できません。');
+      return;
+    }
+
+    if (!evaluationData.trainingGoal.trim() || !evaluationData.workContent.trim()) {
+      alert('訓練目標と取組内容は必須項目です。');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const backendData = {
+        date: new Date().toISOString().split('T')[0],
+        mark_start: evaluationData.startTime ? `${new Date().toISOString().split('T')[0]} ${evaluationData.startTime}:00` : null,
+        mark_end: evaluationData.endTime ? `${new Date().toISOString().split('T')[0]} ${evaluationData.endTime}:00` : null,
+        evaluation_method: evaluationData.method === 'その他' ? 'その他' : evaluationData.method,
+        method_other: evaluationData.method === 'その他' ? evaluationData.methodOther : null,
+        goal: evaluationData.trainingGoal || null,
+        effort: evaluationData.workContent || null,
+        achievement: evaluationData.achievement || null,
+        issues: evaluationData.issues || null,
+        improvement: evaluationData.improvementPlan || null,
+        health: evaluationData.healthNotes || null,
+        others: evaluationData.otherNotes || null,
+        appropriateness: evaluationData.continuityValidity || null,
+        evaluator_name: evaluationData.evaluator || null,
+        prev_evaluation_date: prevEvalDate || null,
+        recipient_number: student.recipientNumber || null,
+        user_name: student.name || null,
+        user_id: student.id
+      };
+
+      const response = await apiCall('/api/monthly-evaluations', {
+        method: 'POST',
+        body: JSON.stringify(backendData)
+      });
+
+      if (response.success) {
+        alert('達成度評価を保存しました。');
+        saveLocationAndNavigate();
+      } else {
+        alert('保存に失敗しました: ' + (response.message || 'エラーが発生しました'));
+      }
+    } catch (error) {
+      console.error('保存エラー:', error);
+      alert('保存中にエラーが発生しました: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // 日付フォーマット
@@ -260,13 +507,22 @@ const MonthlyEvaluationPage = () => {
     return `${startDate.getFullYear()}年${startDate.getMonth() + 1}月${startDate.getDate()}日 〜 ${endDate.getFullYear()}年${endDate.getMonth() + 1}月${endDate.getDate()}日`;
   };
 
-  if (!student || !supportPlan) {
+  if (isLoading || !student) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-50 flex items-center justify-center">
         <div className="text-purple-600 text-xl font-semibold">読み込み中...</div>
       </div>
     );
   }
+
+  // 個別支援計画がない場合でも表示を続行
+  const displaySupportPlan = supportPlan || {
+    longTermGoal: '',
+    shortTermGoal: '',
+    needs: [],
+    supportContent: [],
+    targetDate: ''
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-50">
@@ -277,7 +533,7 @@ const MonthlyEvaluationPage = () => {
             <div className="flex items-center gap-4">
               <button 
                 className="px-4 py-2 bg-white bg-opacity-10 border border-white border-opacity-30 rounded-lg hover:bg-opacity-20 transition-all duration-200 font-medium"
-                onClick={() => navigate('/instructor/dashboard?tab=home-support')}
+                onClick={saveLocationAndNavigate}
               >
                 ← 在宅支援管理に戻る
               </button>
@@ -300,7 +556,7 @@ const MonthlyEvaluationPage = () => {
                 </div>
                 <div className="text-sm">
                   <span className="text-purple-200">前回評価日:</span>
-                  <span className="ml-2 font-semibold text-white">{formatDate(prevEvalDate)}</span>
+                  <span className="ml-2 font-semibold text-white">{prevEvalDate ? formatDate(prevEvalDate) : 'なし'}</span>
                 </div>
               </div>
               <div>
@@ -356,39 +612,47 @@ const MonthlyEvaluationPage = () => {
                   <div>
                     <div className="font-semibold text-gray-700 mb-1">長期目標</div>
                     <div className="text-gray-600 bg-amber-50 p-3 rounded border-l-4 border-amber-400">
-                      {supportPlan.longTermGoal}
+                      {displaySupportPlan.longTermGoal || '未設定'}
                     </div>
                   </div>
                   
                   <div>
                     <div className="font-semibold text-gray-700 mb-1">短期目標</div>
                     <div className="text-gray-600 bg-blue-50 p-3 rounded border-l-4 border-blue-400">
-                      {supportPlan.shortTermGoal}
+                      {displaySupportPlan.shortTermGoal || '未設定'}
                     </div>
                   </div>
                   
                   <div>
                     <div className="font-semibold text-gray-700 mb-1">本人のニーズ</div>
                     <div className="text-gray-600 bg-green-50 p-3 rounded space-y-1">
-                      {supportPlan.needs.map((need, index) => (
-                        <div key={index}>・{need}</div>
-                      ))}
+                      {displaySupportPlan.needs.length > 0 ? (
+                        displaySupportPlan.needs.map((need, index) => (
+                          <div key={index}>・{need}</div>
+                        ))
+                      ) : (
+                        <div>未設定</div>
+                      )}
                     </div>
                   </div>
                   
                   <div>
                     <div className="font-semibold text-gray-700 mb-1">個別支援内容</div>
                     <div className="text-gray-600 bg-purple-50 p-3 rounded space-y-2">
-                      {supportPlan.supportContent.map((content, index) => (
-                        <div key={index}>・{content}</div>
-                      ))}
+                      {displaySupportPlan.supportContent.length > 0 ? (
+                        displaySupportPlan.supportContent.map((content, index) => (
+                          <div key={index}>・{content}</div>
+                        ))
+                      ) : (
+                        <div>未設定</div>
+                      )}
                     </div>
                   </div>
                   
                   <div>
                     <div className="font-semibold text-gray-700 mb-1">目標達成時期</div>
                     <div className="text-gray-600 bg-gray-50 p-3 rounded font-semibold">
-                      {supportPlan.targetDate}
+                      {displaySupportPlan.targetDate || '未設定'}
                     </div>
                   </div>
                 </div>
@@ -473,9 +737,9 @@ const MonthlyEvaluationPage = () => {
                 <h2 className="text-xl font-bold text-gray-800">📝 達成度評価フォーム</h2>
                 <button
                   onClick={generateEvaluationWithAI}
-                  disabled={isGenerating || !supportPlan || weeklyEvaluations.length === 0}
+                  disabled={isGenerating || !studentId}
                   className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 ${
-                    isGenerating || !supportPlan || weeklyEvaluations.length === 0
+                    isGenerating || !studentId
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-lg hover:shadow-xl'
                   }`}
@@ -483,7 +747,7 @@ const MonthlyEvaluationPage = () => {
                   {isGenerating ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      生成中...
+                      {generatingField ? `${generatingField}を生成中...` : '生成中...'}
                     </>
                   ) : (
                     <>
@@ -713,16 +977,19 @@ const MonthlyEvaluationPage = () => {
               {/* ボタン */}
               <div className="mt-8 flex gap-4">
                 <button
-                  onClick={() => navigate('/instructor/dashboard?tab=home-support')}
+                  onClick={saveLocationAndNavigate}
                   className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-300 transition-all duration-200"
                 >
                   キャンセル
                 </button>
                 <button
                   onClick={handleSave}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+                  disabled={isLoading}
+                  className={`flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 ${
+                    isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 >
-                  💾 保存
+                  {isLoading ? '💾 保存中...' : '💾 保存'}
                 </button>
               </div>
             </div>

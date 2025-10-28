@@ -79,26 +79,94 @@ export const getCurrentUserSatelliteId = (currentUser) => {
   }
   
   // 3. ユーザーのsatellite_idsから取得
-  if (currentUser && currentUser.satellite_ids && currentUser.satellite_ids.length > 0) {
-    const satelliteId = currentUser.satellite_ids[0];
-    console.log('ユーザーから取得した拠点ID:', satelliteId);
+  if (currentUser && currentUser.satellite_ids) {
+    let satelliteIds = currentUser.satellite_ids;
     
-    // 拠点IDが取得できた場合、sessionStorageを同期
-    const sessionSelectedSatellite = sessionStorage.getItem('selectedSatellite');
-    if (sessionSelectedSatellite) {
+    // 既に配列の場合はそのまま使用
+    if (Array.isArray(satelliteIds)) {
+      // 既に配列なのでそのまま使用
+    } else if (typeof satelliteIds === 'string') {
+      // 文字列の場合はJSONパースを試行
       try {
-        const parsedSatellite = JSON.parse(sessionSelectedSatellite);
-        if (parsedSatellite.id !== satelliteId) {
-          console.log('拠点IDが一致しません。sessionStorageのselectedSatelliteをクリアします');
-          sessionStorage.removeItem('selectedSatellite');
-        }
+        satelliteIds = JSON.parse(satelliteIds);
       } catch (error) {
-        console.error('sessionStorageのselectedSatelliteパースエラー:', error);
-        sessionStorage.removeItem('selectedSatellite');
+        console.error('satellite_idsのパースエラー:', error);
+        // パースに失敗した場合は、カンマ区切りとして扱う
+        if (satelliteIds.includes(',')) {
+          satelliteIds = satelliteIds.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+        } else {
+          satelliteIds = [parseInt(satelliteIds)];
+        }
       }
+    } else {
+      // その他の型（数値など）の場合は配列に変換
+      satelliteIds = [satelliteIds];
     }
     
-    return satelliteId;
+    // 配列でない場合は配列に変換（念のため）
+    if (!Array.isArray(satelliteIds)) {
+      satelliteIds = [satelliteIds];
+    }
+    
+    // すべてのIDを数値に変換して統一（文字列の"1", "2"なども数値に変換）
+    satelliteIds = satelliteIds.map(id => {
+      const numId = parseInt(id);
+      if (isNaN(numId)) {
+        console.warn('無効な拠点ID:', id);
+        return null;
+      }
+      return numId;
+    }).filter(id => id !== null);
+    
+    if (satelliteIds.length > 0) {
+      const satelliteId = parseInt(satelliteIds[0]); // 数値に変換
+      console.log('ユーザーから取得した拠点ID:', satelliteId);
+      
+      // 拠点IDが取得できた場合、sessionStorageに保存（まだ保存されていない場合）
+      const sessionSelectedSatellite = sessionStorage.getItem('selectedSatellite');
+      if (!sessionSelectedSatellite) {
+        // sessionStorageに選択された拠点がない場合、最初の拠点IDを保存
+        // 拠点名などの情報は後でAPIから取得される可能性があるため、まずはIDだけ保存
+        const selectedSatelliteInfo = {
+          id: satelliteId,
+          name: currentUser.satellite_name || `拠点${satelliteId}`,
+          company_id: currentUser.company_id,
+          company_name: currentUser.company_name
+        };
+        sessionStorage.setItem('selectedSatellite', JSON.stringify(selectedSatelliteInfo));
+        console.log('複数拠点所属指導員: sessionStorageに最初の拠点を保存:', selectedSatelliteInfo);
+      } else {
+        // sessionStorageに既に選択された拠点がある場合、整合性を確認
+        try {
+          const parsedSatellite = JSON.parse(sessionSelectedSatellite);
+          // 選択された拠点IDがユーザーの所属拠点に含まれているか確認（型を統一して比較）
+          const parsedSatelliteId = parseInt(parsedSatellite.id);
+          const isIncluded = satelliteIds.some(id => parseInt(id) === parsedSatelliteId);
+          if (!isIncluded) {
+            console.log('選択された拠点IDが所属拠点に含まれていません。最初の拠点に変更します');
+            const selectedSatelliteInfo = {
+              id: satelliteId,
+              name: currentUser.satellite_name || `拠点${satelliteId}`,
+              company_id: currentUser.company_id,
+              company_name: currentUser.company_name
+            };
+            sessionStorage.setItem('selectedSatellite', JSON.stringify(selectedSatelliteInfo));
+          }
+        } catch (error) {
+          console.error('sessionStorageのselectedSatelliteパースエラー:', error);
+          // パースエラーの場合は、最初の拠点IDを保存
+          const selectedSatelliteInfo = {
+            id: satelliteId,
+            name: currentUser.satellite_name || `拠点${satelliteId}`,
+            company_id: currentUser.company_id,
+            company_name: currentUser.company_name
+          };
+          sessionStorage.setItem('selectedSatellite', JSON.stringify(selectedSatelliteInfo));
+        }
+      }
+      
+      return satelliteId;
+    }
   }
   
   // 4. localStorageから拠点情報を取得
@@ -112,10 +180,40 @@ export const getCurrentUserSatelliteId = (currentUser) => {
       return storedUser.satellite_id;
     }
     
-    if (storedUser.satellite_ids && storedUser.satellite_ids.length > 0) {
-      const satelliteId = storedUser.satellite_ids[0];
-      console.log('localStorageから取得した拠点ID:', satelliteId);
-      return satelliteId;
+    if (storedUser.satellite_ids) {
+      let satelliteIds = storedUser.satellite_ids;
+      
+      // 既に配列の場合はそのまま使用
+      if (Array.isArray(satelliteIds)) {
+        // 既に配列なのでそのまま使用
+      } else if (typeof satelliteIds === 'string') {
+        // 文字列の場合はJSONパースを試行
+        try {
+          satelliteIds = JSON.parse(satelliteIds);
+        } catch (error) {
+          console.error('localStorageのsatellite_idsのパースエラー:', error);
+          // パースに失敗した場合は、カンマ区切りとして扱う
+          if (satelliteIds.includes(',')) {
+            satelliteIds = satelliteIds.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+          } else {
+            satelliteIds = [parseInt(satelliteIds)];
+          }
+        }
+      }
+      
+      // 配列でない場合は配列に変換
+      if (!Array.isArray(satelliteIds)) {
+        satelliteIds = [satelliteIds];
+      }
+      
+      // すべてのIDを数値に変換して統一
+      satelliteIds = satelliteIds.map(id => parseInt(id)).filter(id => !isNaN(id));
+      
+      if (satelliteIds.length > 0) {
+        const satelliteId = parseInt(satelliteIds[0]); // 数値に変換
+        console.log('localStorageから取得した拠点ID:', satelliteId);
+        return satelliteId;
+      }
     }
   } catch (error) {
     console.error('localStorageの読み込みエラー:', error);

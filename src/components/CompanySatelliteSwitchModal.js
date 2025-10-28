@@ -17,6 +17,7 @@ const CompanySatelliteSwitchModal = ({
   const [selectedSatellite, setSelectedSatellite] = useState(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('satellite'); // 'company' or 'satellite'
+  const [companySelectionStep, setCompanySelectionStep] = useState('selectCompany'); // 'selectCompany' or 'selectSatellite'
 
   // 権限チェック
   const canSwitchCompany = userRole >= 9;
@@ -68,7 +69,18 @@ const CompanySatelliteSwitchModal = ({
         console.log('処理後の拠点データが配列か:', Array.isArray(satellitesArray));
         console.log('処理後の拠点データの長さ:', satellitesArray?.length);
         
-        setSatellites(Array.isArray(satellitesArray) ? satellitesArray : []);
+        // 現在の企業が選択されている場合は、その企業の拠点のみをフィルタリング
+        let filteredSatellites = Array.isArray(satellitesArray) ? satellitesArray : [];
+        
+        if (currentCompany && currentCompany.id) {
+          console.log('現在の企業に基づいて拠点をフィルタリング:', currentCompany.id);
+          filteredSatellites = satellitesArray.filter(satellite => 
+            satellite.company_id === currentCompany.id
+          );
+          console.log('フィルタリング後の拠点データ:', filteredSatellites);
+        }
+        
+        setSatellites(filteredSatellites);
       } else if (currentCompany && currentCompany.id) {
         // 指導員の場合は現在の企業に紐づいた拠点のみを取得
         console.log('現在の企業に紐づいた拠点を取得:', currentCompany.id);
@@ -102,11 +114,41 @@ const CompanySatelliteSwitchModal = ({
     }
   };
 
-  const handleCompanyConfirm = () => {
-    if (selectedCompany && onCompanySelect) {
-      onCompanySelect(selectedCompany);
-      onClose();
+  const handleCompanyConfirm = async () => {
+    if (selectedCompany) {
+      // 企業選択後、拠点選択ステップに進む
+      setLoading(true);
+      try {
+        const satellitesData = await getSatellitesByCompany(selectedCompany.id);
+        console.log('選択企業の拠点データ取得結果:', satellitesData);
+        
+        const satellitesArray = satellitesData.success ? satellitesData.data : satellitesData;
+        console.log('選択企業の拠点データ:', satellitesArray);
+        
+        setSatellites(Array.isArray(satellitesArray) ? satellitesArray : []);
+        
+        // 拠点選択ステップに移行
+        setCompanySelectionStep('selectSatellite');
+        
+        // 最初の拠点を自動選択
+        if (satellitesArray && satellitesArray.length > 0) {
+          setSelectedSatellite(satellitesArray[0]);
+        }
+      } catch (error) {
+        console.error('選択企業の拠点データ取得エラー:', error);
+        setSatellites([]);
+        alert('拠点データの取得に失敗しました');
+      } finally {
+        setLoading(false);
+      }
     }
+  };
+
+  // 企業選択時に拠点リストを更新
+  const handleCompanySelect = async (company) => {
+    setSelectedCompany(company);
+    setSelectedSatellite(null); // 企業が変更されたら拠点選択をリセット
+    console.log('企業選択:', company);
   };
 
   const handleSatelliteConfirm = async () => {
@@ -117,6 +159,30 @@ const CompanySatelliteSwitchModal = ({
         onClose();
       } catch (error) {
         console.error('拠点切り替えエラー:', error);
+        // エラーが発生した場合はモーダルを閉じない
+      }
+    }
+  };
+
+  // 企業と拠点を同時に切り替える機能
+  const handleCombinedConfirm = async () => {
+    if (selectedCompany && selectedSatellite) {
+      try {
+        console.log('企業・拠点同時切り替え処理開始:', { company: selectedCompany, satellite: selectedSatellite });
+        
+        // まず企業を切り替え
+        if (onCompanySelect) {
+          await onCompanySelect(selectedCompany);
+        }
+        
+        // 次に拠点を切り替え
+        if (onSatelliteSelect) {
+          await onSatelliteSelect(selectedSatellite);
+        }
+        
+        onClose();
+      } catch (error) {
+        console.error('企業・拠点同時切り替えエラー:', error);
         // エラーが発生した場合はモーダルを閉じない
       }
     }
@@ -162,7 +228,9 @@ const CompanySatelliteSwitchModal = ({
         <div className="flex border-b border-gray-200 mb-6">
           {canSwitchSatellite && (
             <button
-              onClick={() => setActiveTab('satellite')}
+              onClick={() => {
+                setActiveTab('satellite');
+              }}
               className={`px-4 py-2 font-medium transition-colors ${
                 activeTab === 'satellite'
                   ? 'text-indigo-600 border-b-2 border-indigo-600'
@@ -174,7 +242,9 @@ const CompanySatelliteSwitchModal = ({
           )}
           {canSwitchCompany && (
             <button
-              onClick={() => setActiveTab('company')}
+              onClick={() => {
+                setActiveTab('company');
+              }}
               className={`px-4 py-2 font-medium transition-colors ${
                 activeTab === 'company'
                   ? 'text-indigo-600 border-b-2 border-indigo-600'
@@ -271,15 +341,15 @@ const CompanySatelliteSwitchModal = ({
               </div>
             )}
 
-            {/* 企業切り替えタブ */}
-            {activeTab === 'company' && canSwitchCompany && (
+            {/* 企業切り替えタブ - 企業選択画面 */}
+            {activeTab === 'company' && canSwitchCompany && companySelectionStep === 'selectCompany' && (
               <div className="space-y-4">
                 <h3 className="font-medium text-gray-700">企業から選択</h3>
                 <div className="grid grid-cols-1 gap-3">
                   {(companies || []).map((company) => (
                     <button
                       key={company.id}
-                      onClick={() => setSelectedCompany(company)}
+                      onClick={() => handleCompanySelect(company)}
                       className={`w-full flex items-center p-4 rounded-lg transition-all duration-200 ${
                         selectedCompany?.id === company.id
                           ? 'bg-indigo-50 border-2 border-indigo-500'
@@ -299,6 +369,69 @@ const CompanySatelliteSwitchModal = ({
                           : 'border-gray-300'
                       }`}>
                         {selectedCompany?.id === company.id && (
+                          <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 企業切り替えタブ - 拠点選択画面 */}
+            {activeTab === 'company' && canSwitchCompany && companySelectionStep === 'selectSatellite' && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <button
+                    onClick={() => {
+                      setCompanySelectionStep('selectCompany');
+                      setSelectedSatellite(null);
+                    }}
+                    className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    戻る
+                  </button>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-blue-700">
+                    選択した企業: <span className="font-medium">{selectedCompany?.name}</span>
+                  </p>
+                </div>
+                <h3 className="font-medium text-gray-700">拠点を選択してください</h3>
+                <div className="grid grid-cols-1 gap-3">
+                  {(satellites || []).map((satellite) => (
+                    <button
+                      key={satellite.id}
+                      onClick={() => setSelectedSatellite(satellite)}
+                      className={`w-full flex items-center p-4 rounded-lg transition-all duration-200 ${
+                        selectedSatellite?.id === satellite.id
+                          ? 'bg-indigo-50 border-2 border-indigo-500'
+                          : 'bg-gray-50 border-2 border-transparent hover:border-indigo-200'
+                      }`}
+                    >
+                      <div className="flex-1 flex items-center gap-3">
+                        <span className="text-2xl">
+                          {satellite.office_type_name?.includes('学習塾') ? '📚' : 
+                           satellite.office_type_name?.includes('就労移行') ? '🏢' :
+                           satellite.office_type_name?.includes('A型') ? '🏭' :
+                           satellite.office_type_name?.includes('B型') ? '🏗️' : '🏫'}
+                        </span>
+                        <div className="text-left">
+                          <div className="font-medium text-gray-800">{satellite.name}</div>
+                          <div className="text-sm text-gray-600">{satellite.office_type_name}</div>
+                        </div>
+                      </div>
+                      <div className={`flex items-center justify-center w-6 h-6 rounded-full border-2 ml-4 ${
+                        selectedSatellite?.id === satellite.id
+                          ? 'border-indigo-500 bg-indigo-500'
+                          : 'border-gray-300'
+                      }`}>
+                        {selectedSatellite?.id === satellite.id && (
                           <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                           </svg>
@@ -347,17 +480,33 @@ const CompanySatelliteSwitchModal = ({
               </svg>
             </button>
           )}
-          {activeTab === 'company' && canSwitchCompany && (
+          {activeTab === 'company' && canSwitchCompany && companySelectionStep === 'selectCompany' && (
             <button
               onClick={handleCompanyConfirm}
-              disabled={!selectedCompany}
+              disabled={!selectedCompany || loading}
               className={`flex-1 py-3 px-4 font-medium rounded-lg transition-colors duration-200 flex items-center justify-center gap-2
-                ${selectedCompany
+                ${selectedCompany && !loading
                   ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
                   : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 }`}
             >
-              この企業で作業を開始する
+              {loading ? '拠点データを取得中...' : '次へ →'}
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+            </button>
+          )}
+          {activeTab === 'company' && canSwitchCompany && companySelectionStep === 'selectSatellite' && (
+            <button
+              onClick={handleCombinedConfirm}
+              disabled={!selectedCompany || !selectedSatellite}
+              className={`flex-1 py-3 px-4 font-medium rounded-lg transition-colors duration-200 flex items-center justify-center gap-2
+                ${selectedCompany && selectedSatellite
+                  ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                }`}
+            >
+              この企業・拠点で作業を開始する
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>

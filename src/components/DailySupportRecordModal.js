@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getUserHealthData, getUserWorkPlan, updateUserDailyReport } from '../utils/userInputApi';
+import { getSatelliteInstructors } from '../utils/api';
+import { getCurrentUser } from '../utils/userContext';
 
 /**
  * 日次支援記録モーダル
@@ -16,6 +19,8 @@ const DailySupportRecordModal = ({
   const [record, setRecord] = useState({
     startTime: '10:00',
     endTime: '16:00',
+    breakStartTime: '12:00',
+    breakEndTime: '13:00',
     supportMethod: '電話',
     supportMethodOther: '',
     workContent: '',
@@ -25,21 +30,115 @@ const DailySupportRecordModal = ({
     remarks: ''
   });
 
-  // サンプル支援員リスト
-  const sampleSupporters = [
-    '山田 太郎',
-    '佐藤 花子',
-    '鈴木 一郎',
-    '高橋 美咲',
-    '伊藤 健太',
-    '田中 由美',
-    '小林 正雄',
-    '中村 智子',
-    '松本 和也',
-    '森 恵子'
-  ];
+  const [healthData, setHealthData] = useState(null);
+  const [workPlan, setWorkPlan] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [instructors, setInstructors] = useState([]);
+  const [workNote, setWorkNote] = useState('');
+  const [aiSuggesting, setAiSuggesting] = useState(false);
+  const [aiSuggestingSupport, setAiSuggestingSupport] = useState(false);
+  const [aiSuggestingAdvice, setAiSuggestingAdvice] = useState(false);
+  const [supportPlan, setSupportPlan] = useState(null);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (isOpen && student) {
+      fetchUserData();
+      fetchInstructors();
+      fetchSupportPlan();
+    }
+  }, [isOpen, student, date]);
+
+  const fetchInstructors = async () => {
+    try {
+      const currentUser = getCurrentUser();
+      const satelliteId = currentUser?.satellite_id || currentUser?.location?.id;
+      
+      if (satelliteId) {
+        const response = await getSatelliteInstructors(satelliteId);
+        if (response.success && response.data) {
+          setInstructors(response.data);
+        }
+      }
+    } catch (error) {
+      console.error('指導員リスト取得エラー:', error);
+    }
+  };
+
+  const fetchSupportPlan = async () => {
+    try {
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 
+        (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
+          ? 'https://backend.studysphere.ayatori-inc.co.jp' 
+          : 'http://localhost:5050');
+      
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(`${API_BASE_URL}/api/support-plans/user/${student.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data) {
+          setSupportPlan(data.data);
+        }
+      }
+    } catch (error) {
+      console.error('個別計画書取得エラー:', error);
+    }
+  };
+
+  const fetchUserData = async () => {
+    if (!student) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const [healthResult, workResult] = await Promise.all([
+        getUserHealthData(student.id, date),
+        getUserWorkPlan(student.id, date)
+      ]);
+
+      if (healthResult.success) {
+        setHealthData(healthResult.data);
+        if (healthResult.data) {
+          setRecord(prev => ({
+            ...prev,
+            startTime: healthResult.data.mark_start ? new Date(healthResult.data.mark_start).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : prev.startTime,
+            endTime: healthResult.data.mark_end ? new Date(healthResult.data.mark_end).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : prev.endTime,
+            breakStartTime: healthResult.data.mark_lunch_start ? new Date(healthResult.data.mark_lunch_start).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : prev.breakStartTime,
+            breakEndTime: healthResult.data.mark_lunch_end ? new Date(healthResult.data.mark_lunch_end).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : prev.breakEndTime
+          }));
+        }
+      }
+
+      if (workResult.success) {
+        setWorkPlan(workResult.data);
+        if (workResult.data) {
+          setRecord(prev => ({
+            ...prev,
+            workContent: workResult.data.work_result || '',
+            supportContent: workResult.data.support_content || '',
+            healthStatus: workResult.data.advice || '',
+            supportMethod: workResult.data.support_method || prev.supportMethod,
+            supportMethodOther: workResult.data.support_method_note || '',
+            responder: workResult.data.recorder_name || '',
+            remarks: workResult.data.daily_report || ''
+          }));
+          setWorkNote(workResult.data.work_note || '');
+        }
+      }
+    } catch (error) {
+      console.error('データ取得エラー:', error);
+      setError('データの取得に失敗しました');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // 支援方法の選択肢
   const supportMethods = ['訪問', '電話', 'その他'];
@@ -52,31 +151,194 @@ const DailySupportRecordModal = ({
     }));
   };
 
-  // AI提案機能
-  const handleAIAssist = (field) => {
-    if (!aiAssist) return;
-    
-    const suggestion = aiAssist(field, {
-      student,
-      record,
-      date
-    });
-    
-    updateRecord(field, suggestion);
+  // AI提案機能（作業内容）
+  const handleAISuggestWork = async () => {
+    if (!workNote || workNote.trim() === '') {
+      alert('作業記録がありません。AI提案を生成できません。');
+      return;
+    }
+
+    setAiSuggesting(true);
+    try {
+      const token = localStorage.getItem('accessToken');
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 
+        (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
+          ? 'https://backend.studysphere.ayatori-inc.co.jp' 
+          : 'http://localhost:5050');
+
+      const response = await fetch(`${API_BASE_URL}/api/ai/suggest-work-content`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ work_note: workNote })
+      });
+
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+      if (data.success && data.suggestion) {
+        updateRecord('workContent', data.suggestion);
+        alert('AI提案を生成しました。');
+      }
+    } catch (error) {
+      console.error('AI提案エラー:', error);
+      alert(`AI提案の生成中にエラーが発生しました: ${error.message}`);
+    } finally {
+      setAiSuggesting(false);
+    }
+  };
+
+  // AI提案機能（支援内容）
+  const handleAISuggestSupport = async () => {
+    if (!record.startTime || !record.endTime || !record.supportMethod) {
+      alert('開始時刻、終了時刻、支援方法を入力してください。');
+      return;
+    }
+
+    setAiSuggestingSupport(true);
+    try {
+      const token = localStorage.getItem('accessToken');
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 
+        (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
+          ? 'https://backend.studysphere.ayatori-inc.co.jp' 
+          : 'http://localhost:5050');
+
+      const supportPlanText = supportPlan ? 
+        `【短期目標】${supportPlan.short_term_goal || '未設定'}\n【長期目標】${supportPlan.long_term_goal || '未設定'}\n【課題】${supportPlan.issues || '未設定'}` : 
+        '記録なし';
+
+      const response = await fetch(`${API_BASE_URL}/api/ai/suggest-support-content`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          start_time: record.startTime,
+          end_time: record.endTime,
+          support_method: record.supportMethod,
+          work_result: record.workContent || '',
+          daily_report: record.remarks || '',
+          support_plan: supportPlanText
+        })
+      });
+
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+      if (data.success && data.suggestion) {
+        updateRecord('supportContent', data.suggestion);
+        alert('支援内容のAI提案を生成しました。');
+      }
+    } catch (error) {
+      console.error('支援内容AI提案エラー:', error);
+      alert(`AI提案の生成中にエラーが発生しました: ${error.message}`);
+    } finally {
+      setAiSuggestingSupport(false);
+    }
+  };
+
+  // AI提案機能（心身の状況・助言）
+  const handleAISuggestAdvice = async () => {
+    if (!healthData?.condition || !record.remarks) {
+      alert('体調と日報を入力してください。');
+      return;
+    }
+
+    setAiSuggestingAdvice(true);
+    try {
+      const token = localStorage.getItem('accessToken');
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 
+        (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
+          ? 'https://backend.studysphere.ayatori-inc.co.jp' 
+          : 'http://localhost:5050');
+
+      const response = await fetch(`${API_BASE_URL}/api/ai/suggest-advice`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          temperature: healthData.temperature || '',
+          condition: healthData.condition,
+          sleep_hours: healthData.sleep_hours || '',
+          daily_report: record.remarks,
+          start_time: record.startTime,
+          end_time: record.endTime
+        })
+      });
+
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+      if (data.success && data.suggestion) {
+        updateRecord('healthStatus', data.suggestion);
+        alert('心身の状況・助言内容のAI提案を生成しました。');
+      }
+    } catch (error) {
+      console.error('心身の状況・助言内容AI提案エラー:', error);
+      alert(`AI提案の生成中にエラーが発生しました: ${error.message}`);
+    } finally {
+      setAiSuggestingAdvice(false);
+    }
   };
 
   // 保存
-  const handleSave = () => {
-    const data = {
-      studentId: student.id,
-      studentName: student.name,
-      recipientNumber: student.recipientNumber || '',
-      date,
-      ...record
-    };
-    
-    onSave(data);
+  const handleSave = async () => {
+    try {
+      // 日次記録IDを取得
+      let reportId = null;
+      
+      if (healthData && healthData.id) {
+        reportId = healthData.id;
+      } else if (workPlan && workPlan.id) {
+        reportId = workPlan.id;
+      }
+      
+      if (!reportId) {
+        alert('日次記録が見つかりません。データを再読み込みしてください。');
+        return;
+      }
+
+      // 時間フィールドをMySQL形式に変換するヘルパー関数
+      const convertTimeToMySQLDateTime = (timeStr) => {
+        if (!timeStr || timeStr.trim() === '') return null;
+        // date propは YYYY-MM-DD 形式で来るので、それと時間を結合
+        const dateTime = new Date(date + 'T' + timeStr + ':00');
+        return dateTime.toISOString().slice(0, 19).replace('T', ' ');
+      };
+
+      // データを送信
+      const result = await updateUserDailyReport(reportId, {
+        mark_start: record.startTime ? convertTimeToMySQLDateTime(record.startTime) : null,
+        mark_end: record.endTime ? convertTimeToMySQLDateTime(record.endTime) : null,
+        mark_lunch_start: record.breakStartTime ? convertTimeToMySQLDateTime(record.breakStartTime) : null,
+        mark_lunch_end: record.breakEndTime ? convertTimeToMySQLDateTime(record.breakEndTime) : null,
+        support_method: record.supportMethod,
+        support_method_note: record.supportMethodOther,
+        work_result: record.workContent,
+        support_content: record.supportContent,
+        advice: record.healthStatus,
+        recorder_name: record.responder,
+        daily_report: record.remarks
+      });
+      
+      if (result.success) {
+        alert('在宅就労支援記録を保存しました');
+        onClose();
+      } else {
+        alert(`保存に失敗しました: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('保存エラー:', error);
+      alert('保存中にエラーが発生しました');
+    }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -134,6 +396,32 @@ const DailySupportRecordModal = ({
                   </div>
                 </div>
 
+                {/* 昼休憩時間 */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      昼休憩開始
+                    </label>
+                    <input
+                      type="time"
+                      value={record.breakStartTime}
+                      onChange={(e) => updateRecord('breakStartTime', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      昼休憩終了
+                    </label>
+                    <input
+                      type="time"
+                      value={record.breakEndTime}
+                      onChange={(e) => updateRecord('breakEndTime', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
                 {/* 支援方法 */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -169,13 +457,14 @@ const DailySupportRecordModal = ({
 
             {/* 作業・訓練内容 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                作業・訓練内容 <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                <span>作業・訓練内容 <span className="text-red-500">*</span></span>
                 <button
-                  onClick={() => handleAIAssist('workContent')}
-                  className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200"
+                  onClick={handleAISuggestWork}
+                  disabled={aiSuggesting || !workNote}
+                  className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed transition-all duration-200"
                 >
-                  🤖 AI提案
+                  {aiSuggesting ? '🤖 生成中...' : '🤖 AI提案'}
                 </button>
               </label>
               <p className="text-xs text-gray-500 mb-2">実施した作業や訓練の内容を記録してください</p>
@@ -190,13 +479,14 @@ const DailySupportRecordModal = ({
 
             {/* 支援内容（1日2回以上） */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                支援内容（1日2回以上） <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                <span>支援内容（1日2回以上） <span className="text-red-500">*</span></span>
                 <button
-                  onClick={() => handleAIAssist('supportContent')}
-                  className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200"
+                  onClick={handleAISuggestSupport}
+                  disabled={aiSuggestingSupport || !record.startTime || !record.endTime || !record.supportMethod}
+                  className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed transition-all duration-200"
                 >
-                  🤖 AI提案
+                  {aiSuggestingSupport ? '🤖 生成中...' : '🤖 AI提案'}
                 </button>
               </label>
               <p className="text-xs text-gray-500 mb-2">
@@ -213,13 +503,14 @@ const DailySupportRecordModal = ({
 
             {/* 対象者の心身の状況及びそれに対する助言の内容 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                対象者の心身の状況及びそれに対する助言の内容 <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                <span>対象者の心身の状況及びそれに対する助言の内容 <span className="text-red-500">*</span></span>
                 <button
-                  onClick={() => handleAIAssist('healthStatus')}
-                  className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200"
+                  onClick={handleAISuggestAdvice}
+                  disabled={aiSuggestingAdvice || !healthData?.condition || !record.remarks}
+                  className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed transition-all duration-200"
                 >
-                  🤖 AI提案
+                  {aiSuggestingAdvice ? '🤖 生成中...' : '🤖 AI提案'}
                 </button>
               </label>
               <p className="text-xs text-gray-500 mb-2">時系列で体調確認と助言内容を記録してください</p>
@@ -237,18 +528,22 @@ const DailySupportRecordModal = ({
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 対応・記録者 <span className="text-red-500">*</span>
               </label>
-              <select
-                value={record.responder}
-                onChange={(e) => updateRecord('responder', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              >
-                <option value="">支援員を選択してください</option>
-                {sampleSupporters.map((supporter, index) => (
-                  <option key={index} value={supporter}>
-                    {supporter}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <input
+                  type="text"
+                  list="instructor-list"
+                  value={record.responder}
+                  onChange={(e) => updateRecord('responder', e.target.value)}
+                  placeholder="指導員リストから選択または手入力"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+                <datalist id="instructor-list">
+                  {instructors.map(instructor => (
+                    <option key={instructor.id} value={instructor.name} />
+                  ))}
+                </datalist>
+              </div>
+              <p className="mt-1 text-xs text-gray-500">指導員リストから選択、または直接入力できます</p>
             </div>
 
             {/* 備考 */}

@@ -19,7 +19,7 @@ import HomeSupportUserDetailPage from './pages/HomeSupportUserDetailPage';
 import DailyRecordsPage from './pages/DailyRecordsPage';
 import HomeSupportDailyRecordsPage from './pages/HomeSupportDailyRecordsPage';
 import HomeSupportEvaluationsPage from './pages/HomeSupportEvaluationsPage';
-import HomeSupportDashboard from './pages/HomeSupportDashboard';
+import HomeSupportDashboard from './pages/HomeSupportDashboard_new';
 import WeeklyEvaluationPage from './pages/WeeklyEvaluationPage';
 import MonthlyEvaluationPage from './pages/MonthlyEvaluationPage';
 import MonthlyEvaluationHistoryPage from './pages/MonthlyEvaluationHistoryPage';

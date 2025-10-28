@@ -565,7 +565,48 @@ const InstructorDashboard = () => {
 
             <button 
               className="flex items-center gap-3 px-6 py-4 bg-transparent border-none text-gray-800 cursor-pointer transition-all duration-300 text-center text-sm min-w-[150px] flex-shrink-0 rounded-lg hover:bg-indigo-50 hover:-translate-y-0.5"
-              onClick={() => navigate('/instructor/home-support')}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                console.log('在宅支援管理ボタンがクリックされました');
+                
+                try {
+                  // 現在の拠点情報をsessionStorageに保存してから遷移
+                  if (localUser) {
+                    const currentLocation = {
+                      id: localUser.satellite_id,
+                      name: localUser.satellite_name,
+                      company_id: localUser.company_id,
+                      company_name: localUser.company_name,
+                      type: localUser.location?.type || '就労移行支援事業所',
+                      organization: localUser.location?.organization || 'スタディスフィア株式会社'
+                    };
+                    sessionStorage.setItem('selectedSatellite', JSON.stringify(currentLocation));
+                    console.log('在宅支援ダッシュボード遷移前に拠点情報を保存:', currentLocation);
+                  } else {
+                    console.warn('localUserが設定されていません。在宅支援ダッシュボードに遷移します。');
+                  }
+                  
+                  console.log('在宅支援ダッシュボードに遷移します: /instructor/home-support');
+                  console.log('遷移前のURL:', window.location.href);
+                  
+                  // React Routerのnavigateを使用
+                  navigate('/instructor/home-support');
+                  console.log('navigate()を実行しました');
+                  
+                  // フォールバック: 1秒後にwindow.locationを使用
+                  setTimeout(() => {
+                    if (window.location.pathname !== '/instructor/home-support') {
+                      console.log('React Routerの遷移が失敗したため、window.locationを使用します');
+                      window.location.href = '/instructor/home-support';
+                    }
+                  }, 1000);
+                } catch (error) {
+                  console.error('在宅支援ダッシュボードへの遷移中にエラーが発生しました:', error);
+                  alert('在宅支援ダッシュボードへの遷移に失敗しました。ページをリロードして再試行してください。');
+                }
+              }}
             >
               🏠 在宅支援管理
             </button>

@@ -2,90 +2,320 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useInstructorGuard } from '../utils/hooks/useAuthGuard';
 import InstructorHeader from '../components/InstructorHeader';
+import { apiCall } from '../utils/api';
 
 const MonthlyEvaluationHistoryPage = () => {
   const { userId } = useParams();
   const navigate = useNavigate();
   const { currentUser } = useInstructorGuard();
+  const [localUser, setLocalUser] = useState(currentUser);
   
   const [selectedEvaluationId, setSelectedEvaluationId] = useState(null);
   const [evaluations, setEvaluations] = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editingEvaluation, setEditingEvaluation] = useState(null);
+  const [instructorList, setInstructorList] = useState([]);
 
-  // モックデータ（利用者情報）
-  const users = {
-    'tanaka': { id: 'tanaka', name: '田中 太郎', recipientNumber: '1234567890' },
-    'sato': { id: 'sato', name: '佐藤 花子', recipientNumber: '2345678901' },
-    'suzuki': { id: 'suzuki', name: '鈴木 一郎', recipientNumber: '3456789012' },
-    'takahashi': { id: 'takahashi', name: '高橋 美咲', recipientNumber: '4567890123' },
-    'ito': { id: 'ito', name: '伊藤 健太', recipientNumber: '5678901234' }
+  // 拠点情報を復元
+  useEffect(() => {
+    if (currentUser) {
+      const savedSatellite = sessionStorage.getItem('selectedSatellite');
+      if (savedSatellite) {
+        try {
+          const satellite = JSON.parse(savedSatellite);
+          setLocalUser({
+            ...currentUser,
+            satellite_id: satellite.id,
+            satellite_name: satellite.name,
+            company_id: satellite.company_id,
+            company_name: satellite.company_name
+          });
+        } catch (e) {
+          console.error('拠点情報のパースエラー:', e);
+          setLocalUser(currentUser);
+        }
+      } else {
+        setLocalUser(currentUser);
+      }
+    }
+  }, [currentUser]);
+
+  // 拠点変更ハンドラー
+  const handleLocationChange = (newLocation) => {
+    console.log('拠点情報が変更されました:', newLocation);
+    
+    // 拠点情報をsessionStorageに保存
+    sessionStorage.setItem('selectedSatellite', JSON.stringify(newLocation));
+    
+    // ユーザー情報を更新
+    const updatedUser = {
+      ...localUser,
+      satellite_id: newLocation.id,
+      satellite_name: newLocation.name,
+      company_id: newLocation.company_id,
+      company_name: newLocation.company_name
+    };
+    
+    setLocalUser(updatedUser);
+    
+    // 拠点切り替えイベントを発火
+    window.dispatchEvent(new CustomEvent('satelliteChanged', {
+      detail: { satellite: newLocation }
+    }));
   };
 
-  const selectedUser = users[userId];
+  // バックエンドデータをフロントエンド形式に変換
+  const convertBackendToFrontend = (data) => {
+    if (!data) return null;
+    
+    // 評価期間を計算（dateから1ヶ月前後）
+    const evalDate = new Date(data.date);
+    const startDate = new Date(evalDate.getFullYear(), evalDate.getMonth(), 1);
+    const endDate = new Date(evalDate.getFullYear(), evalDate.getMonth() + 1, 0);
+    
+    return {
+      id: data.id,
+      date: data.date,
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+      createdDate: data.created_at || data.date,
+      startTime: data.mark_start || '',
+      endTime: data.mark_end || '',
+      method: data.evaluation_method || '通所',
+      methodOther: data.method_other || '',
+      trainingGoal: data.goal || '',
+      workContent: data.effort || '',
+      achievement: data.achievement || '',
+      issues: data.issues || '',
+      improvementPlan: data.improvement || '',
+      healthNotes: data.health || '',
+      otherNotes: data.others || '',
+      continuityValidity: data.appropriateness || '',
+      evaluator: data.evaluator_name || '',
+      prevEvaluationDate: data.prev_evaluation_date || '',
+      recipientNumber: data.recipient_number || '',
+      userName: data.user_name || ''
+    };
+  };
 
-  // モックデータ（達成度評価履歴）
-  const mockEvaluations = [
-    {
-      id: 1,
-      startDate: '2025-01-01',
-      endDate: '2025-01-31',
-      createdDate: '2025-01-31',
-      status: 'completed',
-      
-      // MonthlyEvaluationPageと同じ項目
-      startTime: '09:00',
-      endTime: '16:00',
-      method: '通所',
-      methodOther: '',
-      trainingGoal: '新しい環境や就労のスタイルに慣れるを達成するため、具体的には以下を目標とします：\n・Webページ制作の基礎スキル（HTML/CSS/JavaScript）を習得する\n・学習時間の自己管理ができるようになる\n・規則正しい生活リズムを維持する',
-      workContent: '・HTML/CSSの基礎から応用まで段階的に学習\n・レスポンシブデザインの実践的な演習\n・JavaScriptの基礎学習と簡単なプログラム作成\n・毎日の学習時間の記録と振り返り',
-      achievement: '・HTML/CSSの基礎スキルは概ね習得できた\n・レスポンシブデザインの理解も深まり、簡単なWebページを作成できるようになった\n・JavaScriptは基礎に入ったばかりで、継続学習が必要\n・学習時間の自己管理は徐々にできるようになってきた\n・生活リズムは安定して維持できている',
-      issues: '・JavaScriptのプログラミング的思考にまだ慣れていない部分がある\n・複雑な課題に取り組む際、時間配分に課題が残る\n・天候による体調への影響について、引き続き注意が必要',
-      improvementPlan: '・来月はJavaScriptの学習を重点的に進め、実践的なプログラム作成に取り組む\n・課題解決のためのタイムマネジメントスキルの向上を図る\n・天候と体調の関係を記録し、予防的な対策を検討する\n・引き続き規則正しい生活リズムの維持を支援する',
-      healthNotes: '・体調は概ね良好で、安定した学習が継続できている\n・天候の変化による影響は見られるものの、適切に休憩を取ることで対応できている\n・生活リズムが安定しており、睡眠も十分に取れている',
-      otherNotes: '特になし',
-      continuityValidity: '個別支援計画に掲げた目標に対し、着実に進捗しています。新しい環境での学習スタイルにも適応し、自主的な学習姿勢が身についてきています。体調面も安定しており、在宅での就労訓練が効果的に機能していると判断できます。今後も継続的な支援により、さらなるスキルアップが期待できるため、在宅就労による支援を継続することが妥当であると判断します。',
-      evaluator: '山田 指導員',
-      studentSignature: '田中 太郎'
-    },
-    {
-      id: 2,
-      startDate: '2024-12-01',
-      endDate: '2024-12-31',
-      createdDate: '2024-12-31',
-      status: 'completed',
-      
-      startTime: '09:00',
-      endTime: '15:00',
-      method: '通所',
-      methodOther: '',
-      trainingGoal: '在宅での就労に向けた基礎的な準備として、以下を目標とします：\n・パソコンの基本操作を習得する\n・在宅作業環境を整備する\n・学習習慣を確立する',
-      workContent: '・パソコン基本操作の指導（Windows操作、タイピング練習）\n・在宅作業環境の整備支援\n・学習習慣の確立に向けた支援',
-      achievement: '・パソコン基本操作を習得できた\n・在宅作業環境を整備できた\n・タイピング練習を継続的に実施できた\n・毎日の学習習慣が確立されてきた',
-      issues: '・長時間作業への耐性がまだ不十分\n・自己管理能力の向上が必要',
-      improvementPlan: '・来月から本格的な学習カリキュラムを開始する\n・作業時間を段階的に増やしていく\n・自己管理スキルの向上を図る',
-      healthNotes: '・体調は良好\n・在宅作業に慣れるまで疲労感があったが、徐々に改善されている',
-      otherNotes: '特になし',
-      continuityValidity: '導入期として順調に進んでいます。基本的なスキルを習得し、在宅での学習スタイルにも適応できています。次期からの本格的な学習に向けて良い準備ができたため、在宅就労による支援を継続することが妥当であると判断します。',
-      evaluator: '山田 指導員',
-      studentSignature: '田中 太郎'
-    }
-  ];
+  // フロントエンドデータをバックエンド形式に変換
+  const convertFrontendToBackend = (data) => {
+    return {
+      date: data.date,
+      mark_start: data.startTime || null,
+      mark_end: data.endTime || null,
+      evaluation_method: data.method === 'その他' ? 'その他' : data.method,
+      method_other: data.method === 'その他' ? data.methodOther : null,
+      goal: data.trainingGoal || null,
+      effort: data.workContent || null,
+      achievement: data.achievement || null,
+      issues: data.issues || null,
+      improvement: data.improvementPlan || null,
+      health: data.healthNotes || null,
+      others: data.otherNotes || null,
+      appropriateness: data.continuityValidity || null,
+      evaluator_name: data.evaluator || null,
+      prev_evaluation_date: data.prevEvaluationDate || null,
+      recipient_number: selectedUser?.recipient_number || null,
+      user_name: selectedUser?.name || null
+    };
+  };
 
+  // 利用者情報を取得
   useEffect(() => {
-    // TODO: 実際のAPI呼び出しに置き換え
-    setEvaluations(mockEvaluations);
-    // 最新の評価を選択
-    if (mockEvaluations.length > 0) {
-      setSelectedEvaluationId(mockEvaluations[0].id);
+    const fetchUserInfo = async () => {
+      if (!userId) return;
+      
+      try {
+        const response = await apiCall(`/api/users/${userId}`, {
+          method: 'GET'
+        });
+        
+        if (response.success && response.data) {
+          setSelectedUser({
+            id: response.data.id,
+            name: response.data.name,
+            recipientNumber: response.data.recipient_number || '',
+            satellite_ids: response.data.satellite_ids || null
+          });
+        } else {
+          console.error('利用者情報の取得に失敗しました:', response.message);
+        }
+      } catch (error) {
+        console.error('利用者情報取得エラー:', error);
+      }
+    };
+
+    fetchUserInfo();
+  }, [userId]);
+
+  // 月次評価履歴を取得
+  useEffect(() => {
+    const fetchEvaluations = async () => {
+      if (!userId) return;
+      
+      try {
+        setIsLoading(true);
+        const response = await apiCall(`/api/monthly-evaluations/user/${userId}`, {
+          method: 'GET'
+        });
+        
+        if (response.success && response.data) {
+          const convertedEvaluations = response.data.map(convertBackendToFrontend);
+          setEvaluations(convertedEvaluations);
+          
+          // 最新の評価を選択
+          if (convertedEvaluations.length > 0) {
+            setSelectedEvaluationId(convertedEvaluations[0].id);
+          }
+        } else {
+          console.error('月次評価履歴の取得に失敗しました:', response.message);
+          setEvaluations([]);
+        }
+      } catch (error) {
+        console.error('月次評価履歴取得エラー:', error);
+        setEvaluations([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (userId) {
+      fetchEvaluations();
     }
-  }, []);
+  }, [userId]);
+
+  // 指導員リストを取得
+  useEffect(() => {
+    const fetchInstructors = async () => {
+      if (!selectedUser?.satellite_ids) return;
+      
+      try {
+        let satelliteIds = selectedUser.satellite_ids;
+        if (typeof satelliteIds === 'string') {
+          satelliteIds = JSON.parse(satelliteIds);
+        }
+        if (!Array.isArray(satelliteIds) || satelliteIds.length === 0) return;
+        
+        const satelliteId = satelliteIds[0]; // 最初の拠点を使用
+        const response = await apiCall(`/api/users/satellite/${satelliteId}/weekly-evaluation-instructors`, {
+          method: 'GET'
+        });
+        
+        if (response.success && response.data) {
+          setInstructorList(response.data);
+        }
+      } catch (error) {
+        console.error('指導員リスト取得エラー:', error);
+      }
+    };
+
+    if (selectedUser) {
+      fetchInstructors();
+    }
+  }, [selectedUser]);
 
   const selectedEvaluation = evaluations.find(e => e.id === selectedEvaluationId);
+
+  // 選択中の評価が変更された場合、編集モードを解除
+  useEffect(() => {
+    if (isEditing && selectedEvaluationId) {
+      setIsEditing(false);
+      setEditingEvaluation(null);
+    }
+  }, [selectedEvaluationId]);
+
+  // 編集開始
+  const handleEdit = () => {
+    if (selectedEvaluation) {
+      setEditingEvaluation({ ...selectedEvaluation });
+      setIsEditing(true);
+    }
+  };
+
+  // 編集キャンセル
+  const handleCancel = () => {
+    setIsEditing(false);
+    setEditingEvaluation(null);
+  };
+
+  // 保存処理
+  const handleSave = async () => {
+    if (!editingEvaluation || !selectedEvaluation) {
+      return;
+    }
+
+    if (!editingEvaluation.trainingGoal.trim() || !editingEvaluation.workContent.trim()) {
+      alert('訓練目標と取組内容は必須項目です。');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const backendData = convertFrontendToBackend(editingEvaluation);
+      const response = await apiCall(`/api/monthly-evaluations/${selectedEvaluation.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(backendData)
+      });
+
+      if (response.success) {
+        alert('月次評価を更新しました。');
+        setIsEditing(false);
+        setEditingEvaluation(null);
+        
+        // データを再取得
+        const refreshResponse = await apiCall(`/api/monthly-evaluations/user/${userId}`, {
+          method: 'GET'
+        });
+        
+        if (refreshResponse.success && refreshResponse.data) {
+          const convertedEvaluations = refreshResponse.data.map(convertBackendToFrontend);
+          setEvaluations(convertedEvaluations);
+          
+          // 更新した評価を選択
+          const updatedEval = convertedEvaluations.find(e => e.id === selectedEvaluation.id);
+          if (updatedEval) {
+            setSelectedEvaluationId(updatedEval.id);
+          }
+        }
+      } else {
+        alert('保存に失敗しました: ' + (response.message || 'エラーが発生しました'));
+      }
+    } catch (error) {
+      console.error('保存エラー:', error);
+      alert('保存中にエラーが発生しました: ' + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // フィールド更新
+  const updateEditingField = (field, value) => {
+    if (editingEvaluation) {
+      setEditingEvaluation({
+        ...editingEvaluation,
+        [field]: value
+      });
+    }
+  };
 
   // 印刷処理
   const handlePrint = () => {
     window.print();
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-xl text-gray-600">読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!selectedUser) {
     return (
@@ -108,10 +338,23 @@ const MonthlyEvaluationHistoryPage = () => {
       {/* ヘッダー（印刷時は非表示） */}
       <div className="print:hidden">
         <InstructorHeader 
-          user={currentUser} 
+          user={localUser || currentUser} 
+          onLocationChange={handleLocationChange}
           showBackButton={true}
           backButtonText="在宅支援ダッシュボードに戻る"
-          onBackClick={() => navigate('/instructor/home-support')}
+          onBackClick={() => {
+            // 戻る前に現在の拠点情報を保存
+            if (localUser) {
+              const currentLocation = {
+                id: localUser.satellite_id,
+                name: localUser.satellite_name,
+                company_id: localUser.company_id,
+                company_name: localUser.company_name
+              };
+              sessionStorage.setItem('selectedSatellite', JSON.stringify(currentLocation));
+            }
+            navigate('/instructor/home-support');
+          }}
         />
       </div>
 
@@ -135,12 +378,22 @@ const MonthlyEvaluationHistoryPage = () => {
                   <p className="text-sm text-gray-600">受給者証番号: {selectedUser.recipientNumber}</p>
                 </div>
               </div>
-              <button 
-                onClick={handlePrint}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-              >
-                🖨️ 印刷
-              </button>
+              <div className="flex gap-2">
+                {!isEditing && selectedEvaluation && (
+                  <button 
+                    onClick={handleEdit}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  >
+                    ✏️ 編集
+                  </button>
+                )}
+                <button 
+                  onClick={handlePrint}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                >
+                  🖨️ 印刷
+                </button>
+              </div>
             </div>
           </div>
 
@@ -214,22 +467,68 @@ const MonthlyEvaluationHistoryPage = () => {
         {/* 評価内容 */}
         {selectedEvaluation ? (
           <div className="bg-white rounded-2xl shadow-xl p-8 print:shadow-none print:rounded-none">
+            {isEditing && (
+              <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-400 rounded-lg print:hidden">
+                <div className="flex items-center justify-between">
+                  <p className="text-yellow-800 font-semibold">📝 編集モード</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isSaving ? '💾 保存中...' : '💾 保存'}
+                    </button>
+                    <button
+                      onClick={handleCancel}
+                      disabled={isSaving}
+                      className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      キャンセル
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="space-y-6 print:break-inside-avoid">
               {/* 1. 実施時間 */}
               <section className="border-b-2 border-gray-200 pb-6 print:break-inside-avoid">
                 <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                   <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-lg">実施時間</span>
                 </h3>
-                <div className="grid grid-cols-2 gap-4 bg-gray-50 rounded-lg p-4">
-                  <div>
-                    <div className="text-sm text-gray-600 mb-1">開始時間</div>
-                    <div className="text-xl font-bold text-blue-600">{selectedEvaluation.startTime}</div>
+                {isEditing ? (
+                  <div className="grid grid-cols-2 gap-4 bg-gray-50 rounded-lg p-4">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">開始時間</label>
+                      <input
+                        type="time"
+                        value={editingEvaluation?.startTime || ''}
+                        onChange={(e) => updateEditingField('startTime', e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">終了時間</label>
+                      <input
+                        type="time"
+                        value={editingEvaluation?.endTime || ''}
+                        onChange={(e) => updateEditingField('endTime', e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-sm text-gray-600 mb-1">終了時間</div>
-                    <div className="text-xl font-bold text-blue-600">{selectedEvaluation.endTime}</div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4 bg-gray-50 rounded-lg p-4">
+                    <div>
+                      <div className="text-sm text-gray-600 mb-1">開始時間</div>
+                      <div className="text-xl font-bold text-blue-600">{selectedEvaluation.startTime || '未設定'}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600 mb-1">終了時間</div>
+                      <div className="text-xl font-bold text-blue-600">{selectedEvaluation.endTime || '未設定'}</div>
+                    </div>
                   </div>
-                </div>
+                )}
               </section>
 
               {/* 2. 実施方法 */}
@@ -237,32 +536,101 @@ const MonthlyEvaluationHistoryPage = () => {
                 <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                   <span className="bg-green-100 text-green-800 px-3 py-1 rounded-lg">実施方法</span>
                 </h3>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <span className="inline-block px-4 py-2 bg-white border-2 border-green-500 rounded-lg font-semibold text-gray-800">
-                    {selectedEvaluation.method}
-                    {selectedEvaluation.method === 'その他' && selectedEvaluation.methodOther && ` (${selectedEvaluation.methodOther})`}
-                  </span>
-                </div>
+                {isEditing ? (
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex gap-4 mb-2">
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="method"
+                          value="通所"
+                          checked={editingEvaluation?.method === '通所'}
+                          onChange={(e) => updateEditingField('method', e.target.value)}
+                          className="mr-2"
+                        />
+                        通所
+                      </label>
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="method"
+                          value="訪問"
+                          checked={editingEvaluation?.method === '訪問'}
+                          onChange={(e) => updateEditingField('method', e.target.value)}
+                          className="mr-2"
+                        />
+                        訪問
+                      </label>
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="method"
+                          value="その他"
+                          checked={editingEvaluation?.method === 'その他'}
+                          onChange={(e) => updateEditingField('method', e.target.value)}
+                          className="mr-2"
+                        />
+                        その他
+                      </label>
+                    </div>
+                    {editingEvaluation?.method === 'その他' && (
+                      <input
+                        type="text"
+                        value={editingEvaluation?.methodOther || ''}
+                        onChange={(e) => updateEditingField('methodOther', e.target.value)}
+                        placeholder="実施方法を入力"
+                        className="mt-2 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <span className="inline-block px-4 py-2 bg-white border-2 border-green-500 rounded-lg font-semibold text-gray-800">
+                      {selectedEvaluation.method}
+                      {selectedEvaluation.method === 'その他' && selectedEvaluation.methodOther && ` (${selectedEvaluation.methodOther})`}
+                    </span>
+                  </div>
+                )}
               </section>
 
               {/* 3. 訓練目標 */}
               <section className="border-b-2 border-gray-200 pb-6 print:break-inside-avoid">
                 <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-lg">訓練目標</span>
+                  <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-lg">訓練目標 *</span>
                 </h3>
-                <div className="bg-gray-50 rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
-                  {selectedEvaluation.trainingGoal}
-                </div>
+                {isEditing ? (
+                  <textarea
+                    value={editingEvaluation?.trainingGoal || ''}
+                    onChange={(e) => updateEditingField('trainingGoal', e.target.value)}
+                    rows={5}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 resize-none"
+                    placeholder="訓練目標を入力"
+                  />
+                ) : (
+                  <div className="bg-gray-50 rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
+                    {selectedEvaluation.trainingGoal || '未入力'}
+                  </div>
+                )}
               </section>
 
               {/* 4. 取組内容 */}
               <section className="border-b-2 border-gray-200 pb-6 print:break-inside-avoid">
                 <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-lg">取組内容</span>
+                  <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-lg">取組内容 *</span>
                 </h3>
-                <div className="bg-gray-50 rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
-                  {selectedEvaluation.workContent}
-                </div>
+                {isEditing ? (
+                  <textarea
+                    value={editingEvaluation?.workContent || ''}
+                    onChange={(e) => updateEditingField('workContent', e.target.value)}
+                    rows={5}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 resize-none"
+                    placeholder="取組内容を入力"
+                  />
+                ) : (
+                  <div className="bg-gray-50 rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
+                    {selectedEvaluation.workContent || '未入力'}
+                  </div>
+                )}
               </section>
 
               {/* 5. 訓練目標に対する達成度 */}
@@ -270,9 +638,19 @@ const MonthlyEvaluationHistoryPage = () => {
                 <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                   <span className="bg-pink-100 text-pink-800 px-3 py-1 rounded-lg">訓練目標に対する達成度</span>
                 </h3>
-                <div className="bg-gray-50 rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
-                  {selectedEvaluation.achievement}
-                </div>
+                {isEditing ? (
+                  <textarea
+                    value={editingEvaluation?.achievement || ''}
+                    onChange={(e) => updateEditingField('achievement', e.target.value)}
+                    rows={5}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 resize-none"
+                    placeholder="達成度を入力"
+                  />
+                ) : (
+                  <div className="bg-gray-50 rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
+                    {selectedEvaluation.achievement || '未入力'}
+                  </div>
+                )}
               </section>
 
               {/* 6. 課題 */}
@@ -280,9 +658,19 @@ const MonthlyEvaluationHistoryPage = () => {
                 <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                   <span className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-lg">課題</span>
                 </h3>
-                <div className="bg-gray-50 rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
-                  {selectedEvaluation.issues}
-                </div>
+                {isEditing ? (
+                  <textarea
+                    value={editingEvaluation?.issues || ''}
+                    onChange={(e) => updateEditingField('issues', e.target.value)}
+                    rows={5}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-none"
+                    placeholder="課題を入力"
+                  />
+                ) : (
+                  <div className="bg-gray-50 rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
+                    {selectedEvaluation.issues || '未入力'}
+                  </div>
+                )}
               </section>
 
               {/* 7. 今後における課題の改善方針 */}
@@ -290,9 +678,19 @@ const MonthlyEvaluationHistoryPage = () => {
                 <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                   <span className="bg-teal-100 text-teal-800 px-3 py-1 rounded-lg">今後における課題の改善方針</span>
                 </h3>
-                <div className="bg-gray-50 rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
-                  {selectedEvaluation.improvementPlan}
-                </div>
+                {isEditing ? (
+                  <textarea
+                    value={editingEvaluation?.improvementPlan || ''}
+                    onChange={(e) => updateEditingField('improvementPlan', e.target.value)}
+                    rows={5}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 resize-none"
+                    placeholder="改善方針を入力"
+                  />
+                ) : (
+                  <div className="bg-gray-50 rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
+                    {selectedEvaluation.improvementPlan || '未入力'}
+                  </div>
+                )}
               </section>
 
               {/* 8. 健康・体調面での留意事項 */}
@@ -300,9 +698,19 @@ const MonthlyEvaluationHistoryPage = () => {
                 <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                   <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-lg">健康・体調面での留意事項</span>
                 </h3>
-                <div className="bg-gray-50 rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
-                  {selectedEvaluation.healthNotes}
-                </div>
+                {isEditing ? (
+                  <textarea
+                    value={editingEvaluation?.healthNotes || ''}
+                    onChange={(e) => updateEditingField('healthNotes', e.target.value)}
+                    rows={5}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 resize-none"
+                    placeholder="健康・体調面での留意事項を入力"
+                  />
+                ) : (
+                  <div className="bg-gray-50 rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
+                    {selectedEvaluation.healthNotes || '未入力'}
+                  </div>
+                )}
               </section>
 
               {/* 9. その他特記事項 */}
@@ -310,9 +718,19 @@ const MonthlyEvaluationHistoryPage = () => {
                 <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                   <span className="bg-gray-100 text-gray-800 px-3 py-1 rounded-lg">その他特記事項</span>
                 </h3>
-                <div className="bg-gray-50 rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
-                  {selectedEvaluation.otherNotes || '特になし'}
-                </div>
+                {isEditing ? (
+                  <textarea
+                    value={editingEvaluation?.otherNotes || ''}
+                    onChange={(e) => updateEditingField('otherNotes', e.target.value)}
+                    rows={5}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 resize-none"
+                    placeholder="特記事項を入力"
+                  />
+                ) : (
+                  <div className="bg-gray-50 rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
+                    {selectedEvaluation.otherNotes || '特になし'}
+                  </div>
+                )}
               </section>
 
               {/* 10. 在宅就労継続の妥当性 */}
@@ -320,9 +738,19 @@ const MonthlyEvaluationHistoryPage = () => {
                 <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                   <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-lg">在宅就労継続の妥当性</span>
                 </h3>
-                <div className="bg-amber-50 border-l-4 border-amber-400 rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
-                  {selectedEvaluation.continuityValidity}
-                </div>
+                {isEditing ? (
+                  <textarea
+                    value={editingEvaluation?.continuityValidity || ''}
+                    onChange={(e) => updateEditingField('continuityValidity', e.target.value)}
+                    rows={5}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 resize-none bg-amber-50"
+                    placeholder="在宅就労継続の妥当性を入力"
+                  />
+                ) : (
+                  <div className="bg-amber-50 border-l-4 border-amber-400 rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
+                    {selectedEvaluation.continuityValidity || '未入力'}
+                  </div>
+                )}
               </section>
 
               {/* 担当者情報 */}
@@ -330,11 +758,40 @@ const MonthlyEvaluationHistoryPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 rounded-lg p-4">
                   <div>
                     <div className="text-sm text-gray-600 mb-1">評価作成日</div>
-                    <div className="font-semibold text-gray-800">{new Date(selectedEvaluation.createdDate).toLocaleDateString('ja-JP')}</div>
+                    {isEditing ? (
+                      <input
+                        type="date"
+                        value={editingEvaluation?.date || ''}
+                        onChange={(e) => updateEditingField('date', e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                    ) : (
+                      <div className="font-semibold text-gray-800">
+                        {selectedEvaluation.date ? new Date(selectedEvaluation.date).toLocaleDateString('ja-JP') : new Date(selectedEvaluation.createdDate).toLocaleDateString('ja-JP')}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <div className="text-sm text-gray-600 mb-1">評価実施者</div>
-                    <div className="font-semibold text-gray-800">{selectedEvaluation.evaluator}</div>
+                    {isEditing ? (
+                      <select
+                        value={editingEvaluation?.evaluator || ''}
+                        onChange={(e) => updateEditingField('evaluator', e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      >
+                        {instructorList.length > 0 ? (
+                          instructorList.map(instructor => (
+                            <option key={instructor.id || instructor.name} value={instructor.name}>
+                              {instructor.name}
+                            </option>
+                          ))
+                        ) : (
+                          <option value="">指導員が見つかりません</option>
+                        )}
+                      </select>
+                    ) : (
+                      <div className="font-semibold text-gray-800">{selectedEvaluation.evaluator || '未設定'}</div>
+                    )}
                   </div>
                 </div>
               </section>

@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import WeeklyEvaluationModal from '../components/WeeklyEvaluationModal';
+import { useInstructorGuard } from '../utils/hooks/useAuthGuard';
+
+// API設定
+const API_BASE_URL = process.env.REACT_APP_API_URL || 
+  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
+    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
+    : 'http://localhost:5050');
 
 /**
  * 評価(週次)作成画面
@@ -11,6 +17,29 @@ const WeeklyEvaluationPage = () => {
   const navigate = useNavigate();
   const { studentId } = useParams();
   const [searchParams] = useSearchParams();
+  const { currentUser } = useInstructorGuard();
+  
+  // 戻る際に拠点情報を保存する関数
+  const saveLocationAndNavigate = () => {
+    if (currentUser) {
+      const savedSatellite = sessionStorage.getItem('selectedSatellite');
+      if (savedSatellite) {
+        // 既存の拠点情報をそのまま保持
+        const satellite = JSON.parse(savedSatellite);
+        sessionStorage.setItem('selectedSatellite', JSON.stringify(satellite));
+      } else if (currentUser.satellite_id) {
+        // ユーザー情報から拠点情報を保存
+        const currentLocation = {
+          id: currentUser.satellite_id,
+          name: currentUser.satellite_name,
+          company_id: currentUser.company_id,
+          company_name: currentUser.company_name
+        };
+        sessionStorage.setItem('selectedSatellite', JSON.stringify(currentLocation));
+      }
+    }
+    navigate('/instructor/home-support');
+  };
   
   // 期間の状態管理
   const [periodStart, setPeriodStart] = useState('');
@@ -39,18 +68,14 @@ const WeeklyEvaluationPage = () => {
   const [instructors, setInstructors] = useState([]);
 
   useEffect(() => {
-    // 指導員リストを取得（モックデータ）
-    setInstructors([
-      { id: 'inst001', name: '佐藤指導員' },
-      { id: 'inst002', name: '田中指導員' },
-      { id: 'inst003', name: '山田指導員' },
-      { id: 'inst004', name: '鈴木指導員' },
-      { id: 'inst005', name: '高橋指導員' }
-    ]);
-  }, []);
+    // 生徒情報と前回評価日を取得
+    if (studentId) {
+      fetchStudentInfo();
+    }
+  }, [studentId]);
 
   useEffect(() => {
-    // URLパラメータから期間を取得、なければ今週を設定
+    // URLパラメータから期間を取得、なければ昨日の1週間前～昨日を設定
     const start = searchParams.get('start');
     const end = searchParams.get('end');
     
@@ -58,82 +83,173 @@ const WeeklyEvaluationPage = () => {
       setPeriodStart(start);
       setPeriodEnd(end);
     } else {
-      // 今週の期間を自動設定
+      // 昨日の1週間前～昨日の期間を自動設定
       const today = new Date();
-      const dayOfWeek = today.getDay();
-      const monday = new Date(today);
-      monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+      const weekAgo = new Date(yesterday);
+      weekAgo.setDate(yesterday.getDate() - 6); // 7日前（1週間前）
       
-      setPeriodStart(monday.toISOString().split('T')[0]);
-      setPeriodEnd(sunday.toISOString().split('T')[0]);
+      setPeriodStart(weekAgo.toISOString().split('T')[0]);
+      setPeriodEnd(yesterday.toISOString().split('T')[0]);
     }
 
-    // 生徒情報を取得（モックデータ）
-    setStudent({
-      id: studentId || 'student001',
-      name: '田中 太郎',
-      recipientNumber: '1234567890',
-      instructorName: '佐藤指導員'
-    });
-
-    // 前回評価日を設定（仮）
-    const prevDate = new Date();
-    prevDate.setDate(prevDate.getDate() - 7);
-    setPrevEvalDate(prevDate.toISOString().split('T')[0]);
+    // 生徒情報と前回評価日は別途取得
   }, [studentId, searchParams]);
 
   useEffect(() => {
-    if (periodStart && periodEnd) {
+    if (periodStart && periodEnd && studentId) {
       fetchDailyRecords();
     }
-  }, [periodStart, periodEnd]);
+  }, [periodStart, periodEnd, studentId]);
 
-  // 日次記録を取得
-  const fetchDailyRecords = () => {
-    // モックデータ
-    const mockRecords = [
-      {
-        id: 'daily001',
-        date: periodStart,
-        startTime: '10:00',
-        endTime: '16:00',
-        supportMethod: '電話',
-        workContent: '・ITリテラシー・AIの基本の学習を実施\n・HTML/CSS基礎学習とレスポンシブデザイン実習',
-        supportContent: '・9:00 利用者から作業開始の連絡\n・12:00 午前中の進捗確認\n・15:00 午後の学習内容について助言\n・16:00 本日の成果確認',
-        healthStatus: '・9:00 体温36.2℃、体調良好\n・16:00 軽い疲労感あり、適度な休憩を推奨',
-        responder: '佐藤指導員'
-      },
-      {
-        id: 'daily002',
-        date: addDays(periodStart, 1),
-        startTime: '10:00',
-        endTime: '16:00',
-        supportMethod: '電話',
-        workContent: '・CSSレイアウトの応用学習\n・レスポンシブデザインの実践',
-        supportContent: '・9:00 作業開始確認、本日の目標設定\n・12:00 進捗確認、午前の成果を評価\n・16:00 終了確認、次回の予定を確認',
-        healthStatus: '・9:00 体温36.3℃、睡眠良好\n・16:00 集中できた様子、体調も安定',
-        responder: '佐藤指導員'
+  // 生徒情報と前回評価日を取得
+  const fetchStudentInfo = async () => {
+    try {
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      if (!token) {
+        console.error('認証トークンが見つかりません');
+        return;
       }
-    ];
-    
-    setDailyRecords(mockRecords);
-    
-    // デフォルトで最初のレコードを展開
-    if (mockRecords.length > 0) {
-      setExpandedRecords({ [mockRecords[0].id]: true });
+      const response = await fetch(`${API_BASE_URL}/api/users/${studentId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          console.error('生徒情報取得エラー:', errorData.message || 'エラーが発生しました');
+        } else {
+          const text = await response.text();
+          console.error('生徒情報取得エラー: HTMLレスポンスが返されました', response.status, text.substring(0, 100));
+        }
+        return;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('生徒情報取得エラー: JSONではないレスポンス', text.substring(0, 100));
+        return;
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        setStudent(data.data);
+      }
+
+      // 前回評価日を取得
+      const prevEvalResponse = await fetch(`${API_BASE_URL}/api/weekly-evaluations/user/${studentId}/last-evaluation-date`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (prevEvalResponse.ok) {
+        const prevEvalContentType = prevEvalResponse.headers.get('content-type');
+        if (prevEvalContentType && prevEvalContentType.includes('application/json')) {
+          const prevEvalData = await prevEvalResponse.json();
+          if (prevEvalData.success && prevEvalData.data?.last_evaluation_date) {
+            setPrevEvalDate(prevEvalData.data.last_evaluation_date);
+          } else {
+            setPrevEvalDate(''); // 前回評価日がない場合は空文字列
+          }
+        }
+      } else {
+        setPrevEvalDate(''); // エラーの場合も空文字列
+      }
+    } catch (error) {
+      console.error('生徒情報取得エラー:', error);
     }
   };
 
-  // 日付に日数を追加
-  const addDays = (dateStr, days) => {
-    const date = new Date(dateStr);
-    date.setDate(date.getDate() + days);
-    return date.toISOString().split('T')[0];
+  // 日次記録を取得
+  const fetchDailyRecords = async () => {
+    if (!studentId || !periodStart || !periodEnd) {
+      console.log('●▶日次記録取得スキップ: 必要なパラメータが不足しています', { studentId, periodStart, periodEnd });
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      if (!token) {
+        console.error('●▶日次記録取得エラー: 認証トークンが見つかりません');
+        setDailyRecords([]);
+        return;
+      }
+
+      const url = `${API_BASE_URL}/api/remote-support/daily-records?userId=${studentId}&startDate=${periodStart}&endDate=${periodEnd}`;
+      console.log('●▶日次記録取得開始:', url);
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          console.error('●▶日次記録取得エラー:', errorData.message || 'エラーが発生しました', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorData
+          });
+        } else {
+          const text = await response.text();
+          console.error('●▶日次記録取得エラー: HTMLレスポンスが返されました', {
+            status: response.status,
+            statusText: response.statusText,
+            preview: text.substring(0, 100)
+          });
+        }
+        // エラー時は空配列を設定
+        setDailyRecords([]);
+        return;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('●▶日次記録取得エラー: JSONではないレスポンス', {
+          contentType,
+          preview: text.substring(0, 100)
+        });
+        setDailyRecords([]);
+        return;
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        console.log('●▶日次記録取得成功:', data.data?.length || 0, '件');
+        setDailyRecords(data.data || []);
+      } else {
+        console.error('●▶日次記録取得エラー:', data.message || 'データ取得に失敗しました', data);
+        setDailyRecords([]);
+      }
+    } catch (error) {
+      console.error('●▶日次記録取得エラー:', error.message, error);
+      // エラー時は空配列を設定
+      setDailyRecords([]);
+    }
   };
 
-  // レコードの展開/折りたたみ
+  // 評価データを更新
+  const updateEvaluation = (field, value) => {
+    setEvaluationData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // 記録の展開/折りたたみ
   const toggleRecord = (recordId) => {
     setExpandedRecords(prev => ({
       ...prev,
@@ -141,21 +257,13 @@ const WeeklyEvaluationPage = () => {
     }));
   };
 
-  // 全て展開/折りたたみ
+  // 全ての記録を展開/折りたたみ
   const toggleAllRecords = (expand) => {
-    const newState = {};
+    const newExpandedRecords = {};
     dailyRecords.forEach(record => {
-      newState[record.id] = expand;
+      newExpandedRecords[record.id] = expand;
     });
-    setExpandedRecords(newState);
-  };
-
-  // フォーム更新
-  const updateEvaluation = (field, value) => {
-    setEvaluationData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setExpandedRecords(newExpandedRecords);
   };
 
   // AIで評価案を生成
@@ -177,20 +285,48 @@ const WeeklyEvaluationPage = () => {
   };
 
   // 保存
-  const handleSave = () => {
-    const data = {
-      studentId: student.id,
-      studentName: student.name,
-      periodStart,
-      periodEnd,
-      prevEvalDate,
-      evalDate: new Date().toISOString().split('T')[0],
-      ...evaluationData
-    };
-    
-    console.log('評価(週次)を保存:', data);
-    alert('評価(週次)を保存しました。');
-    navigate('/instructor/dashboard?tab=home-support');
+  const handleSave = async () => {
+    try {
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      if (!token) {
+        alert('認証トークンが見つかりません。ログインし直してください。');
+        return;
+      }
+      const response = await fetch(`${API_BASE_URL}/api/weekly-evaluations`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          user_id: student.id,
+          date: new Date().toISOString().split('T')[0],
+          prev_eval_date: prevEvalDate,
+          period_start: periodStart,
+          period_end: periodEnd,
+          evaluation_method: evaluationData.method === 'その他' ? evaluationData.methodOther : evaluationData.method,
+          method_other: evaluationData.method === 'その他' ? evaluationData.methodOther : null,
+          evaluation_content: evaluationData.content,
+          recorder_name: evaluationData.recorder,
+          confirm_name: evaluationData.confirmer
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          alert('評価(週次)を保存しました。');
+          saveLocationAndNavigate();
+        } else {
+          alert('保存に失敗しました: ' + data.message);
+        }
+      } else {
+        alert('保存に失敗しました。');
+      }
+    } catch (error) {
+      console.error('保存エラー:', error);
+      alert('保存中にエラーが発生しました。');
+    }
   };
 
   // 日付フォーマット
@@ -221,9 +357,9 @@ const WeeklyEvaluationPage = () => {
             <div className="flex items-center gap-4">
               <button 
                 className="px-4 py-2 bg-white bg-opacity-10 border border-white border-opacity-30 rounded-lg hover:bg-opacity-20 transition-all duration-200 font-medium"
-                onClick={() => navigate('/instructor/dashboard?tab=home-support')}
+                onClick={saveLocationAndNavigate}
               >
-                ← 在宅支援管理に戻る
+                ← 在宅支援管理ダッシュボードに戻る
               </button>
               <div>
                 <h1 className="text-3xl font-bold mb-1">📊 評価(週次)作成</h1>
@@ -244,7 +380,7 @@ const WeeklyEvaluationPage = () => {
                 </div>
                 <div className="text-sm">
                   <span className="text-blue-200">前回評価日:</span>
-                  <span className="ml-2 font-semibold text-white">{formatDate(prevEvalDate)}</span>
+                  <span className="ml-2 font-semibold text-white">{prevEvalDate ? formatDate(prevEvalDate) : 'なし'}</span>
                 </div>
               </div>
               <div>
@@ -262,18 +398,16 @@ const WeeklyEvaluationPage = () => {
                         newEnd.setDate(newStart.getDate() + 6);
                         setPeriodEnd(newEnd.toISOString().split('T')[0]);
                       }}
-                      className="w-full px-3 py-2 bg-white bg-opacity-90 text-gray-800 rounded-lg border-2 border-blue-300 focus:ring-2 focus:ring-white focus:border-white font-semibold"
+                      className="w-full px-3 py-2 bg-white bg-opacity-20 border border-white border-opacity-30 rounded-lg text-white placeholder-blue-200 focus:ring-2 focus:ring-white focus:border-transparent"
                     />
-                    <p className="text-xs text-blue-100 mt-1">開始日</p>
                   </div>
                   <div>
                     <input
                       type="date"
                       value={periodEnd}
                       onChange={(e) => setPeriodEnd(e.target.value)}
-                      className="w-full px-3 py-2 bg-white bg-opacity-90 text-gray-800 rounded-lg border-2 border-blue-300 focus:ring-2 focus:ring-white focus:border-white font-semibold"
+                      className="w-full px-3 py-2 bg-white bg-opacity-20 border border-white border-opacity-30 rounded-lg text-white placeholder-blue-200 focus:ring-2 focus:ring-white focus:border-transparent"
                     />
-                    <p className="text-xs text-blue-100 mt-1">終了日</p>
                   </div>
                 </div>
               </div>
@@ -283,249 +417,244 @@ const WeeklyEvaluationPage = () => {
       </div>
 
       {/* メインコンテンツ */}
-      <div className="max-w-full mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* 左側：日次記録一覧 */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100 sticky top-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-800">📝 今週の日次記録</h2>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => toggleAllRecords(true)}
-                    className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-all duration-200"
-                  >
-                    全て展開
-                  </button>
-                  <button
-                    onClick={() => toggleAllRecords(false)}
-                    className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-all duration-200"
-                  >
-                    全て折りたたむ
-                  </button>
-                </div>
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-800">📝 今週の日次記録</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => toggleAllRecords(true)}
+                  className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-all duration-200"
+                >
+                  全て展開
+                </button>
+                <button
+                  onClick={() => toggleAllRecords(false)}
+                  className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-all duration-200"
+                >
+                  全て折りたたむ
+                </button>
               </div>
+            </div>
 
-              <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto">
-                {dailyRecords.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    この期間の日次記録がありません
-                  </div>
-                ) : (
-                  dailyRecords.map((record) => (
-                    <div key={record.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                      <button
-                        onClick={() => toggleRecord(record.id)}
-                        className="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-all duration-200 flex items-center justify-between"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg">
-                            {expandedRecords[record.id] ? '📂' : '📁'}
-                          </span>
-                          <div className="text-left">
-                            <div className="font-semibold text-gray-800">
-                              {formatDate(record.date)}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {record.startTime} 〜 {record.endTime} ({record.supportMethod})
-                            </div>
-                          </div>
-                        </div>
-                        <span className="text-gray-400">
-                          {expandedRecords[record.id] ? '▼' : '▶'}
+            <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto">
+              {dailyRecords.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  この期間の日次記録がありません
+                </div>
+              ) : (
+                dailyRecords.map((record) => (
+                  <div key={record.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => toggleRecord(record.id)}
+                      className="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-all duration-200 flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg">
+                          {expandedRecords[record.id] ? '📂' : '📁'}
                         </span>
-                      </button>
-                      
-                      {expandedRecords[record.id] && (
-                        <div className="p-4 bg-white space-y-3 text-sm">
-                          <div>
-                            <div className="font-semibold text-gray-700 mb-1">作業・訓練内容</div>
-                            <div className="text-gray-600 whitespace-pre-line bg-gray-50 p-2 rounded">
-                              {record.workContent}
-                            </div>
+                        <div className="text-left">
+                          <div className="font-semibold text-gray-800">
+                            {formatDate(record.date)}
                           </div>
-                          
-                          <div>
-                            <div className="font-semibold text-gray-700 mb-1">支援内容</div>
-                            <div className="text-gray-600 whitespace-pre-line bg-gray-50 p-2 rounded">
-                              {record.supportContent}
-                            </div>
-                          </div>
-                          
-                          <div>
-                            <div className="font-semibold text-gray-700 mb-1">心身の状況</div>
-                            <div className="text-gray-600 whitespace-pre-line bg-gray-50 p-2 rounded">
-                              {record.healthStatus}
-                            </div>
-                          </div>
-                          
-                          <div className="text-xs text-gray-500 border-t pt-2">
-                            記録者: {record.responder}
+                          <div className="text-xs text-gray-500">
+                            {record.startTime} 〜 {record.endTime} ({record.supportMethod})
                           </div>
                         </div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
+                      </div>
+                      <span className="text-gray-400">
+                        {expandedRecords[record.id] ? '▼' : '▶'}
+                      </span>
+                    </button>
+                    
+                    {expandedRecords[record.id] && (
+                      <div className="p-4 bg-white space-y-3 text-sm">
+                        <div>
+                          <span className="font-semibold text-gray-700">作業内容:</span>
+                          <p className="mt-1 text-gray-600">{record.workContent}</p>
+                        </div>
+                        <div>
+                          <span className="font-semibold text-gray-700">作業実績:</span>
+                          <p className="mt-1 text-gray-600">{record.workResult}</p>
+                        </div>
+                        <div>
+                          <span className="font-semibold text-gray-700">日報:</span>
+                          <p className="mt-1 text-gray-600">{record.dailyReport}</p>
+                        </div>
+                        <div>
+                          <span className="font-semibold text-gray-700">支援内容:</span>
+                          <p className="mt-1 text-gray-600">{record.supportContent}</p>
+                        </div>
+                        <div>
+                          <span className="font-semibold text-gray-700">心身状況・助言内容:</span>
+                          <p className="mt-1 text-gray-600">{record.advice}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-gray-700">体調:</span>
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            record.condition === '良い' ? 'bg-green-100 text-green-700' :
+                            record.condition === '普通' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-red-100 text-red-700'
+                          }`}>
+                            {record.condition}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
-          {/* 右側：評価(週次)フォーム */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
-              <h2 className="text-xl font-bold text-gray-800 mb-6">📋 評価(週次)フォーム</h2>
-
-              {/* 注意事項 */}
-              <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
-                <p className="text-sm text-blue-800">
-                  <span className="font-semibold">※ 評価は作業・訓練対象日（期間最終日）の1週間以内に実施すること</span>
-                </p>
-              </div>
-
-              <div className="space-y-6">
-                {/* 実施方法 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    実施方法 <span className="text-red-500">*</span>
-                  </label>
-                  <div className="flex gap-4">
-                    {['通所', '訪問', 'その他'].map(method => (
-                      <label key={method} className="flex items-center">
-                        <input
-                          type="radio"
-                          name="method"
-                          value={method}
-                          checked={evaluationData.method === method}
-                          onChange={(e) => updateEvaluation('method', e.target.value)}
-                          className="mr-2 text-blue-600 focus:ring-blue-500"
-                        />
-                        {method}
-                      </label>
-                    ))}
-                  </div>
-                  {evaluationData.method === 'その他' && (
-                    <input
-                      type="text"
-                      value={evaluationData.methodOther}
-                      onChange={(e) => updateEvaluation('methodOther', e.target.value)}
-                      placeholder="実施方法の詳細を入力"
-                      className="mt-2 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  )}
-                </div>
-
-                {/* 評価内容 */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      評価内容 <span className="text-red-500">*</span>
+          {/* 右側：評価フォーム */}
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-6">📋 評価(週次)フォーム</h2>
+            
+            <div className="space-y-6">
+              {/* 評価方法 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  評価方法 <span className="text-red-500">*</span>
+                </label>
+                <div className="flex gap-4">
+                  {['通所', '訪問', 'その他'].map(method => (
+                    <label key={method} className="flex items-center">
+                      <input
+                        type="radio"
+                        name="method"
+                        value={method}
+                        checked={evaluationData.method === method}
+                        onChange={(e) => updateEvaluation('method', e.target.value)}
+                        className="mr-2 text-blue-600 focus:ring-blue-500"
+                      />
+                      {method}
                     </label>
-                    <button
-                      onClick={generateEvaluationWithAI}
-                      disabled={isGenerating || dailyRecords.length === 0}
-                      className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 ${
-                        isGenerating || dailyRecords.length === 0
-                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-lg hover:shadow-xl'
-                      }`}
-                    >
-                      {isGenerating ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          生成中...
-                        </>
-                      ) : (
-                        <>
-                          ✨ 今週の記録から評価案を生成
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500 mb-2">
-                    左側の日次記録を確認しながら、1週間の振り返りを記載してください
-                  </p>
-                  <textarea
-                    value={evaluationData.content}
-                    onChange={(e) => updateEvaluation('content', e.target.value)}
-                    rows={12}
-                    placeholder="例：&#10;・対象期間中の作業の進め方や、設定した個数目標の達成度をお互いに確認。&#10;・目標に届かなかった日がある。意欲はあるが、集中力が途切れたことが原因であり、効果的なリフレッシュ方法を考えていく。&#10;・生活面では、たまにスマホゲームに没頭してしまい、夜更かししてしまうことがあるため、特に夜間の生活リズムを崩さないよう助言する。"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none font-mono text-sm"
+                  ))}
+                </div>
+                {evaluationData.method === 'その他' && (
+                  <input
+                    type="text"
+                    value={evaluationData.methodOther}
+                    onChange={(e) => updateEvaluation('methodOther', e.target.value)}
+                    placeholder="実施方法の詳細を入力"
+                    className="mt-2 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                </div>
-
-                {/* 記録者 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    記録者 <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      list="recorder-list"
-                      value={evaluationData.recorder}
-                      onChange={(e) => updateEvaluation('recorder', e.target.value)}
-                      placeholder="リストから選択または手入力"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <datalist id="recorder-list">
-                      {instructors.map(instructor => (
-                        <option key={instructor.id} value={instructor.name} />
-                      ))}
-                    </datalist>
-                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">指導員リストから選択、または直接入力できます</p>
-                </div>
-
-                {/* 確認者（サービス管理責任者） */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    確認者（サービス管理責任者） <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      list="confirmer-list"
-                      value={evaluationData.confirmer}
-                      onChange={(e) => updateEvaluation('confirmer', e.target.value)}
-                      placeholder="リストから選択または手入力"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <datalist id="confirmer-list">
-                      {instructors.map(instructor => (
-                        <option key={instructor.id} value={instructor.name} />
-                      ))}
-                    </datalist>
-                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">※ 評価内容はサービス管理責任者が必ず確認すること</p>
-                </div>
+                )}
               </div>
 
-              {/* ボタン */}
-              <div className="mt-8 flex gap-4">
-                <button
-                  onClick={() => navigate('/instructor/dashboard?tab=home-support')}
-                  className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-300 transition-all duration-200"
-                >
-                  キャンセル
-                </button>
-                <button
-                  onClick={handleSave}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
-                >
-                  💾 保存
-                </button>
+              {/* 評価内容 */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    評価内容 <span className="text-red-500">*</span>
+                  </label>
+                  <button
+                    onClick={generateEvaluationWithAI}
+                    disabled={isGenerating || dailyRecords.length === 0}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 ${
+                      isGenerating || dailyRecords.length === 0
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 shadow-lg hover:shadow-xl'
+                    }`}
+                  >
+                    {isGenerating ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        生成中...
+                      </>
+                    ) : (
+                      <>
+                        ✨ 今週の記録から評価案を生成
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mb-2">
+                  左側の日次記録を確認しながら、1週間の振り返りを記載してください
+                </p>
+                <textarea
+                  value={evaluationData.content}
+                  onChange={(e) => updateEvaluation('content', e.target.value)}
+                  rows={12}
+                  placeholder="例：&#10;・対象期間中の作業の進め方や、設定した個数目標の達成度をお互いに確認。&#10;・目標に届かなかった日がある。意欲はあるが、集中力が途切れたことが原因であり、効果的なリフレッシュ方法を考えていく。&#10;・生活面では、たまにスマホゲームに没頭してしまい、夜更かししてしまうことがあるため、特に夜間の生活リズムを崩さないよう助言する。"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none font-mono text-sm"
+                />
               </div>
+
+              {/* 記録者 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  記録者 <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    list="recorder-list"
+                    value={evaluationData.recorder}
+                    onChange={(e) => updateEvaluation('recorder', e.target.value)}
+                    placeholder="リストから選択または手入力"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <datalist id="recorder-list">
+                    {instructors.map(instructor => (
+                      <option key={instructor.id} value={instructor.name} />
+                    ))}
+                  </datalist>
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">指導員リストから選択、または直接入力できます</p>
+              </div>
+
+              {/* 確認者（サービス管理責任者） */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  確認者（サービス管理責任者） <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    list="confirmer-list"
+                    value={evaluationData.confirmer}
+                    onChange={(e) => updateEvaluation('confirmer', e.target.value)}
+                    placeholder="リストから選択または手入力"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <datalist id="confirmer-list">
+                    {instructors.map(instructor => (
+                      <option key={instructor.id} value={instructor.name} />
+                    ))}
+                  </datalist>
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">※ 評価内容はサービス管理責任者が必ず確認すること</p>
+              </div>
+            </div>
+
+            {/* ボタン */}
+            <div className="mt-8 flex gap-4">
+              <button
+                onClick={saveLocationAndNavigate}
+                className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-300 transition-all duration-200"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleSave}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+              >
+                💾 保存
+              </button>
             </div>
           </div>
         </div>
@@ -535,4 +664,3 @@ const WeeklyEvaluationPage = () => {
 };
 
 export default WeeklyEvaluationPage;
-

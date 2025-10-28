@@ -131,6 +131,32 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
     console.log('currentUser.satellite_ids:', currentUser?.satellite_ids);
     console.log('currentUser.satellite_name:', currentUser?.satellite_name);
     
+    // デバッグ用：ユーザー情報をAPIから取得
+    if (currentUser && currentUser.id) {
+      fetch(`https://backend.studysphere.ayatori-inc.co.jp/api/satellites/debug/user/${currentUser.id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log('=== デバッグ：APIから取得したユーザー情報 ===');
+        console.log('APIレスポンス:', data);
+        if (data.success) {
+          console.log('ユーザーID:', data.data.user_id);
+          console.log('ユーザー名:', data.data.name);
+          console.log('ロール:', data.data.role);
+          console.log('会社ID:', data.data.company_id);
+          console.log('satellite_ids生データ:', data.data.satellite_ids_raw);
+          console.log('satellite_idsパース後:', data.data.satellite_ids_parsed);
+          console.log('satellite_ids型:', data.data.satellite_ids_type);
+        }
+      })
+      .catch(error => {
+        console.error('デバッグAPI呼び出しエラー:', error);
+      });
+    }
+    
     // 全ストレージのデバッグ情報を出力
     debugAllStorage();
     
@@ -181,14 +207,27 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
     
     // 拠点名を取得
     if (satelliteId) {
-      // まずセッションストレージから取得
-      if (selectedSatellite) {
+      // セッションストレージから取得を再試行（getCurrentUserSatelliteIdが更新した可能性があるため）
+      const updatedSelectedSatellite = sessionStorage.getItem('selectedSatellite');
+      if (updatedSelectedSatellite) {
         try {
-          const satelliteData = JSON.parse(selectedSatellite);
+          const satelliteData = JSON.parse(updatedSelectedSatellite);
           console.log('パースされた拠点データ:', satelliteData);
-          setCurrentSatelliteName(satelliteData.name || '');
+          if (satelliteData.name) {
+            setCurrentSatelliteName(satelliteData.name);
+          } else if (currentUser && currentUser.satellite_name) {
+            setCurrentSatelliteName(currentUser.satellite_name);
+          } else {
+            setCurrentSatelliteName(`拠点${satelliteId}`);
+          }
         } catch (error) {
           console.error('拠点情報のパースエラー:', error);
+          // パースエラーの場合は、ユーザーデータから取得
+          if (currentUser && currentUser.satellite_name) {
+            setCurrentSatelliteName(currentUser.satellite_name);
+          } else {
+            setCurrentSatelliteName(`拠点${satelliteId}`);
+          }
         }
       } else {
         // セッションストレージにない場合は、ユーザーデータから取得
@@ -196,6 +235,8 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
         if (currentUser && currentUser.satellite_name) {
           console.log('ユーザーデータから拠点名を取得:', currentUser.satellite_name);
           setCurrentSatelliteName(currentUser.satellite_name);
+        } else {
+          setCurrentSatelliteName(`拠点${satelliteId}`);
         }
       }
     } else {
@@ -203,6 +244,54 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
       console.log('currentUser.role:', currentUser?.role);
       console.log('currentUser.satellite_id:', currentUser?.satellite_id);
       console.log('currentUser.satellite_ids:', currentUser?.satellite_ids);
+      
+      // 複数拠点に所属する指導員の場合、satellite_idsから直接取得を試みる
+      if (currentUser && currentUser.satellite_ids) {
+        let satelliteIds = currentUser.satellite_ids;
+        
+        // 既に配列の場合はそのまま使用
+        if (Array.isArray(satelliteIds)) {
+          // 既に配列なのでそのまま使用
+        } else if (typeof satelliteIds === 'string') {
+          // 文字列の場合はJSONパースを試行
+          try {
+            satelliteIds = JSON.parse(satelliteIds);
+          } catch (error) {
+            console.error('satellite_idsのパースエラー:', error);
+            // パースに失敗した場合は、カンマ区切りとして扱う
+            if (satelliteIds.includes(',')) {
+              satelliteIds = satelliteIds.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+            } else {
+              satelliteIds = [parseInt(satelliteIds)];
+            }
+          }
+        } else {
+          // その他の型（数値など）の場合は配列に変換
+          satelliteIds = [satelliteIds];
+        }
+        
+        // 配列でない場合は配列に変換（念のため）
+        if (!Array.isArray(satelliteIds)) {
+          satelliteIds = [satelliteIds];
+        }
+        // すべてのIDを数値に変換して統一
+        satelliteIds = satelliteIds.map(id => parseInt(id)).filter(id => !isNaN(id));
+        if (satelliteIds.length > 0) {
+          const firstSatelliteId = parseInt(satelliteIds[0]); // 数値に変換
+          console.log('複数拠点所属指導員: 最初の拠点IDを設定:', firstSatelliteId);
+          setCurrentSatelliteId(firstSatelliteId);
+          setCurrentSatelliteName(currentUser?.satellite_name || `拠点${firstSatelliteId}`);
+          
+          // sessionStorageにも保存
+          const selectedSatelliteInfo = {
+            id: firstSatelliteId,
+            name: currentUser.satellite_name || `拠点${firstSatelliteId}`,
+            company_id: currentUser.company_id,
+            company_name: currentUser.company_name
+          };
+          sessionStorage.setItem('selectedSatellite', JSON.stringify(selectedSatelliteInfo));
+        }
+      }
     }
     
     console.log('=== StudentManagement 拠点ID取得完了 ===');

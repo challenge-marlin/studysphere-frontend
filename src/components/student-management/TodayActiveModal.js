@@ -20,7 +20,55 @@ const TodayActiveModal = ({
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementMessage, setAnnouncementMessage] = useState('');
   const [tempPasswordLoading, setTempPasswordLoading] = useState(false);
-  
+  const [expiryTimeError, setExpiryTimeError] = useState('');
+
+  // 有効期限のバリデーション（現在時刻より前の時間をチェック）
+  const validateExpiryTime = (timeString) => {
+    if (!timeString || timeString.trim() === '') {
+      setExpiryTimeError('');
+      return true;
+    }
+
+    // HH:MM形式の検証
+    const timePattern = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
+    if (!timePattern.test(timeString)) {
+      setExpiryTimeError('正しい時間形式を入力してください（HH:MM形式）');
+      return false;
+    }
+
+    // 現在の日本時間を取得（時と分のみ）
+    const now = new Date();
+    const japanTimeString = now.toLocaleString('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+    const [currentHours, currentMinutes] = japanTimeString.split(':').map(Number);
+
+    // 入力された時間を取得
+    const [hours, minutes] = timeString.split(':').map(Number);
+
+    // 現在時刻（時:分）と入力時刻（時:分）を比較
+    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+    const inputTimeInMinutes = hours * 60 + minutes;
+
+    // 現在時刻より前または同じ時間の場合はエラー
+    if (inputTimeInMinutes <= currentTimeInMinutes) {
+      setExpiryTimeError('現在時刻より後の時間を入力してください');
+      return false;
+    }
+
+    setExpiryTimeError('');
+    return true;
+  };
+
+  // 有効期限入力のハンドラー
+  const handleExpiryTimeChange = (e) => {
+    const value = e.target.value;
+    setExpiryTime(value);
+    validateExpiryTime(value);
+  };
 
   
   // モーダルが開かれた時の初期化
@@ -140,6 +188,12 @@ const TodayActiveModal = ({
       alert('一時パスワード発行対象の利用者を選択してください。');
       return;
     }
+
+    // 有効期限のバリデーション
+    if (expiryTime && !validateExpiryTime(expiryTime)) {
+      alert('有効期限の入力内容を確認してください。');
+      return;
+    }
     
     try {
       setTempPasswordLoading(true);
@@ -176,6 +230,7 @@ const TodayActiveModal = ({
   // モーダルを閉じる
   const handleClose = () => {
     setExpiryTime('');
+    setExpiryTimeError('');
     setAnnouncementTitle('');
     setAnnouncementMessage('');
     // 選択された指導員の状態は保持する（ユーザビリティ向上のため）
@@ -310,15 +365,22 @@ const TodayActiveModal = ({
                   <input
                     type="text"
                     value={expiryTime}
-                    onChange={(e) => setExpiryTime(e.target.value)}
-                    placeholder="HH:DD（例：23:59）"
+                    onChange={handleExpiryTimeChange}
+                    placeholder="HH:MM（例：23:59）"
                     pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$"
-                    className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={`p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      expiryTimeError ? 'border-red-500' : 'border-gray-300'
+                    }`}
                   />
                   <span className="text-gray-600">まで有効</span>
                 </div>
+                {expiryTimeError && (
+                  <p className="text-sm text-red-600 mt-2">
+                    {expiryTimeError}
+                  </p>
+                )}
                 <p className="text-sm text-gray-600 mt-2">
-                  指定なしの場合は日本時間23:59まで有効です（HH:DD形式で入力してください）
+                  指定なしの場合は日本時間23:59まで有効です（HH:MM形式で入力してください。現在時刻より後の時間を選択してください）
                 </p>
               </div>
 

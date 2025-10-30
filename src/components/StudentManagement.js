@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { getCurrentUserSatelliteId } from '../utils/locationUtils';
-import { getSatelliteUsers } from '../utils/api';
+import { getSatelliteUsers, getSatelliteInstructors } from '../utils/api';
 import { debugAllStorage } from '../utils/debugUtils';
 import TempPasswordManager from './student-management/TempPasswordManager';
 import StudentEditor from './student-management/StudentEditor';
@@ -413,18 +413,20 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
     }
   };
 
-  // 指導員データを取得
+  // 指導員データを取得（現在の拠点に限定）
   const fetchInstructors = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/users`);
-      if (response.ok) {
-        const result = await response.json();
-        const users = result.data?.users || result;
-        const instructorUsers = users.filter(user => user.role === 4);
-        setInstructors(instructorUsers);
+      if (!currentSatelliteId) {
+        setInstructors([]);
+        return;
       }
+      const response = await getSatelliteInstructors(currentSatelliteId);
+      // 期待形: { success: true, data: [...] }
+      const list = response?.data || response?.data?.users || [];
+      setInstructors(Array.isArray(list) ? list : []);
     } catch (error) {
       console.error('指導員データ取得エラー:', error);
+      setInstructors([]);
     }
   };
 
@@ -824,6 +826,7 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
             onViewTestResults={handleViewTestResults}
             onTestApproval={handleTestApprovalInternal}
             onSubmissionApproval={handleSubmissionApprovalInternal}
+            onEditStudent={(student) => studentEditor.openEditModal(student)}
           />
         </div>
 
@@ -1310,6 +1313,18 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
                       />
                     </div>
                     <div>
+                      <label htmlFor="edit_email" className="block text-sm font-semibold text-gray-700 mb-2">メールアドレス（任意）</label>
+                      <input
+                        type="email"
+                        id="edit_email"
+                        name="email"
+                        value={studentEditor.editFormData.email || ''}
+                        onChange={studentEditor.handleInputChange}
+                        placeholder="example@example.com"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
                       <label htmlFor="edit_instructor_id" className="block text-sm font-semibold text-gray-700 mb-2">担当指導員</label>
                       <select
                         id="edit_instructor_id"
@@ -1339,69 +1354,6 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
-                  
-                  {/* 個別支援計画 */}
-                  <div className="border-t pt-6">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">個別支援計画</h4>
-                    <div className="space-y-4">
-                      <div>
-                        <label htmlFor="long_term_goal" className="block text-sm font-semibold text-gray-700 mb-2">長期目標</label>
-                        <textarea
-                          id="long_term_goal"
-                          name="long_term_goal"
-                          value={studentEditor.supportPlanData.long_term_goal}
-                          onChange={studentEditor.handleSupportPlanChange}
-                          rows={3}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="short_term_goal" className="block text-sm font-semibold text-gray-700 mb-2">短期目標</label>
-                        <textarea
-                          id="short_term_goal"
-                          name="short_term_goal"
-                          value={studentEditor.supportPlanData.short_term_goal}
-                          onChange={studentEditor.handleSupportPlanChange}
-                          rows={3}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="needs" className="block text-sm font-semibold text-gray-700 mb-2">ニーズ</label>
-                        <textarea
-                          id="needs"
-                          name="needs"
-                          value={studentEditor.supportPlanData.needs}
-                          onChange={studentEditor.handleSupportPlanChange}
-                          rows={3}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="support_content" className="block text-sm font-semibold text-gray-700 mb-2">支援内容</label>
-                        <textarea
-                          id="support_content"
-                          name="support_content"
-                          value={studentEditor.supportPlanData.support_content}
-                          onChange={studentEditor.handleSupportPlanChange}
-                          rows={3}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="goal_date" className="block text-sm font-semibold text-gray-700 mb-2">目標達成予定日</label>
-                        <input
-                          type="date"
-                          id="goal_date"
-                          name="goal_date"
-                          value={studentEditor.supportPlanData.goal_date}
-                          onChange={studentEditor.handleSupportPlanChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  
                   <div className="flex justify-end gap-4">
                     <button
                       type="button"

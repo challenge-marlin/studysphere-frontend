@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getUserHealthData, getUserWorkPlan, updateUserDailyReport } from '../utils/userInputApi';
 import { getSatelliteInstructors } from '../utils/api';
 import { getCurrentUser } from '../utils/userContext';
+import { API_BASE_URL } from '../config/apiConfig';
 
 /**
  * 日次支援記録モーダル
@@ -67,11 +68,6 @@ const DailySupportRecordModal = ({
 
   const fetchSupportPlan = async () => {
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 
-        (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-          ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-          : 'http://localhost:5050');
-      
       const token = localStorage.getItem('accessToken');
       const response = await fetch(`${API_BASE_URL}/api/support-plans/user/${student.id}`, {
         headers: {
@@ -303,20 +299,38 @@ const DailySupportRecordModal = ({
         return;
       }
 
-      // 時間フィールドをMySQL形式に変換するヘルパー関数
-      const convertTimeToMySQLDateTime = (timeStr) => {
+      // 時間フィールドをUTCのMySQL形式に変換するヘルパー関数
+      const convertTimeToMySQLDateTimeUTC = (timeStr) => {
         if (!timeStr || timeStr.trim() === '') return null;
-        // date propは YYYY-MM-DD 形式で来るので、それと時間を結合
-        const dateTime = new Date(date + 'T' + timeStr + ':00');
-        return dateTime.toISOString().slice(0, 19).replace('T', ' ');
+        // date propは YYYY-MM-DD 形式で来るので、それと時間を結合（日本時間として解釈）
+        // 日本時間（+09:00）として解釈
+        // new Date()に+09:00を付与すると、内部的にUTCに変換される
+        const jstDateTimeString = `${date}T${timeStr}:00+09:00`;
+        const dateObj = new Date(jstDateTimeString);
+        
+        if (isNaN(dateObj.getTime())) {
+          return null;
+        }
+        
+        // Dateオブジェクトは既にUTC時刻として管理されているので、
+        // getUTC*メソッドで直接UTCの値を取得できる
+        // 追加で9時間引く必要はない（既にUTCになっている）
+        const year = dateObj.getUTCFullYear();
+        const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(dateObj.getUTCDate()).padStart(2, '0');
+        const hours = String(dateObj.getUTCHours()).padStart(2, '0');
+        const minutes = String(dateObj.getUTCMinutes()).padStart(2, '0');
+        const seconds = String(dateObj.getUTCSeconds()).padStart(2, '0');
+        
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
       };
 
-      // データを送信
+      // データを送信（UTC変換）
       const result = await updateUserDailyReport(reportId, {
-        mark_start: record.startTime ? convertTimeToMySQLDateTime(record.startTime) : null,
-        mark_end: record.endTime ? convertTimeToMySQLDateTime(record.endTime) : null,
-        mark_lunch_start: record.breakStartTime ? convertTimeToMySQLDateTime(record.breakStartTime) : null,
-        mark_lunch_end: record.breakEndTime ? convertTimeToMySQLDateTime(record.breakEndTime) : null,
+        mark_start: record.startTime ? convertTimeToMySQLDateTimeUTC(record.startTime) : null,
+        mark_end: record.endTime ? convertTimeToMySQLDateTimeUTC(record.endTime) : null,
+        mark_lunch_start: record.breakStartTime ? convertTimeToMySQLDateTimeUTC(record.breakStartTime) : null,
+        mark_lunch_end: record.breakEndTime ? convertTimeToMySQLDateTimeUTC(record.breakEndTime) : null,
         support_method: record.supportMethod,
         support_method_note: record.supportMethodOther,
         work_result: record.workContent,

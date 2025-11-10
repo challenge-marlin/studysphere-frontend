@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useInstructorGuard } from '../utils/hooks/useAuthGuard';
 import InstructorHeader from '../components/InstructorHeader';
 import { apiCall } from '../utils/api';
+import ExcelJS from 'exceljs';
 
 const MonthlyEvaluationHistoryPage = () => {
   const { userId } = useParams();
@@ -18,6 +19,70 @@ const MonthlyEvaluationHistoryPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [editingEvaluation, setEditingEvaluation] = useState(null);
   const [instructorList, setInstructorList] = useState([]);
+  const [excelDownloading, setExcelDownloading] = useState(false);
+
+  const timeOnlyPattern = useMemo(() => /^\d{2}:\d{2}/, []);
+  const tokyoDateTimeFormatter = useMemo(() => new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }), []);
+  const tokyoTimeFormatter = useMemo(() => new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit'
+  }), []);
+
+  const formatDateTimeForDisplay = (value) => {
+    if (!value) return '';
+    if (timeOnlyPattern.test(value)) {
+      return value.slice(0, 5);
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    const parts = tokyoDateTimeFormatter.formatToParts(date).reduce((acc, part) => {
+      acc[part.type] = part.value;
+      return acc;
+    }, {});
+
+    if (!parts.year || !parts.month || !parts.day || !parts.hour || !parts.minute) {
+      return tokyoDateTimeFormatter.format(date);
+    }
+
+    return `${parts.year}年${parts.month}月${parts.day}日 ${parts.hour}:${parts.minute}`;
+  };
+
+  const normalizeTimeForInput = (value) => {
+    if (!value) return '';
+    if (timeOnlyPattern.test(value)) {
+      return value.slice(0, 5);
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return '';
+    }
+
+    const parts = tokyoTimeFormatter.formatToParts(date).reduce((acc, part) => {
+      acc[part.type] = part.value;
+      return acc;
+    }, {});
+
+    if (!parts.hour || !parts.minute) {
+      return tokyoTimeFormatter.format(date);
+    }
+
+    return `${parts.hour}:${parts.minute}`;
+  };
 
   // 拠点情報を復元
   useEffect(() => {
@@ -70,17 +135,39 @@ const MonthlyEvaluationHistoryPage = () => {
   // バックエンドデータをフロントエンド形式に変換
   const convertBackendToFrontend = (data) => {
     if (!data) return null;
-    
-    // 評価期間を計算（dateから1ヶ月前後）
-    const evalDate = new Date(data.date);
-    const startDate = new Date(evalDate.getFullYear(), evalDate.getMonth(), 1);
-    const endDate = new Date(evalDate.getFullYear(), evalDate.getMonth() + 1, 0);
+    const normalizeDateValue = (value) => {
+      if (!value) return '';
+      if (typeof value === 'string') return value;
+      if (value instanceof Date) return value.toISOString().split('T')[0];
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString().split('T')[0];
+      }
+      return '';
+    };
+
+    const evalDate = data.date ? new Date(data.date) : null;
+
+    const defaultStart = () => {
+      if (!evalDate || Number.isNaN(evalDate.getTime())) return '';
+      const firstDay = new Date(evalDate.getFullYear(), evalDate.getMonth(), 1);
+      return firstDay.toISOString().split('T')[0];
+    };
+
+    const defaultEnd = () => {
+      if (!evalDate || Number.isNaN(evalDate.getTime())) return '';
+      const lastDay = new Date(evalDate.getFullYear(), evalDate.getMonth() + 1, 0);
+      return lastDay.toISOString().split('T')[0];
+    };
+
+    const startDate = normalizeDateValue(data.period_start) || defaultStart();
+    const endDate = normalizeDateValue(data.period_end) || defaultEnd();
     
     return {
       id: data.id,
       date: data.date,
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0],
+      startDate,
+      endDate,
       createdDate: data.created_at || data.date,
       startTime: data.mark_start || '',
       endTime: data.mark_end || '',
@@ -120,7 +207,9 @@ const MonthlyEvaluationHistoryPage = () => {
       evaluator_name: data.evaluator || null,
       prev_evaluation_date: data.prevEvaluationDate || null,
       recipient_number: selectedUser?.recipient_number || null,
-      user_name: selectedUser?.name || null
+      user_name: selectedUser?.name || null,
+      period_start: data.startDate || null,
+      period_end: data.endDate || null
     };
   };
 
@@ -231,7 +320,11 @@ const MonthlyEvaluationHistoryPage = () => {
   // 編集開始
   const handleEdit = () => {
     if (selectedEvaluation) {
-      setEditingEvaluation({ ...selectedEvaluation });
+      setEditingEvaluation({
+        ...selectedEvaluation,
+        startTime: normalizeTimeForInput(selectedEvaluation.startTime),
+        endTime: normalizeTimeForInput(selectedEvaluation.endTime)
+      });
       setIsEditing(true);
     }
   };
@@ -302,9 +395,198 @@ const MonthlyEvaluationHistoryPage = () => {
     }
   };
 
-  // 印刷処理
-  const handlePrint = () => {
-    window.print();
+  // 月報Excelダウンロード処理
+  const handleDownloadExcel = async () => {
+    if (!selectedEvaluation || !selectedUser) {
+      alert('評価データまたは利用者情報が取得できません。');
+      return;
+    }
+
+    setExcelDownloading(true);
+
+    try {
+      // テンプレートファイルを読み込む
+      const templatePath = '/doc/reports/monthly_report_template.xlsx';
+      const response = await fetch(templatePath);
+      if (!response.ok) {
+        throw new Error('テンプレートファイルの読み込みに失敗しました');
+      }
+      
+      // テンプレートのバイナリデータを取得
+      const templateArrayBuffer = await response.arrayBuffer();
+      
+      // ExcelJSでテンプレートを読み込み
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(templateArrayBuffer);
+      
+      // 最初のシートを取得
+      const worksheet = workbook.getWorksheet(1) || workbook.worksheets[0];
+      
+      // 日付フォーマット関数（和暦）
+      const convertToWareki = (westernYear, month = 1, day = 1) => {
+        const reiwaStartDate = new Date(2019, 4, 1);
+        const targetDate = new Date(westernYear, month - 1, day);
+        
+        if (targetDate < reiwaStartDate) {
+          const heiseiStartDate = new Date(1989, 0, 8);
+          if (targetDate >= heiseiStartDate) {
+            const heiseiYear = westernYear - 1988;
+            return { era: '平成', year: heiseiYear, month, day };
+          }
+          return { era: '昭和', year: westernYear - 1925, month, day };
+        }
+        
+        const reiwaYear = westernYear - 2018;
+        return { era: '令和', year: reiwaYear, month, day };
+      };
+
+      const formatDateParts = (dateStr) => {
+        if (!dateStr) return { era: '令和', year: '', month: '', day: '' };
+        const date = new Date(dateStr);
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
+        return convertToWareki(year, month, day);
+      };
+
+      const formatTime = (timeStr) => {
+        if (!timeStr) return '';
+        // 時間文字列から時間部分を抽出（HH:MM形式）
+        if (typeof timeStr === 'string') {
+          const match = timeStr.match(/(\d{2}):(\d{2})/);
+          if (match) {
+            return `${match[1]}:${match[2]}`;
+          }
+        }
+        // Dateオブジェクトの場合
+        if (timeStr instanceof Date) {
+          const hours = String(timeStr.getHours()).padStart(2, '0');
+          const minutes = String(timeStr.getMinutes()).padStart(2, '0');
+          return `${hours}:${minutes}`;
+        }
+        return timeStr;
+      };
+
+      const updateCell = (cellAddress, value) => {
+        if (!cellAddress) return;
+        try {
+          const cell = worksheet.getCell(cellAddress);
+          cell.value = value || '';
+        } catch (e) {
+          console.warn(`セル ${cellAddress} の更新に失敗:`, e);
+        }
+      };
+
+      // 機関の頭の月を取得（startDateの月を使用）
+      const periodStartDate = new Date(selectedEvaluation.startDate);
+      const periodYear = periodStartDate.getFullYear();
+      const periodMonth = periodStartDate.getMonth() + 1;
+      const periodDateParts = formatDateParts(selectedEvaluation.startDate);
+      
+      // X1セルに月を入力、V1セルに和暦の年を入力
+      updateCell('X1', periodDateParts.month);
+      updateCell('V1', periodDateParts.year);
+      
+      // 対象者名 (D4セル)
+      if (selectedUser.name) {
+        updateCell('D4', selectedUser.name);
+      }
+
+      // 受給者証番号 (Q4セル)
+      if (selectedUser.recipientNumber) {
+        updateCell('Q4', selectedUser.recipientNumber);
+      }
+      
+      // 実施日（dateフィールドを使用、行6）
+      const evalDateParts = formatDateParts(selectedEvaluation.date || selectedEvaluation.createdDate);
+      updateCell('D6', evalDateParts.year); // 令和の年のみ（数字）
+      updateCell('I6', evalDateParts.month); // 記録月
+      updateCell('L6', evalDateParts.day); // 記録日
+      
+      // 実施時間 (Q6に開始、V6に終了)
+      if (selectedEvaluation.startTime) {
+        updateCell('Q6', formatTime(selectedEvaluation.startTime));
+      }
+      if (selectedEvaluation.endTime) {
+        updateCell('V6', formatTime(selectedEvaluation.endTime));
+      }
+
+      // 実施方法
+      const methodValue = String(selectedEvaluation.method || '').trim();
+      if (methodValue === '通所') {
+        updateCell('D7', '✓');
+      } else if (methodValue === '訪問') {
+        updateCell('F7', '✓');
+      } else if (methodValue === 'その他') {
+        updateCell('H7', '✓');
+        if (selectedEvaluation.methodOther) {
+          updateCell('K7', selectedEvaluation.methodOther);
+        }
+      }
+
+      // その他の項目
+      if (selectedEvaluation.trainingGoal) {
+        updateCell('D9', selectedEvaluation.trainingGoal);
+      }
+      if (selectedEvaluation.workContent) {
+        updateCell('D12', selectedEvaluation.workContent);
+      }
+      if (selectedEvaluation.achievement) {
+        updateCell('D15', selectedEvaluation.achievement);
+      }
+      if (selectedEvaluation.issues) {
+        updateCell('D19', selectedEvaluation.issues);
+      }
+      if (selectedEvaluation.improvementPlan) {
+        updateCell('D22', selectedEvaluation.improvementPlan);
+      }
+      if (selectedEvaluation.healthNotes) {
+        updateCell('D25', selectedEvaluation.healthNotes);
+      }
+      if (selectedEvaluation.otherNotes) {
+        updateCell('D28', selectedEvaluation.otherNotes);
+      }
+      if (selectedEvaluation.continuityValidity) {
+        updateCell('D31', selectedEvaluation.continuityValidity);
+      }
+      if (selectedEvaluation.evaluator) {
+        updateCell('D34', selectedEvaluation.evaluator);
+      }
+      
+      // 前回の達成度評価日
+      if (selectedEvaluation.prevEvaluationDate) {
+        const prevDateParts = formatDateParts(selectedEvaluation.prevEvaluationDate);
+        updateCell('S34', prevDateParts.year);
+        updateCell('V34', prevDateParts.month);
+        updateCell('X34', prevDateParts.day);
+      }
+      
+      // Excelファイルをダウンロード
+      const excelBuffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([excelBuffer], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      });
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // ファイル名に機関の頭の月を含める（例：2025年10月）
+      const fileName = `在宅支援達成度評価_${selectedUser.name || '未設定'}_${periodYear}年${periodMonth}月.xlsx`;
+      link.download = fileName;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      alert('Excelファイルのダウンロードが完了しました。');
+    } catch (error) {
+      console.error('Excelダウンロードエラー:', error);
+      alert('Excelファイルのダウンロードに失敗しました: ' + error.message);
+    } finally {
+      setExcelDownloading(false);
+    }
   };
 
   if (isLoading) {
@@ -388,10 +670,11 @@ const MonthlyEvaluationHistoryPage = () => {
                   </button>
                 )}
                 <button 
-                  onClick={handlePrint}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                  onClick={handleDownloadExcel}
+                  disabled={excelDownloading}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  🖨️ 印刷
+                  {excelDownloading ? '⏳ ダウンロード中...' : '📥 月報Excelダウンロード'}
                 </button>
               </div>
             </div>
@@ -521,11 +804,11 @@ const MonthlyEvaluationHistoryPage = () => {
                   <div className="grid grid-cols-2 gap-4 bg-gray-50 rounded-lg p-4">
                     <div>
                       <div className="text-sm text-gray-600 mb-1">開始時間</div>
-                      <div className="text-xl font-bold text-blue-600">{selectedEvaluation.startTime || '未設定'}</div>
+                      <div className="text-xl font-bold text-blue-600">{formatDateTimeForDisplay(selectedEvaluation.startTime) || '未設定'}</div>
                     </div>
                     <div>
                       <div className="text-sm text-gray-600 mb-1">終了時間</div>
-                      <div className="text-xl font-bold text-blue-600">{selectedEvaluation.endTime || '未設定'}</div>
+                      <div className="text-xl font-bold text-blue-600">{formatDateTimeForDisplay(selectedEvaluation.endTime) || '未設定'}</div>
                     </div>
                   </div>
                 )}

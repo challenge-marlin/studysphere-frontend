@@ -19,10 +19,7 @@ import ModalErrorDisplay from './common/ModalErrorDisplay';
 
 import TodayActiveModal from './student-management/TodayActiveModal';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 
-  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-    : 'http://localhost:5050');
+import { API_BASE_URL } from '../config/apiConfig';
 
 const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionApproval }) => {
   const { currentUser, isAuthenticated } = useAuth();
@@ -133,7 +130,7 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
     
     // デバッグ用：ユーザー情報をAPIから取得
     if (currentUser && currentUser.id) {
-      fetch(`https://backend.studysphere.ayatori-inc.co.jp/api/satellites/debug/user/${currentUser.id}`, {
+      fetch(`${API_BASE_URL}/api/satellites/debug/user/${currentUser.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
         }
@@ -729,12 +726,6 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
             onStudentClick={scrollToStudent}
           />
         )}
-
-        {/* 3. 利用者一覧ヘッダー */}
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">利用者一覧</h2>
-          <p className="text-gray-600">※利用者の管理と一時パスワード発行を行います</p>
-        </div>
 
         {/* 4. フィルター部分 */}
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-100">

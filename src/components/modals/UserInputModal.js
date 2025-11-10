@@ -1,7 +1,70 @@
 import React, { useState, useEffect } from 'react';
-import { getUserHealthData, getUserWorkPlan, addInstructorComment, updateUserDailyReport } from '../../utils/userInputApi';
+import { getUserHealthData, getUserWorkPlan, addInstructorComment, updateUserDailyReport, deleteInstructorComment } from '../../utils/userInputApi';
 import { getSatelliteInstructors } from '../../utils/api';
 import { getCurrentUser } from '../../utils/userContext';
+import { API_BASE_URL } from '../../config/apiConfig';
+
+const DATETIME_LOCAL_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+const MYSQL_DATETIME_REGEX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+
+const formatDateToMySQLUTC = (date) => {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const hours = String(date.getUTCHours()).padStart(2, '0');
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+  const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+
+const parseDateValue = (value) => {
+  if (!value) return null;
+
+  if (DATETIME_LOCAL_REGEX.test(value)) {
+    const dateWithTZ = `${value}:00+09:00`;
+    const parsed = new Date(dateWithTZ);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  if (MYSQL_DATETIME_REGEX.test(value)) {
+    const isoString = value.replace(' ', 'T') + 'Z';
+    const parsed = new Date(isoString);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const parsed = new Date(value);
+  return isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const formatDateTimeForInput = (value) => {
+  if (!value) return '';
+  if (DATETIME_LOCAL_REGEX.test(value)) return value;
+
+  const parsed = parseDateValue(value);
+  if (!parsed) return '';
+
+  const offsetMinutes = parsed.getTimezoneOffset();
+  const localDate = new Date(parsed.getTime() - offsetMinutes * 60000);
+  return localDate.toISOString().slice(0, 16);
+};
+
+const normalizeDateTimeForPayload = (value) => {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+
+  if (DATETIME_LOCAL_REGEX.test(value)) {
+    const parsed = parseDateValue(value);
+    return parsed ? formatDateToMySQLUTC(parsed) : null;
+  }
+
+  if (MYSQL_DATETIME_REGEX.test(value)) {
+    return value;
+  }
+
+  const parsed = parseDateValue(value);
+  return parsed ? formatDateToMySQLUTC(parsed) : null;
+};
 
 const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
   const [healthData, setHealthData] = useState(null);
@@ -10,12 +73,14 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
   const [error, setError] = useState(null);
   const [comment, setComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [deletingCommentId, setDeletingCommentId] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [instructors, setInstructors] = useState([]);
   const [workNote, setWorkNote] = useState('');
   const [aiSuggesting, setAiSuggesting] = useState(false);
   const [supportPlan, setSupportPlan] = useState(null);
+  const [instructorComments, setInstructorComments] = useState([]);
   
   // 編集用の状態
   const [editData, setEditData] = useState({
@@ -30,21 +95,92 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
     mark_end: '',
     mark_lunch_start: '',
     mark_lunch_end: '',
-    recorder_name: ''
+    recorder_name: '',
+    sleep_hours: ''
   });
+
+  const normalizeInstructorComments = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+        if (parsed && typeof parsed === 'object') {
+          if (Array.isArray(parsed.comments)) {
+            return parsed.comments;
+          }
+          if (parsed.comment) {
+            return [parsed];
+          }
+        }
+      } catch (error) {
+        console.warn('normalizeInstructorComments (component): JSON.parse failed', error);
+        return [];
+      }
+    }
+
+    if (typeof value === 'object') {
+      if (Array.isArray(value.comments)) {
+        return value.comments;
+      }
+      if (value.comment) {
+        return [value];
+      }
+    }
+
+    return [];
+  };
+
+  const collectInstructorComments = (...sources) => {
+    const candidateArrays = sources
+      .filter(Boolean)
+      .map((source) => {
+        if (Array.isArray(source.instructor_comments)) {
+          return source.instructor_comments;
+        }
+        return normalizeInstructorComments(source.instructor_comment);
+      });
+
+    const nonEmpty = candidateArrays.find((comments) => comments.length > 0);
+    const base = nonEmpty || candidateArrays[0] || [];
+
+    return base
+      .slice()
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  };
 
   // 更新時間をHH:MM形式にフォーマットする関数
   const formatTime = (dateString) => {
     if (!dateString) return '未記録';
     try {
-      const date = new Date(dateString);
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const parsed = parseDateValue(dateString);
+      if (!parsed) return '未記録';
+      const hours = String(parsed.getHours()).padStart(2, '0');
+      const minutes = String(parsed.getMinutes()).padStart(2, '0');
       return `${hours}:${minutes}`;
     } catch (error) {
       console.error('時間フォーマットエラー:', error);
       return 'エラー';
     }
+  };
+
+  const formatCommentTimestamp = (value) => {
+    if (!value) return '';
+    const parsed = parseDateValue(value);
+    if (!parsed) {
+      return value;
+    }
+    return parsed.toLocaleString('ja-JP', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   useEffect(() => {
@@ -57,11 +193,6 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
 
   const fetchSupportPlan = async () => {
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 
-        (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-          ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-          : 'http://localhost:5050');
-      
       const token = localStorage.getItem('accessToken');
       const response = await fetch(`${API_BASE_URL}/api/support-plans/user/${selectedUser.id}`, {
         headers: {
@@ -115,6 +246,7 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
       if (!accessToken) {
         console.error('認証トークンが見つかりません');
         setError('認証トークンが見つかりません。ログインし直してください。');
+        setInstructorComments([]);
         return;
       }
 
@@ -140,7 +272,8 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
             mark_start: healthResult.data.mark_start || '',
             mark_end: healthResult.data.mark_end || '',
             mark_lunch_start: healthResult.data.mark_lunch_start || '',
-            mark_lunch_end: healthResult.data.mark_lunch_end || ''
+            mark_lunch_end: healthResult.data.mark_lunch_end || '',
+            sleep_hours: healthResult.data.sleep_hours || ''
           }));
         }
       } else {
@@ -163,7 +296,8 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
             mark_start: workResult.data.mark_start || prev.mark_start || '',
             mark_end: workResult.data.mark_end || prev.mark_end || '',
             mark_lunch_start: workResult.data.mark_lunch_start || prev.mark_lunch_start || '',
-            mark_lunch_end: workResult.data.mark_lunch_end || prev.mark_lunch_end || ''
+            mark_lunch_end: workResult.data.mark_lunch_end || prev.mark_lunch_end || '',
+            sleep_hours: prev.sleep_hours || (healthResult.data ? healthResult.data.sleep_hours || '' : '')
           }));
           // work_noteを初期化（AI提案で使用）
           setWorkNote(workResult.data.work_note || '');
@@ -172,8 +306,15 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
         console.error('作業予定データ取得エラー:', workResult.message);
         setError(`作業予定データの取得に失敗しました: ${workResult.message}`);
       }
+
+      const comments = collectInstructorComments(
+        healthResult.success ? healthResult.data : null,
+        workResult.success ? workResult.data : null
+      );
+      setInstructorComments(comments);
     } catch (error) {
       console.error('データ取得エラー:', error);
+      setInstructorComments([]);
       
       // 認証エラーの場合の特別な処理
       if (error.message && error.message.includes('認証')) {
@@ -196,6 +337,20 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
 
     setSubmittingComment(true);
     try {
+      const currentUser = getCurrentUser();
+      const instructorName = (
+        currentUser?.name ||
+        currentUser?.username ||
+        currentUser?.displayName ||
+        currentUser?.adminName ||
+        ''
+      ).trim();
+
+      if (!instructorName) {
+        alert('指導員名を取得できませんでした。再度ログインするか、管理者にお問い合わせください。');
+        return;
+      }
+
       // 体調データまたは作業予定データから日次記録IDを取得
       let reportId = null;
       
@@ -213,10 +368,11 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
       console.log('指導員コメント追加:', {
         reportId,
         comment,
-        selectedUser: selectedUser?.id
+        selectedUser: selectedUser?.id,
+        instructorName
       });
       
-      const result = await addInstructorComment(reportId, comment);
+      const result = await addInstructorComment(reportId, comment, instructorName);
       
       if (result.success) {
         alert('指導員コメントを追加しました');
@@ -231,6 +387,56 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
       alert('コメントの追加中にエラーが発生しました');
     } finally {
       setSubmittingComment(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentItem) => {
+    if (!commentItem) return;
+
+    const commentIdentifier = commentItem.id ?? commentItem.created_at;
+    if (!commentIdentifier) {
+      alert('削除対象のコメントを特定できませんでした。');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `次のコメントを削除しますか？\n\n指導員: ${commentItem.instructor_name || '不明'}\n投稿日: ${formatCommentTimestamp(commentItem.created_at) || '不明'}\n\nこの操作は取り消せません。`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    let reportId = null;
+    if (healthData && healthData.id) {
+      reportId = healthData.id;
+    } else if (workPlan && workPlan.id) {
+      reportId = workPlan.id;
+    }
+
+    if (!reportId) {
+      alert('日次記録が見つかりません。データを再読み込みしてください。');
+      return;
+    }
+
+    setDeletingCommentId(String(commentIdentifier));
+    try {
+      const result = await deleteInstructorComment(
+        reportId,
+        commentIdentifier,
+        commentItem.created_at || null
+      );
+
+      if (result.success) {
+        alert('コメントを削除しました');
+        fetchUserData();
+      } else {
+        alert(result.message || 'コメントの削除に失敗しました');
+      }
+    } catch (error) {
+      console.error('コメント削除エラー:', error);
+      alert('コメントの削除中にエラーが発生しました');
+    } finally {
+      setDeletingCommentId(null);
     }
   };
 
@@ -307,13 +513,21 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
         return;
       }
       
+      const payload = {
+        ...editData,
+        mark_start: normalizeDateTimeForPayload(editData.mark_start),
+        mark_end: normalizeDateTimeForPayload(editData.mark_end),
+        mark_lunch_start: normalizeDateTimeForPayload(editData.mark_lunch_start),
+        mark_lunch_end: normalizeDateTimeForPayload(editData.mark_lunch_end)
+      };
+
       console.log('在宅就労支援記録保存:', {
         reportId,
-        editData,
+        payload,
         selectedUser: selectedUser?.id
       });
       
-      const result = await updateUserDailyReport(reportId, editData);
+      const result = await updateUserDailyReport(reportId, payload);
       
       if (result.success) {
         alert('在宅就労支援記録を保存しました');
@@ -394,7 +608,7 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
                         {isEditing ? (
                           <input
                             type="datetime-local"
-                            value={editData.mark_start ? new Date(editData.mark_start).toISOString().slice(0, 16) : ''}
+                            value={formatDateTimeForInput(editData.mark_start)}
                             onChange={(e) => setEditData(prev => ({ ...prev, mark_start: e.target.value }))}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                           />
@@ -410,7 +624,7 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
                         {isEditing ? (
                           <input
                             type="datetime-local"
-                            value={editData.mark_end ? new Date(editData.mark_end).toISOString().slice(0, 16) : ''}
+                            value={formatDateTimeForInput(editData.mark_end)}
                             onChange={(e) => setEditData(prev => ({ ...prev, mark_end: e.target.value }))}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                           />
@@ -428,7 +642,7 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
                         {isEditing ? (
                           <input
                             type="datetime-local"
-                            value={editData.mark_lunch_start ? new Date(editData.mark_lunch_start).toISOString().slice(0, 16) : ''}
+                            value={formatDateTimeForInput(editData.mark_lunch_start)}
                             onChange={(e) => setEditData(prev => ({ ...prev, mark_lunch_start: e.target.value }))}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                           />
@@ -444,7 +658,7 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
                         {isEditing ? (
                           <input
                             type="datetime-local"
-                            value={editData.mark_lunch_end ? new Date(editData.mark_lunch_end).toISOString().slice(0, 16) : ''}
+                            value={formatDateTimeForInput(editData.mark_lunch_end)}
                             onChange={(e) => setEditData(prev => ({ ...prev, mark_lunch_end: e.target.value }))}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                           />
@@ -642,7 +856,55 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
                   <span>指導員コメント</span>
                 </h3>
                 
-                <div className="space-y-4">
+                <div className="space-y-6">
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">これまでのコメント</h4>
+                    {instructorComments.length > 0 ? (
+                      <div className="space-y-3">
+                        {instructorComments.map((commentItem, index) => {
+                          const commentKey = String(commentItem.id ?? commentItem.created_at ?? index);
+                          const isDeleting = deletingCommentId === commentKey;
+                          return (
+                          <div
+                            key={commentItem.id || commentItem.created_at || index}
+                            className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm"
+                          >
+                            <div className="flex justify-between items-start">
+                              <div className="text-sm font-semibold text-gray-800">
+                                {commentItem.instructor_name || '指導員'}
+                              </div>
+                              <div className="flex items-start gap-2">
+                                <div className="text-xs text-gray-500">
+                                  {formatCommentTimestamp(commentItem.created_at)}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteComment(commentItem)}
+                                  disabled={isDeleting}
+                                  className={`px-2 py-1 text-xs border rounded transition-colors duration-200 ${
+                                    isDeleting
+                                      ? 'bg-red-100 text-red-400 border-red-200 cursor-not-allowed'
+                                      : 'text-red-600 border-red-200 hover:bg-red-50'
+                                  }`}
+                                >
+                                  {isDeleting ? '削除中...' : '削除'}
+                                </button>
+                              </div>
+                            </div>
+                            <p className="mt-3 text-gray-700 whitespace-pre-wrap text-sm">
+                              {commentItem.comment || ''}
+                            </p>
+                          </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="bg-white border border-dashed border-gray-300 rounded-lg p-4 text-sm text-gray-500">
+                        過去のコメントはまだありません。
+                      </div>
+                    )}
+                  </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">コメントを追加</label>
                     <textarea
@@ -652,7 +914,7 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 h-24 resize-none"
                     />
                   </div>
-                  
+
                   <button
                     onClick={handleAddComment}
                     disabled={submittingComment || !comment.trim()}

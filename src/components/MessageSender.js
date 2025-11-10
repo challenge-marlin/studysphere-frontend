@@ -73,18 +73,20 @@ const MessageSender = () => {
                     </div>
 
                     {/* フィルター */}
-                    {showFilter && (
-                        <div className="mb-3 p-3 border border-gray-300 rounded-lg bg-gray-50">
-                            <UserFilter
-                                onFilterChange={handleFilterChange}
-                                onUsersLoad={handleUsersLoad}
-                                apiEndpoint="/api/messages/students"
-                                showInstructorFilter={true}
-                                showTagFilter={true}
-                                showNameFilter={true}
-                            />
-                        </div>
-                    )}
+                    <div
+                        className={`mb-3 p-3 border border-gray-300 rounded-lg bg-gray-50 ${
+                            showFilter ? '' : 'hidden'
+                        }`}
+                    >
+                        <UserFilter
+                            onFilterChange={handleFilterChange}
+                            onUsersLoad={handleUsersLoad}
+                            apiEndpoint="/api/messages/students"
+                            showInstructorFilter={true}
+                            showTagFilter={true}
+                            showNameFilter={true}
+                        />
+                    </div>
 
                     <select
                         value={selectedStudent?.id || ''}
@@ -99,7 +101,7 @@ const MessageSender = () => {
                         {students.map(student => (
                             <option key={student.id} value={student.id}>
                                 {student.name}
-                                {student.is_my_assigned && ' ★'}
+                                {Boolean(student.is_my_assigned) && ' ★'}
                                 {student.satellite_name && ` (${student.satellite_name})`}
                                 {student.company_name && ` - ${student.company_name}`}
                                 {student.instructor_name && ` [担当: ${student.instructor_name}]`}
@@ -196,7 +198,7 @@ const MessageSender = () => {
                                     <div className="flex-1">
                                         <p className="font-medium">
                                             {student.name}
-                                            {student.is_my_assigned && ' ★'}
+                                            {Boolean(student.is_my_assigned) && ' ★'}
                                         </p>
                                         <p className="text-xs text-gray-500">
                                             {student.satellite_name && `${student.satellite_name} | `}

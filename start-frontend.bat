@@ -47,8 +47,8 @@ if not exist "node_modules" (
     echo [OK] Dependencies installed successfully.
 )
 
-REM 環境変数を設定
-set REACT_APP_API_URL=http://localhost:5050
+REM 環境変数を設定（開発環境では127.0.0.1:5050を使用）
+set REACT_APP_API_URL=http://127.0.0.1:5050
 set NODE_ENV=development
 
 echo [INFO] Starting React development server...

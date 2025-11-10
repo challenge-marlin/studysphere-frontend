@@ -33,6 +33,61 @@ const OverviewTab = ({
     };
   }, []);
 
+  const normalizeInstructorComments = (instructorComment) => {
+    if (!instructorComment) {
+      return [];
+    }
+
+    if (Array.isArray(instructorComment)) {
+      return instructorComment;
+    }
+
+    if (typeof instructorComment === 'string') {
+      try {
+        const parsed = JSON.parse(instructorComment);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+        if (parsed && typeof parsed === 'object') {
+          if (Array.isArray(parsed.comments)) {
+            return parsed.comments;
+          }
+          if (parsed.comment) {
+            return [parsed];
+          }
+        }
+        return [];
+      } catch (error) {
+        console.warn('OverviewTab: 指導員コメントのJSON変換に失敗しました:', error);
+        return [];
+      }
+    }
+
+    if (typeof instructorComment === 'object') {
+      if (Array.isArray(instructorComment.comments)) {
+        return instructorComment.comments;
+      }
+      if (instructorComment.comment) {
+        return [instructorComment];
+      }
+    }
+
+    return [];
+  };
+
+  const getLatestInstructorCommentText = (instructorComment) => {
+    const comments = normalizeInstructorComments(instructorComment);
+    if (comments.length === 0) {
+      return '';
+    }
+
+    const latestComment = comments
+      .slice()
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+
+    return latestComment?.comment || '';
+  };
+
   const fetchHomeSupportUsers = async () => {
     try {
       setLoading(true);
@@ -106,6 +161,9 @@ const OverviewTab = ({
             console.log('OverviewTab: 日次記録発見 - userId:', userId, ', record_date:', record.record_date, ', recordDate:', recordDate, ', todayDate:', todayDate, ', 一致:', recordDate === todayDate);
           }
           if (record.daily_record_id && recordDate === todayDate) {
+            const instructorComments = normalizeInstructorComments(record.instructor_comment);
+            const latestInstructorCommentText = getLatestInstructorCommentText(record.instructor_comment);
+
             userMap.get(userId).dailyRecords.push({
               id: record.daily_record_id,
               date: record.record_date,
@@ -124,6 +182,8 @@ const OverviewTab = ({
               supportContent: record.support_content,
               advice: record.advice,
               instructorComment: record.instructor_comment,
+              instructorComments,
+              instructorCommentText: latestInstructorCommentText,
               recorderName: record.recorder_name,
               webcamPhotos: record.webcam_photos,
               screenshots: record.screenshots,
@@ -373,7 +433,7 @@ const OverviewTab = ({
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
-                          {latestRecord?.instructorComment || '指導員コメントなし'}
+                          {latestRecord?.instructorCommentText || '指導員コメントなし'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">

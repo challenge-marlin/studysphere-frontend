@@ -1,8 +1,46 @@
-// API_BASE_URLを直接定義（api.jsと同じ定義を使用）
-const API_BASE_URL = process.env.REACT_APP_API_URL || 
-  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-    : 'http://localhost:5050');
+// API_BASE_URLを共通設定からインポート
+import { API_BASE_URL } from '../config/apiConfig';
+
+const normalizeInstructorComments = (instructorComment) => {
+  if (!instructorComment) {
+    return [];
+  }
+
+  if (Array.isArray(instructorComment)) {
+    return instructorComment;
+  }
+
+  if (typeof instructorComment === 'string') {
+    try {
+      const parsed = JSON.parse(instructorComment);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+      if (parsed && typeof parsed === 'object') {
+        if (Array.isArray(parsed.comments)) {
+          return parsed.comments;
+        }
+        if (parsed.comment) {
+          return [parsed];
+        }
+      }
+    } catch (error) {
+      console.warn('normalizeInstructorComments: JSON.parse failed:', error);
+      return [];
+    }
+  }
+
+  if (typeof instructorComment === 'object') {
+    if (Array.isArray(instructorComment.comments)) {
+      return instructorComment.comments;
+    }
+    if (instructorComment.comment) {
+      return [instructorComment];
+    }
+  }
+
+  return [];
+};
 
 /**
  * 利用者の日報データを取得
@@ -234,7 +272,9 @@ export const getUserHealthData = async (userId, date) => {
             mark_start: userReport.mark_start || null,
             mark_end: userReport.mark_end || null,
             mark_lunch_start: userReport.mark_lunch_start || null,
-            mark_lunch_end: userReport.mark_lunch_end || null
+            mark_lunch_end: userReport.mark_lunch_end || null,
+            instructor_comment: userReport.instructor_comment || null,
+            instructor_comments: normalizeInstructorComments(userReport.instructor_comment)
           }
         };
       } else {
@@ -409,7 +449,9 @@ export const getUserWorkPlan = async (userId, date) => {
             mark_start: userReport.mark_start || null,
             mark_end: userReport.mark_end || null,
             mark_lunch_start: userReport.mark_lunch_start || null,
-            mark_lunch_end: userReport.mark_lunch_end || null
+            mark_lunch_end: userReport.mark_lunch_end || null,
+            instructor_comment: userReport.instructor_comment || null,
+            instructor_comments: normalizeInstructorComments(userReport.instructor_comment)
           }
         };
       } else {
@@ -443,15 +485,8 @@ export const getUserWorkPlan = async (userId, date) => {
   }
 };
 
-/**
- * 指導員コメントを追加
- * @param {string} reportId - 日報ID
- * @param {string} comment - 指導員コメント
- * @returns {Promise<Object>} 更新結果
- */
-export const addInstructorComment = async (reportId, comment) => {
+const postDailyReportComment = async (reportId, comment, instructorName) => {
   try {
-    // トークンの存在確認
     const token = localStorage.getItem('accessToken');
     if (!token) {
       return {
@@ -460,20 +495,30 @@ export const addInstructorComment = async (reportId, comment) => {
       };
     }
 
-    console.log('指導員コメント追加:', {
-      reportId,
-      comment,
-      hasToken: !!token
-    });
+    if (!instructorName || !String(instructorName).trim()) {
+      return {
+        success: false,
+        message: '指導員名を取得できませんでした。再度ログインしてください。'
+      };
+    }
 
-    const response = await fetch(`${API_BASE_URL}/api/remote-support/daily-reports/${reportId}`, {
-      method: 'PUT',
+    const normalizedComment = typeof comment === 'string' ? comment.trim() : '';
+    if (!normalizedComment) {
+      return {
+        success: false,
+        message: 'コメント内容を入力してください。'
+      };
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/remote-support/daily-reports/${reportId}/comments`, {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({
-        instructor_comment: comment
+        comment: normalizedComment,
+        instructor_name: instructorName
       })
     });
 
@@ -494,38 +539,118 @@ export const addInstructorComment = async (reportId, comment) => {
           message: 'サーバーエラーが発生しました。しばらく時間をおいてから再試行してください。'
         };
       } else {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorBody = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorBody}`);
       }
     }
 
     const data = await response.json();
-    console.log('指導員コメント追加レスポンス:', data);
-    
-    if (data.success) {
-      return {
-        success: true,
-        message: '指導員コメントを追加しました'
-      };
-    } else {
-      return {
-        success: false,
-        message: data.message || '指導員コメントの追加に失敗しました'
-      };
-    }
+    return data;
   } catch (error) {
-    console.error('指導員コメント追加エラー:', error);
-    
-    // ネットワークエラーの場合
+    console.error('指導員コメント送信エラー:', error);
+
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
       return {
         success: false,
         message: 'ネットワークエラーが発生しました。インターネット接続を確認してください。'
       };
     }
-    
+
     return {
       success: false,
-      message: '指導員コメントの追加中にエラーが発生しました'
+      message: 'コメントの追加中にエラーが発生しました'
+    };
+  }
+};
+
+/**
+ * 指導員コメントを追加
+ * @param {string} reportId - 日報ID
+ * @param {string} comment - 指導員コメント
+ * @param {string} instructorName - 指導員名
+ * @returns {Promise<Object>} 更新結果
+ */
+export const addInstructorComment = async (reportId, comment, instructorName) => {
+  return postDailyReportComment(reportId, comment, instructorName);
+};
+
+/**
+ * 指導員コメントを削除
+ * @param {string|number} reportId - 日報ID
+ * @param {string|number} commentId - コメントID
+ * @param {string|null} createdAt - コメント作成日時（旧データ互換用）
+ * @returns {Promise<Object>} 削除結果
+ */
+export const deleteInstructorComment = async (reportId, commentId, createdAt = null) => {
+  try {
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      return {
+        success: false,
+        message: '認証トークンが見つかりません。ログインし直してください。'
+      };
+    }
+
+    if (!reportId || commentId === undefined || commentId === null) {
+      return {
+        success: false,
+        message: 'コメント削除に必要な情報が不足しています。'
+      };
+    }
+
+    const encodedCommentId = encodeURIComponent(commentId);
+    const query = createdAt ? `?createdAt=${encodeURIComponent(createdAt)}` : '';
+
+    const response = await fetch(`${API_BASE_URL}/api/remote-support/daily-reports/${reportId}/comments/${encodedCommentId}${query}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        return {
+          success: false,
+          message: '認証が無効です。ログインし直してください。'
+        };
+      } else if (response.status === 403) {
+        return {
+          success: false,
+          message: 'この操作を実行する権限がありません。'
+        };
+      } else if (response.status === 404) {
+        const data = await response.json().catch(() => null);
+        return {
+          success: false,
+          message: data?.message || '削除対象のコメントが見つかりません'
+        };
+      } else if (response.status >= 500) {
+        return {
+          success: false,
+          message: 'サーバーエラーが発生しました。しばらく時間をおいてから再試行してください。'
+        };
+      }
+
+      const errorBody = await response.text();
+      throw new Error(`HTTP error! status: ${response.status}, body: ${errorBody}`);
+    }
+
+    const data = await response.json().catch(() => ({ success: true }));
+    return data;
+  } catch (error) {
+    console.error('指導員コメント削除エラー:', error);
+
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      return {
+        success: false,
+        message: 'ネットワークエラーが発生しました。インターネット接続を確認してください。'
+      };
+    }
+
+    return {
+      success: false,
+      message: 'コメントの削除中にエラーが発生しました'
     };
   }
 };
@@ -547,13 +672,33 @@ export const updateUserDailyReport = async (reportId, updateData) => {
       };
     }
 
+    const normalizedData = { ...updateData };
+
+    if (Object.prototype.hasOwnProperty.call(normalizedData, 'instructor_comment')) {
+      const commentValue = normalizedData.instructor_comment;
+      if (commentValue === null) {
+        normalizedData.instructor_comment = null;
+      } else if (commentValue === undefined || commentValue === '') {
+        normalizedData.instructor_comment = '';
+      } else if (typeof commentValue === 'object') {
+        try {
+          normalizedData.instructor_comment = JSON.stringify(commentValue);
+        } catch (error) {
+          console.error('instructor_commentのJSON変換に失敗しました:', error);
+          normalizedData.instructor_comment = '';
+        }
+      } else {
+        normalizedData.instructor_comment = String(commentValue);
+      }
+    }
+
     const response = await fetch(`${API_BASE_URL}/api/remote-support/daily-reports/${reportId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify(updateData)
+      body: JSON.stringify(normalizedData)
     });
 
     if (!response.ok) {
@@ -603,63 +748,6 @@ export const updateUserDailyReport = async (reportId, updateData) => {
  * @param {string} comment - コメント内容
  * @returns {Promise<Object>} 追加結果
  */
-export const addDailyReportComment = async (reportId, comment) => {
-  try {
-    // トークンの存在確認
-    const token = localStorage.getItem('accessToken');
-    if (!token) {
-      return {
-        success: false,
-        message: '認証トークンが見つかりません。ログインし直してください。'
-      };
-    }
-
-    const response = await fetch(`${API_BASE_URL}/api/remote-support/daily-reports/${reportId}/comments`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ comment })
-    });
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        return {
-          success: false,
-          message: '認証が無効です。ログインし直してください。'
-        };
-      } else if (response.status === 403) {
-        return {
-          success: false,
-          message: 'この操作を実行する権限がありません。'
-        };
-      } else if (response.status >= 500) {
-        return {
-          success: false,
-          message: 'サーバーエラーが発生しました。しばらく時間をおいてから再試行してください。'
-        };
-      } else {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('コメント追加エラー:', error);
-    
-    // ネットワークエラーの場合
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      return {
-        success: false,
-        message: 'ネットワークエラーが発生しました。インターネット接続を確認してください。'
-      };
-    }
-    
-    return {
-      success: false,
-      message: 'コメントの追加中にエラーが発生しました'
-    };
-  }
+export const addDailyReportComment = async (reportId, comment, instructorName) => {
+  return postDailyReportComment(reportId, comment, instructorName);
 };

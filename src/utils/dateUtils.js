@@ -350,3 +350,41 @@ export const convertTimeToMySQLDateTime = (timeStr) => {
   const today = getTodayJapanDate();
   return combineDateAndTime(today, timeStr);
 };
+
+/**
+ * 日付と時刻を組み合わせてUTCのMySQL形式の日時文字列に変換
+ * 日本時間で入力された日時をUTCに変換して返す
+ * @param {string} dateStr - 日付文字列（YYYY-MM-DD）日本時間
+ * @param {string} timeStr - 時刻文字列（HH:MM）日本時間
+ * @returns {string} UTCのMySQL形式の日時文字列（YYYY-MM-DD HH:MM:SS）
+ */
+export const combineDateAndTimeUTC = (dateStr, timeStr) => {
+  if (!dateStr || !timeStr) return null;
+  
+  try {
+    // 日本時間として解釈（+09:00を付与）
+    // new Date()に+09:00を付与すると、内部的にUTCに変換される
+    const jstDateTimeString = `${dateStr}T${timeStr}:00+09:00`;
+    const date = new Date(jstDateTimeString);
+    
+    // 有効な日時かチェック
+    if (isNaN(date.getTime())) {
+      return null;
+    }
+    
+    // Dateオブジェクトは既にUTC時刻として管理されているので、
+    // getUTC*メソッドで直接UTCの値を取得できる
+    // 追加で9時間引く必要はない（既にUTCになっている）
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const hours = String(date.getUTCHours()).padStart(2, '0');
+    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+    
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  } catch (error) {
+    console.error('日時UTC変換エラー:', error);
+    return null;
+  }
+};

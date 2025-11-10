@@ -18,6 +18,7 @@ import AnnouncementList from '../components/AnnouncementList';
 import TestApprovalModal from '../components/student-management/TestApprovalModal';
 import SubmissionApprovalModal from '../components/student-management/SubmissionApprovalModal';
 import PendingApprovalAlert from '../components/student-management/PendingApprovalAlert';
+import { API_BASE_URL } from '../config/apiConfig';
 import PendingSubmissionAlert from '../components/student-management/PendingSubmissionAlert';
 
 import { 
@@ -314,10 +315,6 @@ const InstructorDashboard = () => {
   const handlePasswordChange = async (currentPassword, newPassword) => {
     try {
       const token = localStorage.getItem('accessToken');
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 
-        (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-          ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-          : 'http://localhost:5050');
       const response = await fetch(`${API_BASE_URL}/api/users/${currentUser.id}/change-password`, {
         method: 'POST',
         headers: {

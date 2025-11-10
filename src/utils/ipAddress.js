@@ -2,17 +2,15 @@
  * IPアドレス取得ユーティリティ
  * 複数の方法でIPアドレスを取得を試行します
  */
+import { API_BASE_URL } from '../config/apiConfig';
 
 /**
  * バックエンドAPIを使用してIPアドレスを取得
  * @returns {Promise<string>} IPアドレス
  */
+
 const getIPFromBackendAPI = async () => {
   try {
-    const API_BASE_URL = process.env.REACT_APP_API_URL || 
-      (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-        ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-        : 'http://localhost:5050');
 
     const response = await fetch(`${API_BASE_URL}/api/operation-logs/client-ip`, {
       method: 'GET',

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCurrentUser } from '../../utils/userContext';
+import { getCurrentJapanTime, formatJapanDate } from '../../utils/dateUtils';
 import { getSatelliteHomeSupportUsersWithDailyRecords, removeHomeSupportFlag, getSatelliteEvaluationStatus, createOfficeVisitRecord, getSatelliteSupportPlanGoalDates, getSatelliteSupportPlanStatus } from '../../utils/api';
 import HomeSupportUserAdditionModal from '../HomeSupportUserAdditionModal';
 import DailySupportRecordModal from '../DailySupportRecordModal';
@@ -174,10 +175,24 @@ const HomeSupportTab = () => {
             });
           }
           
+          const userEntry = userMap.get(userId);
+          const tagSet = new Set(userEntry.tags || ['在宅支援']);
+          
+          if (Array.isArray(record.tags)) {
+            record.tags.forEach(tag => {
+              if (typeof tag === 'string' && tag.trim()) {
+                tagSet.add(tag.trim());
+              }
+            });
+          } else if (typeof record.tags === 'string' && record.tags.trim()) {
+            tagSet.add(record.tags.trim());
+          }
+          
+          userEntry.tags = Array.from(tagSet);
+          
           // 日次記録がある場合のみ追加
           if (record.daily_record_id) {
-            // record_dateから日付部分だけを抽出（YYYY-MM-DD形式）
-            const recordDate = record.record_date ? record.record_date.toString().substring(0, 10) : null;
+            const recordDate = record.record_date ? formatJapanDate(record.record_date) : null;
             
             userMap.get(userId).dailyRecords.push({
               id: record.daily_record_id,
@@ -231,10 +246,36 @@ const HomeSupportTab = () => {
       const response = await getSatelliteEvaluationStatus(currentSatellite.id);
       
       if (response.success && response.data) {
-        const now = new Date();
+        const now = getCurrentJapanTime();
         const dailyRecordAlerts = [];
         const weeklyRecordAlerts = [];
         const monthlyRecordAlerts = [];
+        
+        const parseJapanDate = (value) => {
+          if (!value) return null;
+          if (value instanceof Date) return value;
+          
+          const stringValue = String(value).trim();
+          if (!stringValue) return null;
+          
+          const isoCandidate = `${stringValue}T00:00:00+09:00`;
+          const parsed = new Date(isoCandidate);
+          if (!Number.isNaN(parsed.getTime())) {
+            return parsed;
+          }
+          
+          const fallback = new Date(stringValue);
+          return Number.isNaN(fallback.getTime()) ? null : fallback;
+        };
+        
+        const calculateDaysSince = (targetDateValue) => {
+          const targetDate = parseJapanDate(targetDateValue);
+          if (!targetDate) return null;
+          
+          const diffMs = now.getTime() - targetDate.getTime();
+          const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+          return days < 0 ? 0 : days;
+        };
         
         response.data.forEach(user => {
           // 日次記録のアラート（終業時刻があるのにrecorder_nameがない）
@@ -257,21 +298,25 @@ const HomeSupportTab = () => {
             }
           }
           
-          // 週次記録のアラート（最新の週次評価から8日以上経過、または最初の記録から8日以上経過）
+          // 週次記録のアラート（最新の週次評価から一定日数以上経過、または週次評価未実施で日次記録が一定日数以上）
           if (user.weeklyStatus === '未完了') {
             const userData = students.find(s => s.id === user.id);
-            if (userData && userData.dailyRecords && userData.dailyRecords.length > 0) {
-              const latestRecord = userData.dailyRecords[0];
-              const recordDate = new Date(latestRecord.date);
-              const daysSinceRecord = Math.floor((now - recordDate) / (1000 * 60 * 60 * 24));
-              
-              if (daysSinceRecord >= 8) {
-                weeklyRecordAlerts.push({
-                  userId: user.id,
-                  userName: user.name,
-                  daysAgo: daysSinceRecord
-                });
-              }
+            
+            const referenceDate =
+              user.lastWeeklyPeriodEnd ||
+              user.lastWeeklyRecordDate ||
+              (userData?.dailyRecords && userData.dailyRecords.length > 0
+                ? userData.dailyRecords[0].date
+                : null);
+            
+            const daysSinceRecord = calculateDaysSince(referenceDate);
+            
+            if (daysSinceRecord !== null && daysSinceRecord >= 8) {
+              weeklyRecordAlerts.push({
+                userId: user.id,
+                userName: user.name,
+                daysAgo: daysSinceRecord
+              });
             }
           }
           

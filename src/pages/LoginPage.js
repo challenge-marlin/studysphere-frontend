@@ -5,12 +5,7 @@ import { logAdminAccountOperation } from '../utils/adminLogger';
 import SanitizedInput from '../components/SanitizedInput';
 import { SANITIZE_OPTIONS } from '../utils/sanitizeUtils';
 import { addOperationLog } from '../utils/operationLogManager';
-
-// API設定
-const API_BASE_URL = process.env.REACT_APP_API_URL || 
-  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-    : 'http://localhost:5050');
+import { API_BASE_URL } from '../config/apiConfig';
 
 const LoginPage = () => {
   const [credentials, setCredentials] = useState({ id: '', password: '' });
@@ -93,6 +88,8 @@ const LoginPage = () => {
   const adminLoginAPI = async (username, password) => {
     try {
       console.log('LoginPage: 管理者ログインAPI呼び出し開始');
+      console.log('LoginPage: API_BASE_URL =', API_BASE_URL);
+      console.log('LoginPage: 完全なURL =', `${API_BASE_URL}/api/login`);
       console.log('LoginPage: リクエストデータ', { username, password: password ? '***' : 'なし' });
       
       const requestBody = JSON.stringify({ username, password });

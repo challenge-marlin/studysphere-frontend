@@ -3,6 +3,8 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useInstructorGuard } from '../utils/hooks/useAuthGuard';
 import { apiCall } from '../utils/api';
 import { getSupportPlanByUserId } from '../utils/api';
+import MonthlyReportPrintModal from '../components/modals/MonthlyReportPrintModal';
+import ExcelJS from 'exceljs';
 
 /**
  * 達成度評価作成画面（在宅における就労達成度評価シート）
@@ -78,6 +80,9 @@ const MonthlyEvaluationPage = () => {
   
   // 指導員リスト
   const [instructors, setInstructors] = useState([]);
+
+  // 印刷モーダルの状態
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   // 利用者情報を取得
   useEffect(() => {
@@ -447,14 +452,50 @@ const MonthlyEvaluationPage = () => {
       return;
     }
 
+    if (!periodStart || !periodEnd) {
+      alert('対象期間の開始日と終了日を入力してください。');
+      return;
+    }
+
+    if (new Date(periodStart) > new Date(periodEnd)) {
+      alert('対象期間の開始日は終了日以前に設定してください。');
+      return;
+    }
+
     setIsLoading(true);
     try {
+      // evaluation_methodの値を検証（ENUM値に一致させる）
+      // データベースのENUM値: '通所', '訪問', 'その他'
+      // 文字列に変換して空白を削除し、厳密に比較
+      const methodValue = String(evaluationData.method || '').trim();
+      let evaluationMethod = '通所'; // デフォルト値
+      
+      if (methodValue === '通所' || methodValue === '訪問' || methodValue === 'その他') {
+        evaluationMethod = methodValue;
+      } else {
+        console.warn(`無効なevaluation_method値: "${methodValue}" (型: ${typeof evaluationData.method})。デフォルト値「通所」を使用します。`);
+        console.log('evaluationData全体:', evaluationData);
+        // デフォルト値を使用
+        evaluationMethod = '通所';
+      }
+      
+      // デバッグ用: 送信されるevaluation_methodの値を確認
+      console.log(`送信されるevaluation_method: "${evaluationMethod}" (型: ${typeof evaluationMethod})`);
+
+      // user_idの検証と型変換
+      const userId = parseInt(student.id, 10);
+      if (!userId || isNaN(userId)) {
+        alert('利用者IDが無効です。');
+        setIsLoading(false);
+        return;
+      }
+
       const backendData = {
         date: new Date().toISOString().split('T')[0],
         mark_start: evaluationData.startTime ? `${new Date().toISOString().split('T')[0]} ${evaluationData.startTime}:00` : null,
         mark_end: evaluationData.endTime ? `${new Date().toISOString().split('T')[0]} ${evaluationData.endTime}:00` : null,
-        evaluation_method: evaluationData.method === 'その他' ? 'その他' : evaluationData.method,
-        method_other: evaluationData.method === 'その他' ? evaluationData.methodOther : null,
+        evaluation_method: evaluationMethod, // 検証済みの値を使用
+        method_other: methodValue === 'その他' ? (evaluationData.methodOther || null) : null,
         goal: evaluationData.trainingGoal || null,
         effort: evaluationData.workContent || null,
         achievement: evaluationData.achievement || null,
@@ -467,8 +508,14 @@ const MonthlyEvaluationPage = () => {
         prev_evaluation_date: prevEvalDate || null,
         recipient_number: student.recipientNumber || null,
         user_name: student.name || null,
-        user_id: student.id
+        user_id: userId, // 数値型に変換
+        period_start: periodStart,
+        period_end: periodEnd
       };
+
+      // 送信データをログ出力（デバッグ用）
+      console.log('送信データ:', JSON.stringify(backendData, null, 2));
+      console.log('user_idの型:', typeof backendData.user_id, '値:', backendData.user_id);
 
       const response = await apiCall('/api/monthly-evaluations', {
         method: 'POST',
@@ -479,13 +526,294 @@ const MonthlyEvaluationPage = () => {
         alert('達成度評価を保存しました。');
         saveLocationAndNavigate();
       } else {
-        alert('保存に失敗しました: ' + (response.message || 'エラーが発生しました'));
+        // より詳細なエラーメッセージを表示
+        const errorDetails = response.error || response.message || 'エラーが発生しました';
+        console.error('保存エラー詳細 (response):', JSON.stringify(response, null, 2));
+        alert('保存に失敗しました: ' + errorDetails);
       }
     } catch (error) {
       console.error('保存エラー:', error);
-      alert('保存中にエラーが発生しました: ' + error.message);
+      console.error('エラーオブジェクト全体:', error);
+      console.error('error.response:', error.response);
+      console.error('error.response?.data:', error.response?.data);
+      // より詳細なエラーメッセージを表示
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || '不明なエラーが発生しました';
+      console.error('表示されるエラーメッセージ:', errorMessage);
+      alert('保存中にエラーが発生しました: ' + errorMessage);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Excelダウンロード処理（同時に保存も実行）
+  const handleDownloadExcel = async () => {
+    if (!student?.id) {
+      alert('利用者情報が取得できません。');
+      return;
+    }
+
+    // バリデーション
+    if (!evaluationData.trainingGoal.trim() || !evaluationData.workContent.trim()) {
+      alert('訓練目標と取組内容は必須項目です。');
+      return;
+    }
+
+    if (!periodStart || !periodEnd) {
+      alert('対象期間の開始日と終了日を入力してください。');
+      return;
+    }
+
+    if (new Date(periodStart) > new Date(periodEnd)) {
+      alert('対象期間の開始日は終了日以前に設定してください。');
+      return;
+    }
+
+    // 保存処理を先に実行（完了を待つ）
+    setIsLoading(true);
+    try {
+      // evaluation_methodの値を検証（ENUM値に一致させる）
+      // データベースのENUM値: '通所', '訪問', 'その他'
+      // 文字列に変換して空白を削除し、厳密に比較
+      const methodValue = String(evaluationData.method || '').trim();
+      let evaluationMethod = '通所'; // デフォルト値
+      
+      if (methodValue === '通所' || methodValue === '訪問' || methodValue === 'その他') {
+        evaluationMethod = methodValue;
+      } else {
+        console.warn(`無効なevaluation_method値: "${methodValue}" (型: ${typeof evaluationData.method})。デフォルト値「通所」を使用します。`);
+        console.log('evaluationData全体:', evaluationData);
+        // デフォルト値を使用
+        evaluationMethod = '通所';
+      }
+      
+      // デバッグ用: 送信されるevaluation_methodの値を確認
+      console.log(`送信されるevaluation_method: "${evaluationMethod}" (型: ${typeof evaluationMethod})`);
+
+      // user_idの検証
+      if (!student?.id || isNaN(student.id)) {
+        throw new Error('利用者IDが無効です。');
+      }
+
+      const backendData = {
+        date: new Date().toISOString().split('T')[0],
+        mark_start: evaluationData.startTime ? `${new Date().toISOString().split('T')[0]} ${evaluationData.startTime}:00` : null,
+        mark_end: evaluationData.endTime ? `${new Date().toISOString().split('T')[0]} ${evaluationData.endTime}:00` : null,
+        evaluation_method: evaluationMethod, // 検証済みの値を使用
+        method_other: methodValue === 'その他' ? (evaluationData.methodOther || null) : null,
+        goal: evaluationData.trainingGoal || null,
+        effort: evaluationData.workContent || null,
+        achievement: evaluationData.achievement || null,
+        issues: evaluationData.issues || null,
+        improvement: evaluationData.improvementPlan || null,
+        health: evaluationData.healthNotes || null,
+        others: evaluationData.otherNotes || null,
+        appropriateness: evaluationData.continuityValidity || null,
+        evaluator_name: evaluationData.evaluator || null,
+        prev_evaluation_date: prevEvalDate || null,
+        recipient_number: student.recipientNumber || null,
+        user_name: student.name || null,
+        user_id: parseInt(student.id, 10), // 数値型に変換
+        period_start: periodStart,
+        period_end: periodEnd
+      };
+
+      // 送信データをログ出力（デバッグ用）
+      console.log('送信データ:', JSON.stringify(backendData, null, 2));
+      console.log('user_idの型:', typeof backendData.user_id, '値:', backendData.user_id);
+
+      const response = await apiCall('/api/monthly-evaluations', {
+        method: 'POST',
+        body: JSON.stringify(backendData)
+      });
+
+      if (response.success) {
+        console.log('達成度評価を保存しました。');
+        // Excelダウンロードのために画面遷移はしない
+      } else {
+        // より詳細なエラーメッセージを表示
+        const errorDetails = response.error || response.message || 'エラーが発生しました';
+        console.error('保存エラー詳細 (response):', JSON.stringify(response, null, 2));
+        alert(`保存に失敗しましたが、Excelダウンロードを続行します: ${errorDetails}`);
+      }
+    } catch (error) {
+      console.error('保存処理エラー:', error);
+      console.error('エラースタック:', error.stack);
+      console.error('エラーオブジェクト全体:', error);
+      console.error('error.response:', error.response);
+      console.error('error.response?.data:', error.response?.data);
+      // より詳細なエラーメッセージを表示
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || '不明なエラーが発生しました';
+      console.error('表示されるエラーメッセージ:', errorMessage);
+      alert(`保存中にエラーが発生しましたが、Excelダウンロードを続行します: ${errorMessage}`);
+    } finally {
+      setIsLoading(false);
+    }
+
+    // 保存処理完了後、Excelダウンロード処理を実行
+
+    try {
+      // テンプレートファイルを読み込む
+      const templatePath = '/doc/reports/monthly_report_template.xlsx';
+      const response = await fetch(templatePath);
+      if (!response.ok) {
+        throw new Error('テンプレートファイルの読み込みに失敗しました');
+      }
+      
+      // テンプレートのバイナリデータを取得
+      const templateArrayBuffer = await response.arrayBuffer();
+      
+      // ExcelJSでテンプレートを読み込み
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(templateArrayBuffer);
+      
+      // 最初のシートを取得
+      const worksheet = workbook.getWorksheet(1) || workbook.worksheets[0];
+      
+      // 日付フォーマット関数（和暦）
+      const convertToWareki = (westernYear, month = 1, day = 1) => {
+        const reiwaStartDate = new Date(2019, 4, 1);
+        const targetDate = new Date(westernYear, month - 1, day);
+        
+        if (targetDate < reiwaStartDate) {
+          const heiseiStartDate = new Date(1989, 0, 8);
+          if (targetDate >= heiseiStartDate) {
+            const heiseiYear = westernYear - 1988;
+            return { era: '平成', year: heiseiYear, month, day };
+          }
+          return { era: '昭和', year: westernYear - 1925, month, day };
+        }
+        
+        const reiwaYear = westernYear - 2018;
+        return { era: '令和', year: reiwaYear, month, day };
+      };
+
+      const formatDateParts = (dateStr) => {
+        if (!dateStr) return { era: '令和', year: '', month: '', day: '' };
+        const date = new Date(dateStr);
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
+        return convertToWareki(year, month, day);
+      };
+
+      const formatTime = (timeStr) => {
+        if (!timeStr) return '';
+        return timeStr;
+      };
+
+      const updateCell = (cellAddress, value) => {
+        if (!cellAddress) return;
+        try {
+          const cell = worksheet.getCell(cellAddress);
+          cell.value = value || '';
+        } catch (e) {
+          console.warn(`セル ${cellAddress} の更新に失敗:`, e);
+        }
+      };
+
+      const today = new Date().toISOString().split('T')[0];
+      const dateParts = formatDateParts(today);
+      
+      // X1セルに現在の月を入力、V1セルに和暦の年を入力
+      updateCell('X1', dateParts.month);
+      updateCell('V1', dateParts.year);
+      
+      // 対象者名 (D4セル)
+      if (student?.name) {
+        updateCell('D4', student.name);
+      }
+
+      // 受給者証番号 (Q4セル)
+      if (student?.recipientNumber) {
+        updateCell('Q4', student.recipientNumber);
+      }
+      
+      // 実施日（行6）
+      updateCell('D6', dateParts.year); // 令和の年のみ（数字）
+      updateCell('I6', dateParts.month); // 記録月
+      updateCell('L6', dateParts.day); // 記録日
+      
+      // 実施時間 (Q6に開始、V6に終了)
+      if (evaluationData.startTime) {
+        updateCell('Q6', formatTime(evaluationData.startTime));
+      }
+      if (evaluationData.endTime) {
+        updateCell('V6', formatTime(evaluationData.endTime));
+      }
+
+      // 実施方法（evaluation_methodの値を確認）
+      const methodValue = String(evaluationData.method || '').trim();
+      if (methodValue === '通所') {
+        updateCell('D7', '✓');
+      } else if (methodValue === '訪問') {
+        updateCell('F7', '✓');
+      } else if (methodValue === 'その他') {
+        updateCell('H7', '✓');
+        if (evaluationData.methodOther) {
+          updateCell('K7', evaluationData.methodOther);
+        }
+      }
+
+      // その他の項目
+      if (evaluationData.trainingGoal) {
+        updateCell('D9', evaluationData.trainingGoal);
+      }
+      if (evaluationData.workContent) {
+        updateCell('D12', evaluationData.workContent);
+      }
+      if (evaluationData.achievement) {
+        updateCell('D15', evaluationData.achievement);
+      }
+      if (evaluationData.issues) {
+        updateCell('D19', evaluationData.issues);
+      }
+      if (evaluationData.improvementPlan) {
+        updateCell('D22', evaluationData.improvementPlan);
+      }
+      if (evaluationData.healthNotes) {
+        updateCell('D25', evaluationData.healthNotes);
+      }
+      if (evaluationData.otherNotes) {
+        updateCell('D28', evaluationData.otherNotes);
+      }
+      if (evaluationData.continuityValidity) {
+        updateCell('D31', evaluationData.continuityValidity);
+      }
+      if (evaluationData.evaluator) {
+        updateCell('D34', evaluationData.evaluator);
+      }
+      if (evaluationData.studentSignature) {
+        updateCell('Q36', evaluationData.studentSignature);
+      }
+      
+      // 前回の達成度評価日
+      if (prevEvalDate) {
+        const prevDateParts = formatDateParts(prevEvalDate);
+        updateCell('S34', prevDateParts.year);
+        updateCell('V34', prevDateParts.month);
+        updateCell('X34', prevDateParts.day);
+      }
+      
+      // Excelファイルをダウンロード
+      const excelBuffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([excelBuffer], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      });
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const fileName = `在宅支援達成度評価_${student?.name || '未設定'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      link.download = fileName;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Excelダウンロードエラー:', error);
+      alert('Excelファイルのダウンロードに失敗しました: ' + error.message);
     }
   };
 
@@ -974,7 +1302,7 @@ const MonthlyEvaluationPage = () => {
                 </div>
               </div>
 
-              {/* ボタン */}
+              {/* ボタン - 1:1:1のバランスで配置 */}
               <div className="mt-8 flex gap-4">
                 <button
                   onClick={saveLocationAndNavigate}
@@ -991,11 +1319,30 @@ const MonthlyEvaluationPage = () => {
                 >
                   {isLoading ? '💾 保存中...' : '💾 保存'}
                 </button>
+                <button
+                  onClick={handleDownloadExcel}
+                  disabled={isLoading}
+                  className={`flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 ${
+                    isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  📥 Excelダウンロード
+                </button>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* 印刷モーダル */}
+      <MonthlyReportPrintModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        evaluationData={evaluationData}
+        student={student}
+        periodStart={periodStart}
+        periodEnd={periodEnd}
+      />
     </div>
   );
 };

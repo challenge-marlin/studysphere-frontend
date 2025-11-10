@@ -7,9 +7,33 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
   const [isGenerating, setIsGenerating] = useState({});
   const [instructorList, setInstructorList] = useState([]);
 
+  const normalizeDateValue = (value) => {
+    if (!value) return '';
+    if (typeof value === 'string') return value;
+    if (value instanceof Date) return value.toISOString().split('T')[0];
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().split('T')[0];
+    }
+    return '';
+  };
+
+  const computeDefaultPeriod = (baseDate) => {
+    if (!baseDate) return { start: '', end: '' };
+    const dateObj = new Date(baseDate);
+    if (Number.isNaN(dateObj.getTime())) return { start: '', end: '' };
+    const start = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1);
+    const end = new Date(dateObj.getFullYear(), dateObj.getMonth() + 1, 0);
+    return {
+      start: start.toISOString().split('T')[0],
+      end: end.toISOString().split('T')[0]
+    };
+  };
+
   // バックエンドデータをフロントエンド形式に変換
   const convertBackendToFrontend = (data) => {
     if (!data) return null;
+    const defaultPeriod = computeDefaultPeriod(data.date);
     return {
       evalDate: data.date || new Date().toISOString().split('T')[0],
       prevEvalDate: data.prev_evaluation_date || '',
@@ -23,7 +47,9 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
       health: data.health || '',
       note: data.others || '',
       validity: data.appropriateness || '',
-      instructor: data.evaluator_name || ''
+      instructor: data.evaluator_name || '',
+      periodStart: normalizeDateValue(data.period_start) || defaultPeriod.start,
+      periodEnd: normalizeDateValue(data.period_end) || defaultPeriod.end
     };
   };
 
@@ -46,7 +72,9 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
       evaluator_name: data.instructor || null,
       prev_evaluation_date: data.prevEvalDate || null,
       recipient_number: student?.recipientNumber || null,
-      user_name: student?.name || null
+      user_name: student?.name || null,
+      period_start: data.periodStart || null,
+      period_end: data.periodEnd || null
     };
   };
 
@@ -65,7 +93,9 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
       health: converted?.health || report?.health || '',
       note: converted?.note || report?.note || '',
       validity: converted?.validity || report?.validity || '',
-      instructor: converted?.instructor || report?.instructor || student?.instructorName || ''
+      instructor: converted?.instructor || report?.instructor || student?.instructorName || '',
+      periodStart: converted?.periodStart || report?.periodStart || '',
+      periodEnd: converted?.periodEnd || report?.periodEnd || ''
     };
   });
 
@@ -136,6 +166,12 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
     try {
       const backendData = convertFrontendToBackend(formData);
 
+      if (!backendData.period_start || !backendData.period_end) {
+        const defaults = computeDefaultPeriod(formData.evalDate || new Date().toISOString().split('T')[0]);
+        backendData.period_start = backendData.period_start || defaults.start;
+        backendData.period_end = backendData.period_end || defaults.end;
+      }
+
       let response;
       if (report?.id) {
         // 更新
@@ -157,12 +193,19 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
       if (response.success) {
         alert(report?.id ? '達成度評価を更新しました。' : '達成度評価を保存しました。');
         setIsEditing(false);
+        setFormData(prev => ({
+          ...prev,
+          periodStart: backendData.period_start,
+          periodEnd: backendData.period_end
+        }));
         // 親コンポーネントのコールバックを呼び出し
         if (onSave) {
           onSave({
             ...formData,
             id: report?.id || response.data?.id,
-            method: formData.method === 'その他' ? formData.otherMethod : formData.method
+            method: formData.method === 'その他' ? formData.otherMethod : formData.method,
+            periodStart: backendData.period_start,
+            periodEnd: backendData.period_end
           });
         }
       } else {
@@ -192,7 +235,9 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
       health: converted?.health || report?.health || '',
       note: converted?.note || report?.note || '',
       validity: converted?.validity || report?.validity || '',
-      instructor: converted?.instructor || report?.instructor || student?.instructorName || ''
+      instructor: converted?.instructor || report?.instructor || student?.instructorName || '',
+      periodStart: converted?.periodStart || report?.periodStart || '',
+      periodEnd: converted?.periodEnd || report?.periodEnd || ''
     });
   };
 

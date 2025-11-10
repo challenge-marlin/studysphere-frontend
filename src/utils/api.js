@@ -1,9 +1,5 @@
 // API呼び出し用のユーティリティ関数
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 
-  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-    : 'http://localhost:5050');
+import { API_BASE_URL } from '../config/apiConfig';
 
 // 認証エラー検出フラグ
 let isAuthErrorHandling = false;

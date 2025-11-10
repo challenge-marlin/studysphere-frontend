@@ -1,12 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useInstructorGuard } from '../utils/hooks/useAuthGuard';
-
-// API設定
-const API_BASE_URL = process.env.REACT_APP_API_URL || 
-  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-    : 'http://localhost:5050');
+import { API_BASE_URL } from '../config/apiConfig';
+import { getCurrentUserSatelliteId } from '../utils/locationUtils';
 
 /**
  * 評価(週次)作成画面
@@ -102,6 +98,101 @@ const WeeklyEvaluationPage = () => {
       fetchDailyRecords();
     }
   }, [periodStart, periodEnd, studentId]);
+
+  // 指導員一覧を取得
+  useEffect(() => {
+    const fetchInstructors = async () => {
+      try {
+        // まず生徒情報から拠点IDを取得
+        let satelliteId = student?.satellite_id;
+        
+        // 生徒情報にsatellite_idがない場合、satellite_idsから取得を試みる
+        if (!satelliteId && student?.satellite_ids) {
+          let satelliteIds = student.satellite_ids;
+          if (typeof satelliteIds === 'string') {
+            try {
+              satelliteIds = JSON.parse(satelliteIds);
+            } catch (error) {
+              console.error('satellite_idsパースエラー:', error);
+            }
+          }
+          if (Array.isArray(satelliteIds) && satelliteIds.length > 0) {
+            satelliteId = satelliteIds[0];
+          } else if (satelliteIds && !Array.isArray(satelliteIds)) {
+            satelliteId = satelliteIds;
+          }
+        }
+        
+        // 生徒情報に拠点IDがない場合、現在選択中の拠点IDを取得
+        if (!satelliteId && currentUser) {
+          satelliteId = getCurrentUserSatelliteId(currentUser);
+        }
+        
+        // セッションストレージからも取得を試みる
+        if (!satelliteId) {
+          const savedSatellite = sessionStorage.getItem('selectedSatellite');
+          if (savedSatellite) {
+            try {
+              const satellite = JSON.parse(savedSatellite);
+              satelliteId = satellite.id;
+            } catch (e) {
+              console.error('拠点情報のパースエラー:', e);
+            }
+          }
+        }
+
+        if (!satelliteId) {
+          console.warn('拠点IDが取得できません。指導員一覧を取得できません。');
+          setInstructors([]);
+          return;
+        }
+
+        const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+        if (!token) {
+          console.error('認証トークンが見つかりません');
+          setInstructors([]);
+          return;
+        }
+
+        const response = await fetch(`${API_BASE_URL}/api/users/satellite/${satelliteId}/weekly-evaluation-instructors`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          console.error('指導員一覧取得エラー:', response.status, response.statusText);
+          setInstructors([]);
+          return;
+        }
+
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          console.error('指導員一覧取得エラー: JSONではないレスポンス');
+          setInstructors([]);
+          return;
+        }
+
+        const data = await response.json();
+        if (data.success && data.data) {
+          console.log('指導員一覧取得成功:', data.data.length, '件');
+          setInstructors(data.data);
+        } else {
+          console.error('指導員一覧取得エラー:', data.message || 'データ取得に失敗しました');
+          setInstructors([]);
+        }
+      } catch (error) {
+        console.error('指導員一覧取得エラー:', error);
+        setInstructors([]);
+      }
+    };
+
+    // 生徒情報または現在ユーザーが利用可能な場合に取得
+    if (student || currentUser) {
+      fetchInstructors();
+    }
+  }, [student, currentUser]);
 
   // 生徒情報と前回評価日を取得
   const fetchStudentInfo = async () => {
@@ -200,8 +291,17 @@ const WeeklyEvaluationPage = () => {
           console.error('●▶日次記録取得エラー:', errorData.message || 'エラーが発生しました', {
             status: response.status,
             statusText: response.statusText,
-            error: errorData
+            error: errorData,
+            sqlError: errorData.sqlError,
+            sqlCode: errorData.sqlCode
           });
+          
+          // ユーザーに分かりやすいエラーメッセージを表示
+          if (response.status === 401 || response.status === 403) {
+            alert('認証エラーが発生しました。ログインし直してください。');
+          } else if (errorData.sqlError) {
+            console.error('SQLエラー詳細:', errorData.sqlError);
+          }
         } else {
           const text = await response.text();
           console.error('●▶日次記録取得エラー: HTMLレスポンスが返されました', {
@@ -301,11 +401,11 @@ const WeeklyEvaluationPage = () => {
         body: JSON.stringify({
           user_id: student.id,
           date: new Date().toISOString().split('T')[0],
-          prev_eval_date: prevEvalDate,
+          prev_eval_date: prevEvalDate && prevEvalDate.trim() !== '' ? prevEvalDate : null, // 空文字列の場合はnullに変換
           period_start: periodStart,
           period_end: periodEnd,
-          evaluation_method: evaluationData.method === 'その他' ? evaluationData.methodOther : evaluationData.method,
-          method_other: evaluationData.method === 'その他' ? evaluationData.methodOther : null,
+          evaluation_method: evaluationData.method, // ENUM値（'通所', '訪問', 'その他'）をそのまま送信
+          method_other: evaluationData.method === 'その他' ? evaluationData.methodOther : null, // 「その他」の場合のみ補足情報を送信
           evaluation_content: evaluationData.content,
           recorder_name: evaluationData.recorder,
           confirm_name: evaluationData.confirmer
@@ -318,14 +418,36 @@ const WeeklyEvaluationPage = () => {
           alert('評価(週次)を保存しました。');
           saveLocationAndNavigate();
         } else {
-          alert('保存に失敗しました: ' + data.message);
+          const errorMsg = data.message || '保存に失敗しました';
+          const sqlError = data.sqlError ? `\nSQLエラー: ${data.sqlError}` : '';
+          alert(`保存に失敗しました: ${errorMsg}${sqlError}`);
+          console.error('保存エラー詳細:', data);
         }
       } else {
-        alert('保存に失敗しました。');
+        const contentType = response.headers.get('content-type');
+        let errorMessage = '保存に失敗しました。';
+        
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorMessage;
+            if (errorData.sqlError) {
+              errorMessage += `\nSQLエラー: ${errorData.sqlError}`;
+            }
+            console.error('保存エラー詳細:', errorData);
+          } catch (e) {
+            console.error('エラーレスポンスの解析に失敗:', e);
+          }
+        } else {
+          const text = await response.text();
+          console.error('HTMLレスポンス:', text.substring(0, 200));
+        }
+        
+        alert(`保存に失敗しました: ${errorMessage} (ステータス: ${response.status})`);
       }
     } catch (error) {
       console.error('保存エラー:', error);
-      alert('保存中にエラーが発生しました。');
+      alert('保存中にエラーが発生しました: ' + error.message);
     }
   };
 

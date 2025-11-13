@@ -670,6 +670,31 @@ const LessonManagement = () => {
     }
   };
 
+  const decodeBase64Utf8 = (value) => {
+    if (typeof value !== 'string' || value.length === 0) return null;
+    try {
+      const binary = atob(value);
+      let result = '';
+      for (let i = 0; i < binary.length; i++) {
+        const hex = binary.charCodeAt(i).toString(16).padStart(2, '0');
+        result += `%${hex.toUpperCase()}`;
+      }
+      return decodeURIComponent(result);
+    } catch (error) {
+      console.warn('Base64デコードに失敗しました', { value, error });
+      return null;
+    }
+  };
+
+  const normalizeTextEncoding = (value) => {
+    if (typeof value !== 'string' || value.length === 0) return value;
+    try {
+      return decodeURIComponent(escape(value));
+    } catch (error) {
+      return value;
+    }
+  };
+
   // ファイル一覧表示
   const handleShowFileList = async (lessonId) => {
     try {
@@ -682,6 +707,17 @@ const LessonManagement = () => {
         // レスポンスデータの構造を確認
         console.log('レスポンスデータの型:', typeof response.data);
         console.log('レスポンスデータの内容:', response.data);
+        if (Array.isArray(response.data)) {
+          response.data.forEach((file, idx) => {
+            console.log(`ファイルメタデータ[${idx}]:`, file);
+            if (file?.metadata) {
+              console.log(`metadata[${idx}]:`, file.metadata);
+            }
+            if (file?.metadataRaw) {
+              console.log(`metadataRaw[${idx}]:`, file.metadataRaw);
+            }
+          });
+        }
         
         let fileData;
         
@@ -729,8 +765,53 @@ const LessonManagement = () => {
   };
 
   // 個別ファイルダウンロード
-  const handleDownloadIndividualFile = async (fileKey, fileName) => {
+  const handleDownloadIndividualFile = async (file) => {
     try {
+      const rawOriginalNameBase64 =
+        file?.metadataRaw &&
+        typeof file.metadataRaw === 'object' &&
+        typeof file.metadataRaw['original-name'] === 'string'
+          ? file.metadataRaw['original-name']
+          : null;
+
+      const decodedRawOriginalName = rawOriginalNameBase64
+        ? decodeBase64Utf8(rawOriginalNameBase64)
+        : null;
+
+      const fileKey =
+        file?.key ||
+        file?.s3_key ||
+        file?.s3Key ||
+        file?.file_key ||
+        file?.fileKey ||
+        file?.Key ||
+        file?.S3Key ||
+        null;
+
+      if (!fileKey) {
+        const message = 'ファイルキーが取得できませんでした。';
+        console.error(message, { file });
+        setError(message);
+        return;
+      }
+
+      const resolvedFileNameCandidate =
+        decodedRawOriginalName ||
+        file?.display_name ||
+        file?.original_file_name ||
+        file?.file_name ||
+        file?.name ||
+        file?.originalName ||
+        (typeof file?.fileName === 'string' ? file.fileName : undefined) ||
+        (file?.metadata && typeof file.metadata['original-name'] === 'string'
+          ? file.metadata['original-name']
+          : undefined) ||
+        (fileKey ? fileKey.split('/').pop() : undefined);
+
+      const resolvedFileName = normalizeTextEncoding(
+        resolvedFileNameCandidate || 'downloaded-file'
+      );
+
       const blob = await apiDownloadBinary(`/api/lessons/download-file`, {
         method: 'POST',
         body: JSON.stringify({ fileKey }),
@@ -742,14 +823,18 @@ const LessonManagement = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', fileName);
+      link.setAttribute('download', resolvedFileName);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      setError('ファイルのダウンロードに失敗しました');
       console.error('Error downloading individual file:', err);
+      const fallbackMessage =
+        err?.message && typeof err.message === 'string'
+          ? `ファイルのダウンロードに失敗しました: ${err.message}`
+          : 'ファイルのダウンロードに失敗しました';
+      setError(fallbackMessage);
     }
   };
 
@@ -1797,27 +1882,60 @@ const LessonManagement = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedLessonFiles.files?.map((file, index) => (
-                      <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200">
-                        <td className="px-4 py-3 font-medium text-gray-800">
-                          {file?.name || '不明なファイル'}
-                        </td>
-                        <td className="px-4 py-3 text-gray-600">
-                          {file?.sizeFormatted || '不明'}
-                        </td>
-                        <td className="px-4 py-3 text-gray-600">
-                          {file?.lastModified ? new Date(file.lastModified).toLocaleString('ja-JP') : '不明'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <button
-                            onClick={() => handleDownloadIndividualFile(file?.key, file?.name)}
-                            className="px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
-                          >
-                            📥 ダウンロード
-                          </button>
-                        </td>
-                      </tr>
-                    )) || (
+                    {selectedLessonFiles.files?.map((file, index) => {
+                      const fileKey =
+                        file?.key ||
+                        file?.s3_key ||
+                        file?.s3Key ||
+                        file?.file_key ||
+                        file?.fileKey ||
+                        file?.Key ||
+                        file?.S3Key ||
+                        null;
+                      const displayFileName =
+                        normalizeTextEncoding(
+                          decodeBase64Utf8(
+                            file?.metadataRaw &&
+                              typeof file.metadataRaw === 'object' &&
+                              typeof file.metadataRaw['original-name'] === 'string'
+                              ? file.metadataRaw['original-name']
+                              : ''
+                          ) ||
+                            file?.display_name ||
+                            file?.original_file_name ||
+                            file?.file_name ||
+                            file?.name ||
+                            file?.originalName ||
+                            (typeof file?.fileName === 'string' ? file.fileName : undefined) ||
+                            (file?.metadata && typeof file.metadata['original-name'] === 'string'
+                              ? file.metadata['original-name']
+                              : undefined) ||
+                            (fileKey ? fileKey.split('/').pop() : undefined) ||
+                            '不明なファイル'
+                        );
+
+                      return (
+                        <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200">
+                          <td className="px-4 py-3 font-medium text-gray-800">
+                            {displayFileName}
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">
+                            {file?.sizeFormatted || file?.size || '不明'}
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">
+                            {file?.lastModified ? new Date(file.lastModified).toLocaleString('ja-JP') : '不明'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => handleDownloadIndividualFile(file)}
+                              className="px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+                            >
+                              📥 ダウンロード
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    }) || (
                       <tr>
                         <td colSpan="4" className="px-4 py-3 text-center text-gray-500">
                           ファイルが見つかりません

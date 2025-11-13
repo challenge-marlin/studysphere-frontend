@@ -374,6 +374,70 @@ const HomeSupportRecordsPage = () => {
     }
   };
 
+  // 日報を削除
+  const deleteDailyReport = async (reportId) => {
+    if (!reportId) {
+      alert('削除する日報が特定できません。');
+      return;
+    }
+
+    const confirmMessage = 'この日次支援記録を削除しますか？\nこの操作は取り消せません。';
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      const response = await apiCall(`/api/remote-support/daily-reports/${reportId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.success) {
+        if (editingDailyReport === reportId || editingWeeklyReport === reportId) {
+          cancelEdit();
+        }
+        alert('日次支援記録を削除しました。');
+        await searchRecords();
+      } else {
+        alert('削除に失敗しました: ' + (response.message || 'エラーが発生しました'));
+      }
+    } catch (error) {
+      console.error('日報削除エラー:', error);
+      alert('削除中にエラーが発生しました: ' + error.message);
+    }
+  };
+
+  // 週報を削除
+  const deleteWeeklyReport = async (reportId) => {
+    if (!reportId) {
+      alert('削除する週次評価が特定できません。');
+      return;
+    }
+
+    const confirmMessage = 'この週次評価を削除しますか？\nこの操作は取り消せません。';
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      const response = await apiCall(`/api/weekly-evaluations/${reportId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.success) {
+        if (editingWeeklyReport === reportId || editingDailyReport === reportId) {
+          cancelEdit();
+        }
+        alert('週次評価を削除しました。');
+        await searchRecords();
+      } else {
+        alert('削除に失敗しました: ' + (response.message || 'エラーが発生しました'));
+      }
+    } catch (error) {
+      console.error('週報削除エラー:', error);
+      alert('削除中にエラーが発生しました: ' + error.message);
+    }
+  };
+
   // 編集をキャンセル
   const cancelEdit = () => {
     setEditingDailyReport(null);
@@ -1561,12 +1625,20 @@ const HomeSupportRecordsPage = () => {
                               </button>
                             </>
                           ) : (
+                          <>
                             <button
                               onClick={() => startEditDailyReport(record)}
                               className="px-3 py-1 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 print:hidden"
                             >
                               編集
                             </button>
+                            <button
+                              onClick={() => deleteDailyReport(record.id)}
+                              className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700 print:hidden"
+                            >
+                              削除
+                            </button>
+                          </>
                           )}
                         </div>
                       </div>
@@ -1747,12 +1819,20 @@ const HomeSupportRecordsPage = () => {
                               </button>
                             </>
                           ) : (
+                          <>
                             <button
                               onClick={() => startEditWeeklyReport(record)}
                               className="px-3 py-1 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 print:hidden"
                             >
                               編集
                             </button>
+                            <button
+                              onClick={() => deleteWeeklyReport(record.id)}
+                              className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700 print:hidden"
+                            >
+                              削除
+                            </button>
+                          </>
                           )}
                         </div>
                       </div>

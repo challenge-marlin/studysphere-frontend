@@ -12,6 +12,13 @@ import AIAssistantService from './AIAssistantService';
 import { SessionStorageManager } from '../../utils/sessionStorage';
 import { API_BASE_URL } from '../../config/apiConfig';
 
+const TEXT_ERROR_KEYWORDS = [
+  'テキストファイルの読み込みに失敗しました',
+  'テキストファイルが設定されていません',
+  'テキスト内容が利用できません',
+  '教材テキストを読み込めません'
+];
+
 const EnhancedLearningPageRefactored = () => {
   const navigate = useNavigate();
   const { currentUser } = useContext(AuthContext);
@@ -38,6 +45,14 @@ const EnhancedLearningPageRefactored = () => {
   const textContainerRef = useRef(null);
   const latestFetchId = useRef(0); // レースコンディション防止用
   const abortControllerRef = useRef(null); // リクエストキャンセル用
+
+  const isErrorTextContent = (content) => {
+    const normalized = (content || '').trim();
+    if (!normalized) {
+      return true;
+    }
+    return TEXT_ERROR_KEYWORDS.some(keyword => normalized.includes(keyword));
+  };
 
   // 学習進捗管理フックを使用
   const {
@@ -768,7 +783,7 @@ const EnhancedLearningPageRefactored = () => {
     // セッションストレージからコンテキストを確認
     if (lessonData?.s3_key && lessonData?.id) {
       const storedContext = SessionStorageManager.getContext(lessonData.id, lessonData.s3_key, lessonData.file_type);
-      if (storedContext) {
+      if (storedContext && !isErrorTextContent(storedContext.context)) {
         console.log('AIサポート用にセッションストレージからコンテキスト取得:', {
           contextLength: storedContext.context.length
         });
@@ -779,11 +794,13 @@ const EnhancedLearningPageRefactored = () => {
     // フォールバック: 既存のロジック
     if (currentSection >= 0 && sectionData && sectionData[currentSection]) {
       // セクション固有のテキストがある場合はそれを返す
-      return textContent || pdfTextContent || lessonData?.description || 'テキスト内容が利用できません';
+      const fallbackText = textContent || pdfTextContent || lessonData?.description || '';
+      return isErrorTextContent(fallbackText) ? '' : fallbackText;
     }
     
     // デフォルトはレッスンのテキスト内容
-    return textContent || pdfTextContent || lessonData?.description || 'テキスト内容が利用できません';
+    const fallbackText = textContent || pdfTextContent || lessonData?.description || '';
+    return isErrorTextContent(fallbackText) ? '' : fallbackText;
   };
 
   // PDFテキスト更新ハンドラー
@@ -794,23 +811,30 @@ const EnhancedLearningPageRefactored = () => {
       isCancel: newPdfText?.includes('キャンセル')
     });
     
-    if (newPdfText && newPdfText.length > 0) {
-      // エラーメッセージの場合は処理状態をerrorに設定
-      if (newPdfText.startsWith('エラー:') || newPdfText.includes('失敗') || newPdfText.includes('タイムアウト')) {
+    const incomingText = newPdfText || '';
+    
+    if (incomingText && incomingText.length > 0) {
+      if (
+        incomingText.startsWith('エラー:') ||
+        incomingText.includes('失敗') ||
+        incomingText.includes('タイムアウト')
+      ) {
         setPdfProcessingStatus('error');
-        console.log('PDF処理でエラーが発生しました:', newPdfText);
-      } else if (newPdfText.includes('キャンセル')) {
+        setPdfTextContent('');
+        console.log('PDF処理でエラーが発生しました:', incomingText);
+      } else if (incomingText.includes('キャンセル')) {
         setPdfProcessingStatus('idle');
+        setPdfTextContent('');
         console.log('PDF処理がキャンセルされました');
       } else {
-        // 正常にテキストが抽出された場合
         setPdfTextExtracted(true);
         setPdfProcessingStatus('completed');
-        console.log('PDFテキスト抽出完了:', { textLength: newPdfText.length });
+        setPdfTextContent(incomingText);
+        console.log('PDFテキスト抽出完了:', { textLength: incomingText.length });
       }
     } else {
-      // 空のテキストの場合はエラーとして扱う
       setPdfProcessingStatus('error');
+      setPdfTextContent('');
       console.log('PDF処理で空のテキストが返されました');
     }
   };
@@ -983,6 +1007,39 @@ const EnhancedLearningPageRefactored = () => {
     );
   }
 
+  const isPdfLesson = lessonData?.file_type === 'pdf';
+  const effectiveTextContent = isPdfLesson ? pdfTextContent : textContent;
+  let textStatusType = null;
+  let textStatusMessage = '';
+
+  if (!lessonData) {
+    textStatusType = 'loading';
+    textStatusMessage = '教材データを読み込み中です。';
+  } else if (!lessonData?.s3_key) {
+    textStatusType = 'error';
+    textStatusMessage = '教材のテキストファイルが設定されていないため、テストとAIサポートを利用できません。';
+  } else if (isPdfLesson) {
+    if (pdfProcessingStatus === 'processing' || (pdfProcessingStatus === 'idle' && !pdfTextContent)) {
+      textStatusType = 'loading';
+      textStatusMessage = '教材PDFを処理中です。完了後にテストとAIサポートを利用できます。';
+    } else if (pdfProcessingStatus === 'error' || isErrorTextContent(effectiveTextContent)) {
+      textStatusType = 'error';
+      textStatusMessage = '教材PDFの読み込みに失敗しました。ページを再読み込みしてください。';
+    }
+  } else if (textLoading) {
+    textStatusType = 'loading';
+    textStatusMessage = '教材テキストを読み込み中です。完了後にテストとAIサポートを利用できます。';
+  } else if (isErrorTextContent(effectiveTextContent)) {
+    textStatusType = 'error';
+    textStatusMessage = '教材テキストの読み込みに失敗しました。ページを再読み込みしてください。';
+  }
+
+  const isTextReady = textStatusType === null;
+  const isTestEnabled = isTextReady;
+  const testDisabledReason = isTextReady ? '' : textStatusMessage;
+  const isAIEnabled = isTextReady;
+  const aiStatus = isTextReady ? null : { type: textStatusType, message: textStatusMessage };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50">
       {/* ヘッダー */}
@@ -995,10 +1052,8 @@ const EnhancedLearningPageRefactored = () => {
         onSectionChange={changeSection}
         onUploadModalOpen={() => setShowUploadModal(true)}
         onTestNavigate={(lessonId) => navigate(`/student/test?lesson=${lessonId}`)}
-        isTestEnabled={
-          pdfProcessingStatus === 'completed' || // PDF処理完了時
-          (lessonData?.file_type !== 'pdf' && lessonData?.textContent) // テキストファイルの場合
-        }
+        isTestEnabled={isTestEnabled}
+        testDisabledReason={testDisabledReason}
         hasAssignment={assignmentStatus.hasAssignment}
         assignmentSubmitted={assignmentStatus.assignmentSubmitted}
       />
@@ -1090,14 +1145,8 @@ const EnhancedLearningPageRefactored = () => {
                currentLessonData={currentLessonData}
                currentSectionText={getCurrentSectionText()}
                isAILoading={isAILoading}
-               isAIEnabled={
-                 pdfProcessingStatus === 'completed' || 
-                 (lessonData?.file_type === 'pdf' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type)) ||
-                 (lessonData?.file_type === 'txt' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type)) ||
-                 (lessonData?.file_type === 'md' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type)) ||
-                 (lessonData?.file_type === 'application/rtf' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type)) ||
-                 (lessonData?.file_type !== 'pdf' && lessonData?.textContent) // フォールバック: 通常のテキストファイルの場合
-               }
+              isAIEnabled={isAIEnabled}
+              aiStatus={aiStatus}
              />
 
             {/* 提出物確認（課題がある場合のみ表示） */}

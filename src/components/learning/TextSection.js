@@ -5,6 +5,12 @@ import MarkdownRenderer from './MarkdownRenderer';
 import { SessionStorageManager } from '../../utils/sessionStorage';
 import { API_BASE_URL } from '../../config/apiConfig';
 
+const TEXT_ERROR_KEYWORDS = [
+  'テキストファイルの読み込みに失敗しました',
+  'テキストファイルが設定されていません',
+  'テキスト内容が利用できません'
+];
+
 const TextSection = ({
   lessonData,
   textContent,
@@ -94,6 +100,18 @@ const TextSection = ({
         textLength: textContent.length,
         s3Key: lessonData.s3_key
       });
+      
+      const normalizedText = textContent.trim();
+      const isErrorContent = !normalizedText || TEXT_ERROR_KEYWORDS.some(keyword => normalizedText.includes(keyword));
+      
+      if (isErrorContent) {
+        console.warn('テキストコンテンツがエラー状態のため、セッションストレージへの保存をスキップします');
+        if (onTextContentUpdate) {
+          onTextContentUpdate(textContent);
+        }
+        processedS3KeyRef.current = lessonData.s3_key;
+        return;
+      }
       
       // セッションストレージにコンテキストを保存
       const saveSuccess = SessionStorageManager.saveContext(

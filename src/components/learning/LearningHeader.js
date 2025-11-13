@@ -12,6 +12,7 @@ const LearningHeader = ({
   onUploadModalOpen,
   onTestNavigate,
   isTestEnabled,
+  testDisabledReason,
   hasAssignment,
   assignmentSubmitted
 }) => {
@@ -144,7 +145,7 @@ const LearningHeader = ({
             )}
             
             {/* テストメニュー */}
-            <div className="relative group">
+            <div className="relative group flex flex-col items-start">
               <button 
                 className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all duration-200 hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!isTestEnabled}
@@ -184,6 +185,12 @@ const LearningHeader = ({
                     </button>
                   </div>
                 </div>
+              )}
+              
+              {!isTestEnabled && testDisabledReason && (
+                <p className="mt-2 text-xs text-yellow-100 max-w-xs leading-snug">
+                  {testDisabledReason}
+                </p>
               )}
             </div>
           </div>

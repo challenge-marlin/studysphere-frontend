@@ -16,6 +16,19 @@ const HomeSupportUserAdditionModal = ({ isOpen, onClose, onSuccess }) => {
   const [currentSatellite, setCurrentSatellite] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
 
+  const getInstructorKey = (instructor) => {
+    if (!instructor) return '';
+    if (instructor.id !== null && instructor.id !== undefined) {
+      return String(instructor.id);
+    }
+    return 'unassigned';
+  };
+
+  const isInstructorSelected = (instructor) => {
+    const key = getInstructorKey(instructor);
+    return key !== '' && selectedInstructors.includes(key);
+  };
+
   // ストレージから拠点情報とユーザー情報を取得
   useEffect(() => {
     if (isOpen) {
@@ -107,7 +120,13 @@ const HomeSupportUserAdditionModal = ({ isOpen, onClose, onSuccess }) => {
       
       if (response.success) {
         console.log('取得した指導員データ:', response.data);
-        setInstructors(response.data || []);
+        const formattedInstructors = (response.data || []).sort((a, b) => {
+          if ((a.is_unassigned ?? false) === (b.is_unassigned ?? false)) {
+            return a.name.localeCompare(b.name, 'ja');
+          }
+          return a.is_unassigned ? 1 : -1;
+        });
+        setInstructors(formattedInstructors);
         // 初期状態では指導員は選択されていない
         setSelectedInstructors([]);
         
@@ -135,7 +154,9 @@ const HomeSupportUserAdditionModal = ({ isOpen, onClose, onSuccess }) => {
     try {
       setLoading(true);
       // 指導員が選択されていない場合は現在のユーザーのみの利用者を取得
-      const instructorIds = selectedInstructors.length > 0 ? selectedInstructors : [currentUser?.id].filter(Boolean);
+      const instructorIds = selectedInstructors.length > 0 
+        ? selectedInstructors 
+        : [currentUser?.id].filter(Boolean).map(String);
       const response = await getSatelliteUsersForHomeSupport(currentSatellite.id, instructorIds);
       if (response.success) {
         console.log('取得した利用者データ:', response.data);
@@ -321,19 +342,23 @@ const HomeSupportUserAdditionModal = ({ isOpen, onClose, onSuccess }) => {
               ) : (
                 <>
                   <div className="flex flex-wrap gap-3">
-                    {instructors.map(instructor => (
-                      <button
-                        key={instructor.id}
-                        onClick={() => handleInstructorToggle(instructor.id)}
-                        className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 ${
-                          selectedInstructors.includes(instructor.id)
-                            ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
-                            : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                        }`}
-                      >
-                        {instructor.name} ({instructor.student_count}名)
-                      </button>
-                    ))}
+                    {instructors.map(instructor => {
+                      const instructorKey = getInstructorKey(instructor);
+                      const selected = isInstructorSelected(instructor);
+                      return (
+                        <button
+                          key={instructorKey}
+                          onClick={() => handleInstructorToggle(instructorKey)}
+                          className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 ${
+                            selected
+                              ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
+                              : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                          }`}
+                        >
+                          {instructor.name} ({instructor.student_count}名)
+                        </button>
+                      );
+                    })}
                   </div>
                   <p className="text-sm text-gray-600">
                     選択中の指導員: {selectedInstructors.length}名

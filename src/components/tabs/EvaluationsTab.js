@@ -400,13 +400,13 @@ const EvaluationsTab = ({
                             onClick={() => navigateWithLocation(`/instructor/home-support/records/${user.id}`)}
                             className="text-white text-sm px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-700 transition-colors duration-200"
                           >
-                            🔍 記録確認
+                            🔍 過去の記録確認
                           </button>
                           <button 
                             onClick={() => navigateWithLocation(`/instructor/home-support/monthly-evaluation-history/${user.id}`)}
                             className="text-white text-sm px-3 py-1 rounded bg-purple-600 hover:bg-purple-700 transition-colors duration-200"
                           >
-                            📊 達成度確認
+                            📊 達成度履歴確認
                           </button>
                         </div>
                       </td>

@@ -9,3 +9,18 @@ root.render(
     <App />
   </React.StrictMode>
 ); 
+
+const registerNotificationServiceWorker = async () => {
+  if (!('serviceWorker' in navigator)) {
+    return;
+  }
+
+  try {
+    await navigator.serviceWorker.register('/notification-sw.js');
+    console.log('Notification service worker registered.');
+  } catch (error) {
+    console.error('Failed to register notification service worker:', error);
+  }
+};
+
+registerNotificationServiceWorker();

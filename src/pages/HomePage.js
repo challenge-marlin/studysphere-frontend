@@ -116,7 +116,7 @@ const HomePage = () => {
               >
                 <span className="text-2xl">⊞</span>
                 <span className="animate-bounce">⬇</span>
-                アプリをダウンロード
+                アプリをダウンロード（v1.1.3）
               </a>
             </div>
           </div>

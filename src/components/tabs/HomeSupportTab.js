@@ -220,6 +220,21 @@ const HomeSupportTab = () => {
             });
           }
         });
+
+        // 日次記録を新しい順にソート（先頭が最新、末尾が最古）
+        userMap.forEach(userEntry => {
+          if (Array.isArray(userEntry.dailyRecords)) {
+            userEntry.dailyRecords.sort((a, b) => {
+              const dateA = a.date ? new Date(a.date) : null;
+              const dateB = b.date ? new Date(b.date) : null;
+
+              if (dateA && dateB) return dateB - dateA; // 降順（新しいものが先頭）
+              if (dateA) return -1;
+              if (dateB) return 1;
+              return 0;
+            });
+          }
+        });
         
         const formattedUsers = Array.from(userMap.values());
         
@@ -302,16 +317,55 @@ const HomeSupportTab = () => {
           if (user.weeklyStatus === '未完了') {
             const userData = students.find(s => s.id === user.id);
             
+            const getOldestPendingDailyRecordDate = () => {
+              if (!userData || !Array.isArray(userData.dailyRecords) || userData.dailyRecords.length === 0) {
+                return null;
+              }
+
+              const lastWeeklyReference = user.lastWeeklyPeriodEnd || user.lastWeeklyRecordDate;
+              const lastWeeklyDate = parseJapanDate(lastWeeklyReference);
+
+              const sortedDailyRecords = [...userData.dailyRecords].sort((a, b) => {
+                const dateA = parseJapanDate(a.date);
+                const dateB = parseJapanDate(b.date);
+
+                if (dateA && dateB) return dateB - dateA; // 新しい順
+                if (dateA) return -1;
+                if (dateB) return 1;
+                return 0;
+              });
+
+              const pendingRecords = sortedDailyRecords.filter(record => {
+                const recordDate = parseJapanDate(record.date);
+                if (!recordDate) return false;
+                if (!lastWeeklyDate) return true;
+                return recordDate > lastWeeklyDate;
+              });
+
+              if (pendingRecords.length === 0) {
+                return null;
+              }
+
+              const oldestPendingRecord = pendingRecords[pendingRecords.length - 1];
+              return oldestPendingRecord?.date || null;
+            };
+
+            const oldestPendingDailyRecordDate = getOldestPendingDailyRecordDate();
+
+            const fallbackDailyRecordDate =
+              userData?.dailyRecords && userData.dailyRecords.length > 0
+                ? userData.dailyRecords[userData.dailyRecords.length - 1].date
+                : null;
+
             const referenceDate =
+              oldestPendingDailyRecordDate ||
               user.lastWeeklyPeriodEnd ||
               user.lastWeeklyRecordDate ||
-              (userData?.dailyRecords && userData.dailyRecords.length > 0
-                ? userData.dailyRecords[0].date
-                : null);
+              fallbackDailyRecordDate;
             
             const daysSinceRecord = calculateDaysSince(referenceDate);
             
-            if (daysSinceRecord !== null && daysSinceRecord >= 8) {
+            if (daysSinceRecord !== null && daysSinceRecord >= 7) {
               weeklyRecordAlerts.push({
                 userId: user.id,
                 userName: user.name,

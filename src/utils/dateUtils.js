@@ -69,23 +69,7 @@ export const formatJapanTime = (date, options = {}) => {
  */
 export const formatDatabaseTime = (date, options = {}) => {
   if (!date) return '';
-  
-  // データベースから取得した日本時間の値をそのまま表示
-  // タイムゾーン変換を避けるため、文字列として直接フォーマット
-  const dateString = date.toString();
-  
-  // ISO形式またはDATETIME形式の場合
-  if (dateString.includes('-') && (dateString.includes(' ') || dateString.includes('T'))) {
-    let formatted = dateString
-      .replace(/-/g, '/')           // ハイフンをスラッシュに変換
-      .replace('T', ' ')            // Tをスペースに変換
-      .replace(/\.\d{3}Z?$/, '')    // .000Z または .000 を削除
-      .replace(/\s+/g, ' ');        // 複数のスペースを1つに統一
-    
-    return formatted;
-  }
-  
-  // その他の場合は従来の方法を使用
+
   const defaultOptions = {
     year: 'numeric',
     month: '2-digit',
@@ -94,9 +78,37 @@ export const formatDatabaseTime = (date, options = {}) => {
     minute: '2-digit',
     second: '2-digit'
   };
-  
+
+  const mergedOptions = { ...defaultOptions, ...options };
+  const dateString = typeof date === 'string' ? date : date.toString();
+
+  // ISO形式やZ付きのUTC日時は日本時間に変換して表示
+  const isUTCString = /Z$|([+-]\d{2}:\d{2})$| UTC$/i.test(dateString);
+  if (isUTCString) {
+    const utcDate = new Date(dateString);
+    if (!isNaN(utcDate.getTime())) {
+      return utcDate.toLocaleString('ja-JP', { ...mergedOptions, timeZone: 'Asia/Tokyo' });
+    }
+  }
+
+  // MySQLのDATETIME形式（タイムゾーン情報なし）の場合でも、
+  // 末尾がZでなければ既に日本時間として扱う
+  if (dateString.includes('-') && (dateString.includes(' ') || dateString.includes('T'))) {
+    const parsedDate = new Date(dateString);
+    if (!isNaN(parsedDate.getTime())) {
+      return parsedDate.toLocaleString('ja-JP', mergedOptions);
+    }
+
+    // 直接整形（Fallback）
+    return dateString
+      .replace(/-/g, '/')
+      .replace('T', ' ')
+      .replace(/\.\d{3}Z?$/, '')
+      .replace(/\s+/g, ' ');
+  }
+
   const dateObj = new Date(date);
-  return dateObj.toLocaleString('ja-JP', { ...defaultOptions, ...options });
+  return dateObj.toLocaleString('ja-JP', mergedOptions);
 };
 
 /**

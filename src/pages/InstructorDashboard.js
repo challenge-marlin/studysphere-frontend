@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useInstructorGuard } from '../utils/hooks/useAuthGuard';
 import InstructorHeader from '../components/InstructorHeader';
@@ -20,6 +20,8 @@ import SubmissionApprovalModal from '../components/student-management/Submission
 import PendingApprovalAlert from '../components/student-management/PendingApprovalAlert';
 import { API_BASE_URL } from '../config/apiConfig';
 import PendingSubmissionAlert from '../components/student-management/PendingSubmissionAlert';
+import useBrowserNotifications from '../utils/hooks/useBrowserNotifications';
+import { fetchLatestMessageSummary, truncateText } from '../utils/messageUtils';
 
 import { 
   getInstructorSpecializations, 
@@ -83,6 +85,25 @@ const InstructorDashboard = () => {
   const [localUser, setLocalUser] = useState(null);
   const [messagePollingInterval, setMessagePollingInterval] = useState(null);
   const [newMessageNotification, setNewMessageNotification] = useState(null);
+  const [messageRefreshSignal, setMessageRefreshSignal] = useState(0);
+  const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
+  const lastUnreadCountRef = useRef(0);
+
+  const {
+    isSupported: isNotificationSupported,
+    permission: notificationPermission,
+    requestPermission: requestNotificationPermission,
+    showNotification,
+    subscribeToPush,
+  } = useBrowserNotifications();
+
+  useEffect(() => {
+    if (!isNotificationSupported) {
+      setShowNotificationPrompt(false);
+      return;
+    }
+    setShowNotificationPrompt(notificationPermission === 'default');
+  }, [isNotificationSupported, notificationPermission]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -130,19 +151,17 @@ const InstructorDashboard = () => {
 
   // 声かけタブのアクティブ状態に応じて定期確認を制御
   useEffect(() => {
-    if (activeTab === 'overview') {
-      // 声かけタブがアクティブな場合、定期確認を開始
-      startMessagePolling();
-    } else {
-      // 他のタブがアクティブな場合、定期確認を停止
+    if (!currentUser) {
       stopMessagePolling();
+      return;
     }
 
-    // クリーンアップ関数
+    startMessagePolling();
+
     return () => {
       stopMessagePolling();
     };
-  }, [activeTab]);
+  }, [currentUser]);
 
   // 専門分野一覧を取得
   const loadSpecializations = async () => {
@@ -160,17 +179,53 @@ const InstructorDashboard = () => {
   const checkNewMessages = async () => {
     try {
       const response = await apiGet('/api/messages/unread-count');
-      if (response.success && response.data.unread_count > 0) {
-        // 新着メッセージがある場合の通知
-        setNewMessageNotification({
-          count: response.data.unread_count,
-          timestamp: new Date()
-        });
-        
-        // 3秒後に通知を自動で非表示
-        setTimeout(() => {
-          setNewMessageNotification(null);
-        }, 3000);
+      if (response.success) {
+        const unreadCount = response.data.unread_count || 0;
+        const hasUnreadCountChanged = unreadCount !== lastUnreadCountRef.current;
+        const hasUnreadIncreased = unreadCount > lastUnreadCountRef.current;
+
+        if (hasUnreadCountChanged) {
+          setMessageRefreshSignal(prev => prev + 1);
+        }
+
+        let latestMessageSummary = null;
+
+        if (unreadCount > 0 && hasUnreadCountChanged) {
+          latestMessageSummary = await fetchLatestMessageSummary();
+        }
+
+        if (unreadCount > 0) {
+          // 新着メッセージがある場合の通知
+          setNewMessageNotification({
+            count: unreadCount,
+            timestamp: new Date(),
+            latestMessage: latestMessageSummary
+          });
+          
+          const shouldShowDesktopNotification = hasUnreadIncreased;
+
+          if (
+            shouldShowDesktopNotification &&
+            isNotificationSupported &&
+            notificationPermission === 'granted'
+          ) {
+            const notificationBody = latestMessageSummary?.messageText
+              ? `${latestMessageSummary.senderName ? `${latestMessageSummary.senderName}: ` : ''}${truncateText(latestMessageSummary.messageText)}`
+              : `新着メッセージが${unreadCount}件あります。`;
+
+            showNotification('Study Sphere', {
+              body: notificationBody,
+              tag: 'study-sphere-messages',
+              renotify: true
+            });
+          }
+          
+          // 3秒後に通知を自動で非表示
+          setTimeout(() => {
+            setNewMessageNotification(null);
+          }, 3000);
+        }
+        lastUnreadCountRef.current = unreadCount;
       }
     } catch (error) {
       console.error('新着メッセージ確認エラー:', error);
@@ -179,6 +234,11 @@ const InstructorDashboard = () => {
 
   // 定期確認の開始
   const startMessagePolling = () => {
+    if (!currentUser) {
+      console.log('認証されていないため、メッセージ定期確認を開始しません');
+      return;
+    }
+
     if (messagePollingInterval) {
       clearInterval(messagePollingInterval);
     }
@@ -196,6 +256,19 @@ const InstructorDashboard = () => {
     if (messagePollingInterval) {
       clearInterval(messagePollingInterval);
       setMessagePollingInterval(null);
+    }
+  };
+
+  const handleEnableNotifications = async () => {
+    const result = await requestNotificationPermission();
+    if (result !== 'granted') {
+      alert('通知を有効にするにはブラウザのサイト設定から許可を行ってください。');
+      return;
+    }
+
+    const subscribeResult = await subscribeToPush();
+    if (!subscribeResult?.success) {
+      console.warn('プッシュ通知の登録に失敗しました:', subscribeResult?.message);
     }
   };
 
@@ -640,6 +713,30 @@ const InstructorDashboard = () => {
         </aside>
 
         <main className="flex-1 p-8 overflow-y-auto bg-white">
+          {/* デスクトップ通知の案内 */}
+          {isNotificationSupported && showNotificationPrompt && (
+            <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center justify-between">
+              <div className="flex items-center gap-3 text-indigo-700 font-medium">
+                <span role="img" aria-label="notification">
+                  🔔
+                </span>
+                <span>新着メッセージをPC通知で受け取るには、通知を有効化してください。</span>
+              </div>
+              <button
+                onClick={handleEnableNotifications}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+              >
+                通知を有効化
+              </button>
+            </div>
+          )}
+
+          {isNotificationSupported && notificationPermission === 'denied' && (
+            <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-700 text-sm">
+              ブラウザで通知がブロックされています。PC通知を受け取るには、ブラウザのサイト設定から通知を許可してください。
+            </div>
+          )}
+
           {/* 新着メッセージ通知 */}
           {newMessageNotification && (
             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg animate-pulse">
@@ -657,6 +754,13 @@ const InstructorDashboard = () => {
                   ✕
                 </button>
               </div>
+              {newMessageNotification.latestMessage?.messageText && (
+                <div className="mt-2 text-sm text-blue-600">
+                  {newMessageNotification.latestMessage.senderName
+                    ? `${newMessageNotification.latestMessage.senderName}: ${truncateText(newMessageNotification.latestMessage.messageText, 120)}`
+                    : truncateText(newMessageNotification.latestMessage.messageText, 120)}
+                </div>
+              )}
             </div>
           )}
 
@@ -742,7 +846,7 @@ const InstructorDashboard = () => {
                   <h3 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent mb-4 flex items-center gap-2">
                     📥 メッセージ受信・会話
                   </h3>
-                  <PersonalMessageList />
+                  <PersonalMessageList refreshSignal={messageRefreshSignal} />
                 </div>
               </div>
             </div>

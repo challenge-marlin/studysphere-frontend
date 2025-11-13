@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPut } from '../utils/api';
 import { useAuth } from './contexts/AuthContext';
 
-const StudentVoiceCareView = ({ studentId, studentName }) => {
+const StudentVoiceCareView = ({ studentId, studentName, refreshSignal = 0 }) => {
   const { currentUser } = useAuth();
   const [voiceMessages, setVoiceMessages] = useState([]);
   const [selectedMessage, setSelectedMessage] = useState(null);
@@ -19,7 +19,7 @@ const StudentVoiceCareView = ({ studentId, studentName }) => {
   useEffect(() => {
     // アナウンスメッセージと1対1メッセージを統合して取得
     loadVoiceMessages();
-  }, [studentId]);
+  }, [studentId, refreshSignal]);
 
   const loadVoiceMessages = async () => {
     try {
@@ -333,7 +333,7 @@ const StudentVoiceCareView = ({ studentId, studentName }) => {
             
             {/* 会話タイプの場合は会話全体を表示 */}
             {selectedMessage.type === 'conversation' && selectedMessage.allMessages ? (
-              <div className="space-y-4 mb-4">
+              <div className="space-y-4 mb-4 max-h-80 overflow-y-auto pr-2">
                 <div className="text-sm text-gray-600 mb-3">
                   {selectedMessage.messageCount}通のメッセージ
                 </div>

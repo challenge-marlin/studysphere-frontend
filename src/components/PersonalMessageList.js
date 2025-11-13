@@ -4,7 +4,7 @@ import { formatDatabaseTime } from '../utils/dateUtils';
 import { useAuth } from './contexts/AuthContext';
 import { sanitizeInput } from '../utils/sanitizeUtils';
 
-const PersonalMessageList = () => {
+const PersonalMessageList = ({ refreshSignal }) => {
     const { currentUser: user } = useAuth();
     const [conversations, setConversations] = useState([]);
     const [selectedConversation, setSelectedConversation] = useState(null);
@@ -102,6 +102,17 @@ const PersonalMessageList = () => {
             fetchUnreadCount();
         }
     }, [user]);
+
+    useEffect(() => {
+        if (!user) return;
+
+        fetchConversations();
+        fetchUnreadCount();
+
+        if (selectedConversation?.other_user_id) {
+            fetchMessages(selectedConversation.other_user_id);
+        }
+    }, [refreshSignal]);
 
     // 日時フォーマット（DBに保存されている時間をそのまま表示）
     const formatDateTime = (dateString) => {

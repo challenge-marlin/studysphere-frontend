@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStudentGuard } from '../utils/hooks/useAuthGuard';
 import { useAuth } from '../components/contexts/AuthContext';
@@ -10,6 +10,8 @@ import LessonList from './LessonList';
 import CareerAssessment from '../components/CareerAssessment';
 import PersonalMessageList from '../components/PersonalMessageList';
 import AnnouncementList from '../components/AnnouncementList';
+import useBrowserNotifications from '../utils/hooks/useBrowserNotifications';
+import { fetchLatestMessageSummary, truncateText } from '../utils/messageUtils';
 
 const StudentDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -23,6 +25,25 @@ const StudentDashboard = () => {
   const [userCourses, setUserCourses] = useState([]);
   const [messagePollingInterval, setMessagePollingInterval] = useState(null);
   const [newMessageNotification, setNewMessageNotification] = useState(null);
+  const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
+  const lastUnreadCountRef = useRef(0);
+  const [messageRefreshSignal, setMessageRefreshSignal] = useState(0);
+
+  const {
+    isSupported: isNotificationSupported,
+    permission: notificationPermission,
+    requestPermission: requestNotificationPermission,
+    showNotification,
+    subscribeToPush,
+  } = useBrowserNotifications();
+
+  useEffect(() => {
+    if (!isNotificationSupported) {
+      setShowNotificationPrompt(false);
+      return;
+    }
+    setShowNotificationPrompt(notificationPermission === 'default');
+  }, [isNotificationSupported, notificationPermission]);
 
   // 利用者のコース情報を取得
   useEffect(() => {
@@ -51,21 +72,19 @@ const StudentDashboard = () => {
     fetchUserCourses();
   }, [currentUser?.id]);
 
-  // ダッシュボードタブのアクティブ状態に応じて定期確認を制御
+  // 認証状態に応じて定期確認を制御
   useEffect(() => {
-    if (activeTab === 'dashboard') {
-      // ダッシュボードタブがアクティブな場合、定期確認を開始
-      startMessagePolling();
-    } else {
-      // 他のタブがアクティブな場合、定期確認を停止
+    if (!currentUser) {
       stopMessagePolling();
+      return;
     }
 
-    // クリーンアップ関数
+    startMessagePolling();
+
     return () => {
       stopMessagePolling();
     };
-  }, [activeTab]);
+  }, [currentUser]);
 
   // クエリパラメータからの自動認証処理
   useEffect(() => {
@@ -413,14 +432,6 @@ const StudentDashboard = () => {
     handleAutoLogin();
   }, [currentUser, login, navigate, searchParams]);
 
-  // コンポーネントアンマウント時のクリーンアップ
-  useEffect(() => {
-    return () => {
-      // 定期確認を停止
-      stopMessagePolling();
-    };
-  }, []);
-
   const handleLogout = () => {
     // ログアウト確認ダイアログ
     if (window.confirm('ログアウトしますか？')) {
@@ -451,17 +462,53 @@ const StudentDashboard = () => {
 
     try {
       const response = await apiGet('/api/messages/unread-count');
-      if (response.success && response.data.unread_count > 0) {
-        // 新着メッセージがある場合の通知
-        setNewMessageNotification({
-          count: response.data.unread_count,
-          timestamp: new Date()
-        });
-        
-        // 3秒後に通知を自動で非表示
-        setTimeout(() => {
-          setNewMessageNotification(null);
-        }, 3000);
+      if (response.success) {
+        const unreadCount = response.data.unread_count || 0;
+        const hasUnreadCountChanged = unreadCount !== lastUnreadCountRef.current;
+        const hasUnreadIncreased = unreadCount > lastUnreadCountRef.current;
+
+        if (hasUnreadCountChanged) {
+          setMessageRefreshSignal(prev => prev + 1);
+        }
+
+        let latestMessageSummary = null;
+
+        if (unreadCount > 0 && hasUnreadCountChanged) {
+          latestMessageSummary = await fetchLatestMessageSummary();
+        }
+
+        if (unreadCount > 0) {
+          // 新着メッセージがある場合の通知
+          setNewMessageNotification({
+            count: unreadCount,
+            timestamp: new Date(),
+            latestMessage: latestMessageSummary
+          });
+
+          const shouldShowDesktopNotification = hasUnreadIncreased;
+
+          if (
+            shouldShowDesktopNotification &&
+            isNotificationSupported &&
+            notificationPermission === 'granted'
+          ) {
+            const notificationBody = latestMessageSummary?.messageText
+              ? `${latestMessageSummary.senderName ? `${latestMessageSummary.senderName}: ` : ''}${truncateText(latestMessageSummary.messageText)}`
+              : `新着メッセージが${unreadCount}件あります。`;
+
+            showNotification('Study Sphere', {
+              body: notificationBody,
+              tag: 'study-sphere-messages',
+              renotify: true
+            });
+          }
+          
+          // 3秒後に通知を自動で非表示
+          setTimeout(() => {
+            setNewMessageNotification(null);
+          }, 3000);
+        }
+        lastUnreadCountRef.current = unreadCount;
       }
     } catch (error) {
       console.error('新着メッセージ確認エラー:', error);
@@ -493,6 +540,19 @@ const StudentDashboard = () => {
     if (messagePollingInterval) {
       clearInterval(messagePollingInterval);
       setMessagePollingInterval(null);
+    }
+  };
+
+  const handleEnableNotifications = async () => {
+    const result = await requestNotificationPermission();
+    if (result !== 'granted') {
+      alert('通知を有効にするにはブラウザのサイト設定から許可を行ってください。');
+      return;
+    }
+
+    const subscribeResult = await subscribeToPush();
+    if (!subscribeResult?.success) {
+      console.warn('プッシュ通知の登録に失敗しました:', subscribeResult?.message);
     }
   };
 
@@ -637,6 +697,30 @@ const StudentDashboard = () => {
 
       {/* メインコンテンツ */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+        {/* デスクトップ通知の案内 */}
+        {isNotificationSupported && showNotificationPrompt && (
+          <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center justify-between">
+            <div className="flex items-center gap-3 text-indigo-700 font-medium">
+              <span role="img" aria-label="notification">
+                🔔
+              </span>
+              <span>新着メッセージをPC通知で受け取るには、通知を有効化してください。</span>
+            </div>
+            <button
+              onClick={handleEnableNotifications}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+            >
+              通知を有効化
+            </button>
+          </div>
+        )}
+
+        {isNotificationSupported && notificationPermission === 'denied' && (
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-700 text-sm">
+            ブラウザで通知がブロックされています。PC通知を受け取るには、ブラウザのサイト設定から通知を許可してください。
+          </div>
+        )}
+
         {/* 新着メッセージ通知 */}
         {newMessageNotification && (
           <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg animate-pulse">
@@ -654,6 +738,13 @@ const StudentDashboard = () => {
                 ✕
               </button>
             </div>
+            {newMessageNotification.latestMessage?.messageText && (
+              <div className="mt-2 text-sm text-blue-600">
+                {newMessageNotification.latestMessage.senderName
+                  ? `${newMessageNotification.latestMessage.senderName}: ${truncateText(newMessageNotification.latestMessage.messageText, 120)}`
+                  : truncateText(newMessageNotification.latestMessage.messageText, 120)}
+              </div>
+            )}
           </div>
         )}
 
@@ -661,7 +752,7 @@ const StudentDashboard = () => {
           {/* アクティブタブに応じたコンテンツ表示 */}
           {activeTab === 'dashboard' && (
             <div className="bg-white rounded-2xl shadow-xl p-8">
-              <Dashboard onTabChange={handleTabChange} />
+              <Dashboard onTabChange={handleTabChange} messageRefreshSignal={messageRefreshSignal} />
             </div>
           )}
           

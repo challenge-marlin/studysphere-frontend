@@ -6,7 +6,7 @@ import { fetchStudentCourses } from '../utils/studentApi';
 import { useAuth } from '../components/contexts/AuthContext';
 import { API_BASE_URL } from '../config/apiConfig';
 
-const Dashboard = ({ onTabChange }) => {
+const Dashboard = ({ onTabChange, messageRefreshSignal = 0 }) => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [enrolledCourses, setEnrolledCourses] = useState([]);
@@ -245,7 +245,8 @@ const Dashboard = ({ onTabChange }) => {
         {/* 声かけセクション */}
         <StudentVoiceCareView 
           studentId={currentUser.id} 
-          studentName={currentUser.name} 
+          studentName={currentUser.name}
+          refreshSignal={messageRefreshSignal}
         />
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

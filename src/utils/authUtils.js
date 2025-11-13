@@ -1,6 +1,7 @@
 /**
  * 認証情報管理ユーティリティ
  */
+import { API_BASE_URL } from '../config/apiConfig';
 
 const AUTH_KEYS = {
   LOGIN_CODE: 'loginCode',
@@ -343,10 +344,6 @@ export const refreshTokenAPI = async (refreshToken) => {
   try {
     console.log('トークン更新API呼び出し開始:', { refreshToken: refreshToken ? '存在' : 'なし' });
     
-    const API_BASE_URL = process.env.REACT_APP_API_URL || 
-      (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-        ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-        : 'http://localhost:5050');
     const response = await fetch(`${API_BASE_URL}/api/refresh`, {
       method: 'POST',
       headers: {

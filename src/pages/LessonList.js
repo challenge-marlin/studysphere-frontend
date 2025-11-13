@@ -80,14 +80,23 @@ const LessonList = ({ selectedCourseId }) => {
     // 未学習以外のステータス（in_progress、completed）のレッスンを対象とする
     const activeLessons = lessonList.filter(lesson => lesson.progress_status !== 'not_started');
     
-    // 未学習以外のレッスンがない場合はnullを返す
+    // 未学習以外のレッスンがない場合はnullを返す（全てのレッスンが未受講の場合）
     if (activeLessons.length === 0) {
       console.log('🎯 未学習以外のレッスンが見つかりません - 現在受講中タグは表示されません');
       return null;
     }
     
+    // 進行中（in_progress）のレッスンのみを対象とする
+    const inProgressLessons = activeLessons.filter(lesson => lesson.progress_status === 'in_progress');
+    
+    // 進行中のレッスンがない場合はnullを返す（完了済みのレッスンのみの場合）
+    if (inProgressLessons.length === 0) {
+      console.log('🎯 進行中のレッスンが見つかりません - 現在受講中タグは表示されません');
+      return null;
+    }
+    
     // updated_atでソートして最新のものを取得
-    const sortedLessons = [...activeLessons].sort((a, b) => {
+    const sortedLessons = [...inProgressLessons].sort((a, b) => {
       const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
       const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
       if (dateB !== dateA) return dateB - dateA; // updated_atが新しい順
@@ -462,7 +471,7 @@ const LessonList = ({ selectedCourseId }) => {
          const currentLessonId = getCurrentLessonIdFromList(lessons);
          const currentLessonData = currentLessonId ? lessons.find(l => l.id === currentLessonId) : null;
          
-         // in_progressステータスのレッスンがない場合は表示しない
+         // レッスン一覧から取得した現在受講中レッスンがない場合
          if (!currentLessonData) {
            // APIから取得したcurrentLessonも確認するが、in_progressステータスでない場合は表示しない
            if (currentLesson && currentLesson.status !== 'in_progress') {

@@ -4,12 +4,9 @@ import { logAdminAccountOperation } from '../utils/adminLogger';
 import { getUserInfo, reauthenticateForSatellite } from '../utils/api';
 import CompanySatelliteSwitchModal from './CompanySatelliteSwitchModal';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 
-  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-    : 'http://localhost:5050');
+import { API_BASE_URL } from '../config/apiConfig';
 
-const InstructorHeader = ({ user, onLocationChange }) => {
+const InstructorHeader = ({ user, onLocationChange, showBackButton = false, backButtonText = "戻る", onBackClick }) => {
   const [isSwitchModalOpen, setIsSwitchModalOpen] = useState(false);
   const [currentCompany, setCurrentCompany] = useState(null);
   const [currentSatellite, setCurrentSatellite] = useState(null);
@@ -223,6 +220,18 @@ const InstructorHeader = ({ user, onLocationChange }) => {
     
     setLoading(true);
     try {
+      // まずsessionStorageから保存された拠点情報を取得（最優先）
+      const savedSatellite = sessionStorage.getItem('selectedSatellite');
+      let savedSatelliteData = null;
+      if (savedSatellite) {
+        try {
+          savedSatelliteData = JSON.parse(savedSatellite);
+          console.log('loadUserInfo: sessionStorageから保存された拠点情報を取得:', savedSatelliteData);
+        } catch (error) {
+          console.error('loadUserInfo: sessionStorageの拠点情報パースエラー:', error);
+        }
+      }
+      
       const result = await getUserInfo();
       if (result.success && result.data) {
         const { user: userInfo, satellites, companies } = result.data;
@@ -235,50 +244,88 @@ const InstructorHeader = ({ user, onLocationChange }) => {
         // 拠点情報を設定
         setUserSatellites(Array.isArray(satellites) ? satellites : []);
         
-        // アドミン権限（ロール9以上）の場合の特別処理
-        if (userInfo.role >= 9) {
-          // システム管理者として設定
-          setCurrentCompany({
-            id: null,
-            name: 'システム管理者',
-            address: null,
-            phone: null
-          });
-          
-          // 拠点の設定（ログイン時に選択された拠点を優先）
-          const selectedSatelliteId = user?.satellite_id;
-          let targetSatellite = null;
-          
-          if (selectedSatelliteId && satellites && satellites.length > 0) {
-            targetSatellite = satellites.find(s => s.id === selectedSatelliteId) || satellites[0];
-          } else if (satellites && satellites.length > 0) {
-            targetSatellite = satellites[0];
-          }
-          
+        // 拠点の設定：sessionStorageを最優先、次にAPIから取得したリストから選択
+        let targetSatellite = null;
+        
+        // 1. sessionStorageに保存された拠点情報を優先（存在し、APIのリストにも含まれている場合）
+        if (savedSatelliteData && savedSatelliteData.id && satellites && satellites.length > 0) {
+          const savedId = parseInt(savedSatelliteData.id);
+          targetSatellite = satellites.find(s => parseInt(s.id) === savedId);
           if (targetSatellite) {
+            console.log('loadUserInfo: sessionStorageの拠点情報を使用:', targetSatellite);
+            // 企業情報も更新
+            if (savedSatelliteData.company_id && savedSatelliteData.company_name) {
+              setCurrentCompany({
+                id: savedSatelliteData.company_id,
+                name: savedSatelliteData.company_name
+              });
+            }
             setCurrentSatellite(targetSatellite);
+          } else {
+            console.log('loadUserInfo: sessionStorageの拠点IDがAPIリストに見つからないため、フォールバック処理へ');
           }
-        } else {
-          // 通常のユーザー（ロール9未満）の処理
-          setCurrentCompany({
-            id: userInfo.company_id,
-            name: userInfo.company_name,
-            address: userInfo.company_address,
-            phone: userInfo.company_phone
-          });
-          
-          // 拠点の設定（ログイン時に選択された拠点を優先）
-          const selectedSatelliteId = user?.satellite_id;
-          let targetSatellite = null;
-          
-          if (selectedSatelliteId && satellites && satellites.length > 0) {
-            targetSatellite = satellites.find(s => s.id === selectedSatelliteId) || satellites[0];
-          } else if (satellites && satellites.length > 0) {
-            targetSatellite = satellites[0];
+        }
+        
+        // 2. sessionStorageの情報が使えない場合のフォールバック処理
+        if (!targetSatellite) {
+          // アドミン権限（ロール9以上）の場合の特別処理
+          if (userInfo.role >= 9) {
+            // システム管理者として設定
+            setCurrentCompany({
+              id: null,
+              name: 'システム管理者',
+              address: null,
+              phone: null
+            });
+            
+            // フォールバック: user?.satellite_idまたは最初の拠点
+            const selectedSatelliteId = user?.satellite_id || (savedSatelliteData ? savedSatelliteData.id : null);
+            if (selectedSatelliteId && satellites && satellites.length > 0) {
+              targetSatellite = satellites.find(s => s.id === selectedSatelliteId) || satellites[0];
+            } else if (satellites && satellites.length > 0) {
+              targetSatellite = satellites[0];
+            }
+            
+            if (targetSatellite) {
+              console.log('loadUserInfo: フォールバック処理で拠点を設定（管理者）:', targetSatellite);
+              setCurrentSatellite(targetSatellite);
+            }
+          } else {
+            // 通常のユーザー（ロール9未満）の処理
+            setCurrentCompany({
+              id: userInfo.company_id,
+              name: userInfo.company_name,
+              address: userInfo.company_address,
+              phone: userInfo.company_phone
+            });
+            
+            // フォールバック: user?.satellite_idまたは最初の拠点
+            const selectedSatelliteId = user?.satellite_id || (savedSatelliteData ? savedSatelliteData.id : null);
+            if (selectedSatelliteId && satellites && satellites.length > 0) {
+              targetSatellite = satellites.find(s => s.id === selectedSatelliteId) || satellites[0];
+            } else if (satellites && satellites.length > 0) {
+              targetSatellite = satellites[0];
+            }
+            
+            if (targetSatellite) {
+              console.log('loadUserInfo: フォールバック処理で拠点を設定（通常ユーザー）:', targetSatellite);
+              setCurrentSatellite(targetSatellite);
+            }
           }
-          
-          if (targetSatellite) {
-            setCurrentSatellite(targetSatellite);
+        }
+        
+        // 3. 最終的に設定された拠点情報をsessionStorageに同期（存在する場合）
+        if (targetSatellite && targetSatellite.id) {
+          const currentSavedSatellite = sessionStorage.getItem('selectedSatellite');
+          if (!currentSavedSatellite || JSON.parse(currentSavedSatellite).id !== targetSatellite.id) {
+            const satelliteInfo = {
+              id: targetSatellite.id,
+              name: targetSatellite.name,
+              company_id: targetSatellite.company_id || (userInfo.role >= 9 ? null : userInfo.company_id),
+              company_name: targetSatellite.company_name || (userInfo.role >= 9 ? 'システム管理者' : userInfo.company_name)
+            };
+            sessionStorage.setItem('selectedSatellite', JSON.stringify(satelliteInfo));
+            console.log('loadUserInfo: sessionStorageに拠点情報を同期:', satelliteInfo);
           }
         }
       }
@@ -447,6 +494,17 @@ const InstructorHeader = ({ user, onLocationChange }) => {
     <header className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white py-4 shadow-lg">
       <div className="max-w-7xl mx-auto px-5 flex justify-between items-center">
         <div className="flex items-center gap-4">
+          {showBackButton && (
+            <button
+              onClick={onBackClick}
+              className="flex items-center gap-2 px-3 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition-all duration-200 text-sm font-medium"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              {backButtonText}
+            </button>
+          )}
           <h1 className="text-2xl font-bold text-white m-0">Study Sphere</h1>
         </div>
         <div className="flex items-center gap-4">

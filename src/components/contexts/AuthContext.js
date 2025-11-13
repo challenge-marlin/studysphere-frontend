@@ -17,10 +17,11 @@ import { setGlobalNavigate, setupFetchInterceptor } from '../../utils/httpInterc
 import { addOperationLog } from '../../utils/operationLogManager';
 import { markTempPasswordAsUsedAPI } from '../../utils/api';
 
+// 開発環境では127.0.0.1:5050を使用（バックエンドのデータベース接続と統一）
 const API_BASE_URL = process.env.REACT_APP_API_URL || 
   (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
     ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-    : 'http://localhost:5050');
+    : 'http://127.0.0.1:5050');
 
 // 認証コンテキストの作成
 export const AuthContext = createContext();
@@ -441,6 +442,15 @@ export const AuthProvider = ({ children }) => {
       console.error('ログアウトログの記録に失敗しました:', error);
     }
     
+    // 一時パスワード認証情報を保持するため、特定の項目のみクリア
+    const tempPasswordAuth = {
+      loginCode: localStorage.getItem('loginCode'),
+      tempPassword: localStorage.getItem('tempPassword'),
+      tempPasswordExpiry: localStorage.getItem('tempPasswordExpiry'),
+      autoLoginCode: localStorage.getItem('autoLoginCode'),
+      temp_password: localStorage.getItem('temp_password')
+    };
+    
     // ローカルストレージをクリア
     localStorage.removeItem('currentUser');
     clearStoredTokens();
@@ -448,6 +458,23 @@ export const AuthProvider = ({ children }) => {
     // 追加のクリア処理（確実性のため）
     localStorage.clear();
     sessionStorage.clear();
+    
+    // 一時パスワード認証情報を復元（利用者ログイン用）
+    if (tempPasswordAuth.loginCode) {
+      localStorage.setItem('loginCode', tempPasswordAuth.loginCode);
+    }
+    if (tempPasswordAuth.tempPassword) {
+      localStorage.setItem('tempPassword', tempPasswordAuth.tempPassword);
+    }
+    if (tempPasswordAuth.tempPasswordExpiry) {
+      localStorage.setItem('tempPasswordExpiry', tempPasswordAuth.tempPasswordExpiry);
+    }
+    if (tempPasswordAuth.autoLoginCode) {
+      localStorage.setItem('autoLoginCode', tempPasswordAuth.autoLoginCode);
+    }
+    if (tempPasswordAuth.temp_password) {
+      localStorage.setItem('temp_password', tempPasswordAuth.temp_password);
+    }
     
     console.log('LocalStorageとSessionStorageを完全にクリアしました');
     

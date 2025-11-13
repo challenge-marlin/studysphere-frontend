@@ -25,6 +25,15 @@ const SectionTestPage = () => {
   const [lessonData, setLessonData] = useState(null);
   const [sectionData, setSectionData] = useState(null);
   const [isFetching, setIsFetching] = useState(false);
+  const GENERATION_FAILURE_MESSAGE = '問題の作成に失敗しました。再読み込みをしてください。';
+
+  const handleTestGenerationFailure = (detail) => {
+    if (detail) {
+      console.warn('セクションテストの問題作成に失敗しました:', detail);
+    }
+    setTestData(null);
+    setError(GENERATION_FAILURE_MESSAGE);
+  };
 
   // URLパラメータからレッスン番号とセクション番号を取得
   useEffect(() => {
@@ -134,9 +143,7 @@ const SectionTestPage = () => {
         
       } catch (error) {
         console.error('データ取得エラー:', error);
-        setError(error.message);
-        // フォールバック: モックデータを使用
-        generateMockTestData();
+        handleTestGenerationFailure(error);
       } finally {
         setLoading(false);
         setIsFetching(false);
@@ -335,8 +342,8 @@ const SectionTestPage = () => {
           }
         }
         
-        console.warn('モックデータを使用してテストを生成します');
-        generateMockTestData();
+        console.warn('テスト生成に必要なデータが揃わないため、ユーザーに再試行を促します');
+        handleTestGenerationFailure('利用可能なコンテキストが見つかりません');
         return;
       }
       
@@ -344,7 +351,7 @@ const SectionTestPage = () => {
       const storedData = sessionStorage.getItem(currentLessonKey);
       if (!storedData) {
         console.warn('セッションストレージからコンテキストデータを取得できません');
-        generateMockTestData();
+        handleTestGenerationFailure('コンテキストデータを取得できません');
         return;
       }
       
@@ -374,8 +381,8 @@ const SectionTestPage = () => {
       
       // テキストコンテンツが空の場合は警告
       if (!textContent || textContent.trim().length === 0) {
-        console.warn('⚠️ テキストコンテンツが空です。フォールバック用のモックデータを使用します。');
-        generateMockTestData();
+        console.warn('⚠️ テキストコンテンツが空です。');
+        handleTestGenerationFailure('テキストコンテンツが空です');
         return;
       }
       
@@ -424,8 +431,7 @@ const SectionTestPage = () => {
       }
     } catch (error) {
       console.error('テストデータ生成エラー:', error);
-      // フォールバック: モックデータを使用
-      generateMockTestData();
+      handleTestGenerationFailure(error);
     }
   };
 
@@ -440,7 +446,7 @@ const SectionTestPage = () => {
       
       if (!selectedContext) {
         console.warn('利用可能なコンテキストがありません');
-        generateMockTestData();
+        handleTestGenerationFailure('利用可能なコンテキストがありません');
         return;
       }
       
@@ -450,7 +456,7 @@ const SectionTestPage = () => {
       const storedData = sessionStorage.getItem(selectedContext.key);
       if (!storedData) {
         console.warn('選択されたコンテキストのデータを取得できません');
-        generateMockTestData();
+        handleTestGenerationFailure('選択されたコンテキストのデータを取得できません');
         return;
       }
       
@@ -533,138 +539,8 @@ const SectionTestPage = () => {
       }
     } catch (error) {
       console.error('レッスン1コンテキスト生成エラー:', error);
-      // フォールバック: モックデータを使用
-      generateMockTestData();
+      handleTestGenerationFailure(error);
     }
-  };
-
-  // モックテストデータ（フォールバック用）
-  const generateMockTestData = () => {
-    const currentSectionInfo = sectionData?.[currentSection];
-    const sectionTitle = currentSectionInfo?.section_title || `セクション${currentSection + 1}`;
-    
-    const mockTestData = {
-      title: `${sectionTitle} - セクションまとめテスト`,
-      description: `${sectionTitle}の学習内容について理解度を確認するテストです。`,
-      type: 'section',
-      lessonId: currentLesson,
-      sectionIndex: currentSection,
-      questionCount: 10,
-      passingScore: 90,
-      questions: [
-        {
-          id: 1,
-          question: `${sectionTitle}の主要なポイントは何ですか？`,
-          options: [
-            '基本的な概念の理解',
-            '実践的な応用方法',
-            '理論的な背景',
-            'すべての選択肢が正しい'
-          ],
-          correctAnswer: 3
-        },
-        {
-          id: 2,
-          question: 'このセクションで学んだ内容を実際に活用する際の注意点は？',
-          options: [
-            '特に注意点はない',
-            '基本的なルールを守る',
-            '専門家の指導を受ける',
-            '自己判断で進める'
-          ],
-          correctAnswer: 2
-        },
-        {
-          id: 3,
-          question: '学習内容の理解度を深めるために重要なことは？',
-          options: [
-            '暗記すること',
-            '実践すること',
-            '理論を学ぶこと',
-            '他人に教えること'
-          ],
-          correctAnswer: 1
-        },
-        {
-          id: 4,
-          question: 'このセクションの内容を復習する際の効果的な方法は？',
-          options: [
-            '一度だけ読む',
-            '定期的に復習する',
-            '暗記する',
-            '他人に説明する'
-          ],
-          correctAnswer: 1
-        },
-        {
-          id: 5,
-          question: '学習した内容を応用する際に考慮すべき点は？',
-          options: [
-            '理論的な正確性',
-            '実践的な効果',
-            '時間的な効率',
-            'すべての選択肢が正しい'
-          ],
-          correctAnswer: 3
-        },
-        {
-          id: 6,
-          question: 'このセクションで最も重要な学習目標は？',
-          options: [
-            '知識の習得',
-            'スキルの向上',
-            '理解の深化',
-            'すべての選択肢が正しい'
-          ],
-          correctAnswer: 3
-        },
-        {
-          id: 7,
-          question: '学習内容を他者に説明する際のポイントは？',
-          options: [
-            '専門用語を多用する',
-            '分かりやすい言葉で説明する',
-            '詳細に説明する',
-            '簡潔に説明する'
-          ],
-          correctAnswer: 1
-        },
-        {
-          id: 8,
-          question: 'このセクションの内容を実践する際の準備として必要なことは？',
-          options: [
-            '理論の完全な理解',
-            '実践的な準備',
-            '専門家の指導',
-            'すべての選択肢が正しい'
-          ],
-          correctAnswer: 3
-        },
-        {
-          id: 9,
-          question: '学習した内容の効果を測定する方法は？',
-          options: [
-            'テストの点数',
-            '実践的な成果',
-            '理解度の確認',
-            'すべての選択肢が正しい'
-          ],
-          correctAnswer: 3
-        },
-        {
-          id: 10,
-          question: 'このセクションの学習を完了した後の次のステップは？',
-          options: [
-            '次のセクションに進む',
-            '復習を繰り返す',
-            '実践を開始する',
-            'すべての選択肢が正しい'
-          ],
-          correctAnswer: 3
-        }
-      ]
-    };
-    setTestData(mockTestData);
   };
 
   // 回答の変更

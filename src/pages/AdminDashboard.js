@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminGuard } from '../utils/hooks/useAuthGuard';
 import AdminHeader from '../components/AdminHeader';
+import { API_BASE_URL } from '../config/apiConfig';
 import LocationManagement from '../components/LocationManagement';
 import InstructorManagement from '../components/InstructorManagement';
 import CourseManagement from '../components/CourseManagement';
@@ -31,10 +32,6 @@ const AdminDashboard = () => {
   const handlePasswordChange = async (currentPassword, newPassword) => {
     try {
       const token = localStorage.getItem('accessToken');
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 
-        (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-          ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-          : 'http://localhost:5050');
       const response = await fetch(`${API_BASE_URL}/api/users/${currentUser.id}/change-password`, {
         method: 'POST',
         headers: {

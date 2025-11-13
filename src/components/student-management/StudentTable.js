@@ -28,13 +28,12 @@ const formatTempPasswordExpiry = (expiryTime) => {
 const StudentTable = ({
   students,
   onIssueTemporaryPassword,
-  onEditStudent,
   onToggleStatus,
   onDeleteStudent,
-  onViewDailyReports,
   onViewTestResults,
   onTestApproval,
-  onSubmissionApproval
+  onSubmissionApproval,
+  onEditStudent
 }) => {
   console.log('=== StudentTable レンダリング ===');
   console.log('受け取ったstudents:', students);
@@ -46,7 +45,7 @@ const StudentTable = ({
           <thead className="bg-gradient-to-r from-indigo-50 to-purple-50">
             <tr>
 
-              <th className="px-4 py-3 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200" style={{ width: '150px' }}>利用者名</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200" style={{ width: '260px' }}>利用者名</th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200" style={{ width: '120px' }}>担当指導員</th>
                              <th className="px-4 py-3 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200" style={{ width: '200px' }}>コース・タグ</th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-indigo-800 border-b border-indigo-200" style={{ width: '180px' }}>進捗状況</th>
@@ -61,17 +60,47 @@ const StudentTable = ({
               }`}>
 
                 <td className="px-4 py-3">
-                  <div className="flex flex-col">
+                  <div className="grid grid-cols-2 gap-2 items-center">
                     <button 
-                      className="text-left font-semibold text-indigo-600 hover:text-indigo-800 transition-colors duration-200"
-                      onClick={() => {/* TODO: 利用者詳細画面に遷移 */}}
-                      title="利用者詳細を表示"
+                      className="text-left font-semibold text-indigo-600 hover:text-indigo-800 transition-colors duration-200 whitespace-nowrap"
+                      onClick={() => onEditStudent && onEditStudent(student)}
+                      title="利用者情報を編集"
                     >
                       {student.name}
                     </button>
-                    <div className="text-xs text-gray-500 mt-1 font-mono">
+                    <button
+                      className="justify-self-start px-2 py-1 bg-indigo-600 text-white rounded text-xs font-medium hover:bg-indigo-700 transition-all duration-200 w-fit"
+                      onClick={() => onEditStudent && onEditStudent(student)}
+                    >
+                      編集
+                    </button>
+                    <div className="text-xs text-gray-500 font-mono whitespace-nowrap">
                       {student.login_code}
                     </div>
+                    <button
+                      className="justify-self-start px-2 py-1 bg-gray-600 text-white rounded text-xs font-medium hover:bg-gray-700 transition-all duration-200 w-fit"
+                      onClick={async () => {
+                        try {
+                          if (navigator.clipboard && navigator.clipboard.writeText) {
+                            await navigator.clipboard.writeText(student.login_code || '');
+                            alert('ログインコードをコピーしました');
+                          } else {
+                            const textarea = document.createElement('textarea');
+                            textarea.value = student.login_code || '';
+                            document.body.appendChild(textarea);
+                            textarea.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(textarea);
+                            alert('ログインコードをコピーしました');
+                          }
+                        } catch (e) {
+                          console.error('クリップボードコピーに失敗しました', e);
+                          alert('コピーに失敗しました');
+                        }
+                      }}
+                    >
+                      コピー
+                    </button>
                   </div>
                 </td>
                 <td className="px-4 py-3">
@@ -228,20 +257,6 @@ const StudentTable = ({
                 </td>
                 <td className="px-4 py-3">
                   <div className="grid grid-cols-2 gap-1">
-                    <button 
-                      className="px-2 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 transition-all duration-200"
-                      onClick={() => onEditStudent(student)}
-                      title="利用者情報と個別支援計画を編集"
-                    >
-                      ✏️ 編集
-                    </button>
-                    <button 
-                      className="px-2 py-1 bg-orange-600 text-white rounded text-xs font-medium hover:bg-orange-700 transition-all duration-200"
-                      onClick={() => onViewDailyReports(student)}
-                      title="日報確認・編集・コメント"
-                    >
-                      📊 日報確認
-                    </button>
                     <button 
                       className="px-2 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 transition-all duration-200"
                       onClick={() => onTestApproval && onTestApproval(student)}

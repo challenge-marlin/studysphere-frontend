@@ -380,10 +380,9 @@ const HomeSupportDailyRecordsPage = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                           >
                             <option value="">選択してください</option>
-                            <option value="電話">電話</option>
-                            <option value="オンライン">オンライン</option>
                             <option value="訪問">訪問</option>
-                            <option value="メール">メール</option>
+                            <option value="電話">電話</option>
+                            <option value="その他">その他</option>
                           </select>
                         </div>
 

@@ -128,14 +128,14 @@ const UnifiedReportsList = ({ student, reports, onNavigateToReport, onDownloadPD
     setSelectedReport(null);
   };
 
-  // 週次・月次評価を保存
+  // 評価(週次)・達成度評価を保存
   const handleSaveEvaluation = (evaluationData) => {
     console.log('評価データを保存:', evaluationData);
     // 実際の実装では、ここでAPIを呼び出してデータを保存
     handleCloseDetail();
   };
 
-  // 週次・月次評価を削除
+  // 評価(週次)・達成度評価を削除
   const handleDeleteEvaluation = (reportId) => {
     console.log('評価を削除:', reportId);
     // 実際の実装では、ここでAPIを呼び出してデータを削除
@@ -366,7 +366,7 @@ const UnifiedReportsList = ({ student, reports, onNavigateToReport, onDownloadPD
         </div>
       </div>
 
-      {/* 週次・月次評価の詳細表示 */}
+      {/* 評価(週次)・達成度評価の詳細表示 */}
       {showDetail && selectedReport && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">

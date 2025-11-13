@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { getCurrentUserSatelliteId } from '../utils/locationUtils';
-import { getSatelliteUsers } from '../utils/api';
+import { getSatelliteUsers, getSatelliteInstructors } from '../utils/api';
 import { debugAllStorage } from '../utils/debugUtils';
 import TempPasswordManager from './student-management/TempPasswordManager';
 import StudentEditor from './student-management/StudentEditor';
@@ -18,12 +18,8 @@ import PendingSubmissionAlert from './student-management/PendingSubmissionAlert'
 import ModalErrorDisplay from './common/ModalErrorDisplay';
 
 import TodayActiveModal from './student-management/TodayActiveModal';
-import DailyReportManagement from './DailyReportManagement';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 
-  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-    : 'http://localhost:5050');
+import { API_BASE_URL } from '../config/apiConfig';
 
 const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionApproval }) => {
   const { currentUser, isAuthenticated } = useAuth();
@@ -53,9 +49,6 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
   const [showCourseAssignmentModal, setShowCourseAssignmentModal] = useState(false);
   const [showCourseManagerModal, setShowCourseManagerModal] = useState(false);
 
-  // 日報管理モーダルの状態
-  const [showDailyReportModal, setShowDailyReportModal] = useState(false);
-  const [selectedStudentForReports, setSelectedStudentForReports] = useState(null);
 
   // 合格承認モーダルの状態
   const [showTestApprovalModal, setShowTestApprovalModal] = useState(false);
@@ -135,6 +128,32 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
     console.log('currentUser.satellite_ids:', currentUser?.satellite_ids);
     console.log('currentUser.satellite_name:', currentUser?.satellite_name);
     
+    // デバッグ用：ユーザー情報をAPIから取得
+    if (currentUser && currentUser.id) {
+      fetch(`${API_BASE_URL}/api/satellites/debug/user/${currentUser.id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log('=== デバッグ：APIから取得したユーザー情報 ===');
+        console.log('APIレスポンス:', data);
+        if (data.success) {
+          console.log('ユーザーID:', data.data.user_id);
+          console.log('ユーザー名:', data.data.name);
+          console.log('ロール:', data.data.role);
+          console.log('会社ID:', data.data.company_id);
+          console.log('satellite_ids生データ:', data.data.satellite_ids_raw);
+          console.log('satellite_idsパース後:', data.data.satellite_ids_parsed);
+          console.log('satellite_ids型:', data.data.satellite_ids_type);
+        }
+      })
+      .catch(error => {
+        console.error('デバッグAPI呼び出しエラー:', error);
+      });
+    }
+    
     // 全ストレージのデバッグ情報を出力
     debugAllStorage();
     
@@ -185,14 +204,27 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
     
     // 拠点名を取得
     if (satelliteId) {
-      // まずセッションストレージから取得
-      if (selectedSatellite) {
+      // セッションストレージから取得を再試行（getCurrentUserSatelliteIdが更新した可能性があるため）
+      const updatedSelectedSatellite = sessionStorage.getItem('selectedSatellite');
+      if (updatedSelectedSatellite) {
         try {
-          const satelliteData = JSON.parse(selectedSatellite);
+          const satelliteData = JSON.parse(updatedSelectedSatellite);
           console.log('パースされた拠点データ:', satelliteData);
-          setCurrentSatelliteName(satelliteData.name || '');
+          if (satelliteData.name) {
+            setCurrentSatelliteName(satelliteData.name);
+          } else if (currentUser && currentUser.satellite_name) {
+            setCurrentSatelliteName(currentUser.satellite_name);
+          } else {
+            setCurrentSatelliteName(`拠点${satelliteId}`);
+          }
         } catch (error) {
           console.error('拠点情報のパースエラー:', error);
+          // パースエラーの場合は、ユーザーデータから取得
+          if (currentUser && currentUser.satellite_name) {
+            setCurrentSatelliteName(currentUser.satellite_name);
+          } else {
+            setCurrentSatelliteName(`拠点${satelliteId}`);
+          }
         }
       } else {
         // セッションストレージにない場合は、ユーザーデータから取得
@@ -200,6 +232,8 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
         if (currentUser && currentUser.satellite_name) {
           console.log('ユーザーデータから拠点名を取得:', currentUser.satellite_name);
           setCurrentSatelliteName(currentUser.satellite_name);
+        } else {
+          setCurrentSatelliteName(`拠点${satelliteId}`);
         }
       }
     } else {
@@ -207,6 +241,54 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
       console.log('currentUser.role:', currentUser?.role);
       console.log('currentUser.satellite_id:', currentUser?.satellite_id);
       console.log('currentUser.satellite_ids:', currentUser?.satellite_ids);
+      
+      // 複数拠点に所属する指導員の場合、satellite_idsから直接取得を試みる
+      if (currentUser && currentUser.satellite_ids) {
+        let satelliteIds = currentUser.satellite_ids;
+        
+        // 既に配列の場合はそのまま使用
+        if (Array.isArray(satelliteIds)) {
+          // 既に配列なのでそのまま使用
+        } else if (typeof satelliteIds === 'string') {
+          // 文字列の場合はJSONパースを試行
+          try {
+            satelliteIds = JSON.parse(satelliteIds);
+          } catch (error) {
+            console.error('satellite_idsのパースエラー:', error);
+            // パースに失敗した場合は、カンマ区切りとして扱う
+            if (satelliteIds.includes(',')) {
+              satelliteIds = satelliteIds.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+            } else {
+              satelliteIds = [parseInt(satelliteIds)];
+            }
+          }
+        } else {
+          // その他の型（数値など）の場合は配列に変換
+          satelliteIds = [satelliteIds];
+        }
+        
+        // 配列でない場合は配列に変換（念のため）
+        if (!Array.isArray(satelliteIds)) {
+          satelliteIds = [satelliteIds];
+        }
+        // すべてのIDを数値に変換して統一
+        satelliteIds = satelliteIds.map(id => parseInt(id)).filter(id => !isNaN(id));
+        if (satelliteIds.length > 0) {
+          const firstSatelliteId = parseInt(satelliteIds[0]); // 数値に変換
+          console.log('複数拠点所属指導員: 最初の拠点IDを設定:', firstSatelliteId);
+          setCurrentSatelliteId(firstSatelliteId);
+          setCurrentSatelliteName(currentUser?.satellite_name || `拠点${firstSatelliteId}`);
+          
+          // sessionStorageにも保存
+          const selectedSatelliteInfo = {
+            id: firstSatelliteId,
+            name: currentUser.satellite_name || `拠点${firstSatelliteId}`,
+            company_id: currentUser.company_id,
+            company_name: currentUser.company_name
+          };
+          sessionStorage.setItem('selectedSatellite', JSON.stringify(selectedSatelliteInfo));
+        }
+      }
     }
     
     console.log('=== StudentManagement 拠点ID取得完了 ===');
@@ -328,18 +410,20 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
     }
   };
 
-  // 指導員データを取得
+  // 指導員データを取得（現在の拠点に限定）
   const fetchInstructors = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/users`);
-      if (response.ok) {
-        const result = await response.json();
-        const users = result.data?.users || result;
-        const instructorUsers = users.filter(user => user.role === 4);
-        setInstructors(instructorUsers);
+      if (!currentSatelliteId) {
+        setInstructors([]);
+        return;
       }
+      const response = await getSatelliteInstructors(currentSatelliteId);
+      // 期待形: { success: true, data: [...] }
+      const list = response?.data || response?.data?.users || [];
+      setInstructors(Array.isArray(list) ? list : []);
     } catch (error) {
       console.error('指導員データ取得エラー:', error);
+      setInstructors([]);
     }
   };
 
@@ -425,22 +509,6 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
     }
   };
 
-  // 編集モーダルを開く
-  const openEditModal = (student) => {
-    studentEditor.openEditModal(student);
-  };
-
-  // 日報確認モーダルを開く
-  const openDailyReportModal = (student) => {
-    setSelectedStudentForReports(student);
-    setShowDailyReportModal(true);
-  };
-
-  // 日報確認モーダルを閉じる
-  const closeDailyReportModal = () => {
-    setShowDailyReportModal(false);
-    setSelectedStudentForReports(null);
-  };
 
   // フィルター機能
   const getFilteredStudents = () => {
@@ -659,12 +727,6 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
           />
         )}
 
-        {/* 3. 利用者一覧ヘッダー */}
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">利用者一覧</h2>
-          <p className="text-gray-600">※利用者の管理と一時パスワード発行を行います</p>
-        </div>
-
         {/* 4. フィルター部分 */}
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-100">
           <div className="space-y-6">
@@ -750,13 +812,12 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
           <StudentTable
             students={filteredStudents}
             onIssueTemporaryPassword={tempPasswordManager.issueTemporaryPassword}
-            onEditStudent={openEditModal}
             onToggleStatus={toggleStudentStatus}
             onDeleteStudent={deleteStudent}
-            onViewDailyReports={openDailyReportModal}
             onViewTestResults={handleViewTestResults}
             onTestApproval={handleTestApprovalInternal}
             onSubmissionApproval={handleSubmissionApprovalInternal}
+            onEditStudent={(student) => studentEditor.openEditModal(student)}
           />
         </div>
 
@@ -1243,6 +1304,18 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
                       />
                     </div>
                     <div>
+                      <label htmlFor="edit_email" className="block text-sm font-semibold text-gray-700 mb-2">メールアドレス（任意）</label>
+                      <input
+                        type="email"
+                        id="edit_email"
+                        name="email"
+                        value={studentEditor.editFormData.email || ''}
+                        onChange={studentEditor.handleInputChange}
+                        placeholder="example@example.com"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
                       <label htmlFor="edit_instructor_id" className="block text-sm font-semibold text-gray-700 mb-2">担当指導員</label>
                       <select
                         id="edit_instructor_id"
@@ -1272,69 +1345,6 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
-                  
-                  {/* 個別支援計画 */}
-                  <div className="border-t pt-6">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">個別支援計画</h4>
-                    <div className="space-y-4">
-                      <div>
-                        <label htmlFor="long_term_goal" className="block text-sm font-semibold text-gray-700 mb-2">長期目標</label>
-                        <textarea
-                          id="long_term_goal"
-                          name="long_term_goal"
-                          value={studentEditor.supportPlanData.long_term_goal}
-                          onChange={studentEditor.handleSupportPlanChange}
-                          rows={3}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="short_term_goal" className="block text-sm font-semibold text-gray-700 mb-2">短期目標</label>
-                        <textarea
-                          id="short_term_goal"
-                          name="short_term_goal"
-                          value={studentEditor.supportPlanData.short_term_goal}
-                          onChange={studentEditor.handleSupportPlanChange}
-                          rows={3}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="needs" className="block text-sm font-semibold text-gray-700 mb-2">ニーズ</label>
-                        <textarea
-                          id="needs"
-                          name="needs"
-                          value={studentEditor.supportPlanData.needs}
-                          onChange={studentEditor.handleSupportPlanChange}
-                          rows={3}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="support_content" className="block text-sm font-semibold text-gray-700 mb-2">支援内容</label>
-                        <textarea
-                          id="support_content"
-                          name="support_content"
-                          value={studentEditor.supportPlanData.support_content}
-                          onChange={studentEditor.handleSupportPlanChange}
-                          rows={3}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="goal_date" className="block text-sm font-semibold text-gray-700 mb-2">目標達成予定日</label>
-                        <input
-                          type="date"
-                          id="goal_date"
-                          name="goal_date"
-                          value={studentEditor.supportPlanData.goal_date}
-                          onChange={studentEditor.handleSupportPlanChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  
                   <div className="flex justify-end gap-4">
                     <button
                       type="button"
@@ -1382,13 +1392,6 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
           </div>
         )}
 
-        {/* 日報管理モーダル */}
-        {showDailyReportModal && selectedStudentForReports && (
-          <DailyReportManagement
-            student={selectedStudentForReports}
-            onClose={closeDailyReportModal}
-          />
-        )}
 
         {/* 合格承認モーダル */}
         {showTestApprovalModal && selectedStudentForApproval && (

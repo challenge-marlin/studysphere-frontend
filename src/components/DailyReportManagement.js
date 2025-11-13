@@ -203,19 +203,23 @@ const DailyReportManagement = ({ student, onClose }) => {
         normalizedForm.mark_end = null;
       }
       
-      console.log('送信データ:', normalizedForm);
-      console.log('時間フィールド詳細（MySQL形式）:', {
-        mark_start: { value: normalizedForm.mark_start, type: typeof normalizedForm.mark_start, stringified: JSON.stringify(normalizedForm.mark_start) },
-        mark_lunch_start: { value: normalizedForm.mark_lunch_start, type: typeof normalizedForm.mark_lunch_start, stringified: JSON.stringify(normalizedForm.mark_lunch_start) },
-        mark_lunch_end: { value: normalizedForm.mark_lunch_end, type: typeof normalizedForm.mark_lunch_end, stringified: JSON.stringify(normalizedForm.mark_lunch_end) },
-        mark_end: { value: normalizedForm.mark_end, type: typeof normalizedForm.mark_end, stringified: JSON.stringify(normalizedForm.mark_end) }
-      });
-      console.log('時間フィールド値（MySQL形式）:', {
-        mark_start: normalizedForm.mark_start,
-        mark_lunch_start: normalizedForm.mark_lunch_start,
-        mark_lunch_end: normalizedForm.mark_lunch_end,
-        mark_end: normalizedForm.mark_end
-      });
+      if (Object.prototype.hasOwnProperty.call(normalizedForm, 'instructor_comment')) {
+        const commentValue = normalizedForm.instructor_comment;
+        if (commentValue === null) {
+          normalizedForm.instructor_comment = null;
+        } else if (commentValue === undefined || commentValue === '') {
+          normalizedForm.instructor_comment = '';
+        } else if (typeof commentValue === 'object') {
+          try {
+            normalizedForm.instructor_comment = JSON.stringify(commentValue);
+          } catch (error) {
+            console.error('instructor_commentのJSON変換に失敗しました:', error);
+            normalizedForm.instructor_comment = '';
+          }
+        } else {
+          normalizedForm.instructor_comment = String(commentValue);
+        }
+      }
       
       const response = await fetch(`${API_BASE_URL}/api/remote-support/daily-reports/${selectedReport.id}`, {
         method: 'PUT',
@@ -280,26 +284,80 @@ const DailyReportManagement = ({ student, onClose }) => {
     }
   };
 
+  // コメントを削除
+  const deleteComment = async (comment) => {
+    if (!selectedReport) return;
+
+    const commentId = comment?.id ?? comment?.created_at ?? '';
+    if (!commentId) {
+      alert('コメントIDが見つかりませんでした');
+      return;
+    }
+
+    const confirmMessage = `コメントを削除しますか？\n\n指導員: ${comment.instructor_name || '不明'}\n投稿日: ${comment.created_at ? new Date(comment.created_at).toLocaleString('ja-JP') : '不明'}`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      const encodedCommentId = encodeURIComponent(commentId);
+      const query = comment.created_at ? `?createdAt=${encodeURIComponent(comment.created_at)}` : '';
+      const response = await fetch(`${API_BASE_URL}/api/remote-support/daily-reports/${selectedReport.id}/comments/${encodedCommentId}${query}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        alert('コメントを削除しました');
+        fetchReportDetail(selectedReport.id);
+        fetchDailyReports();
+      } else {
+        const errorData = await response.json();
+        alert(errorData.message || 'コメントの削除に失敗しました');
+      }
+    } catch (error) {
+      console.error('コメント削除エラー:', error);
+      alert('コメントの削除に失敗しました');
+    }
+  };
+
+  const normalizeInstructorComments = (instructorComment) => {
+    if (!instructorComment) {
+      return [];
+    }
+
+    if (Array.isArray(instructorComment)) {
+      return instructorComment;
+    }
+
+    if (typeof instructorComment === 'object') {
+      return Array.isArray(instructorComment?.comments)
+        ? instructorComment.comments
+        : [];
+    }
+
+    if (typeof instructorComment === 'string') {
+      try {
+        const parsed = JSON.parse(instructorComment);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (error) {
+        console.warn('指導員コメントのJSON変換に失敗しました:', error);
+        return [];
+      }
+    }
+
+    return [];
+  };
+
   // コメント数を取得
   const getCommentCount = (instructorComment) => {
-    if (!instructorComment) return 0;
-    try {
-      const comments = JSON.parse(instructorComment);
-      return Array.isArray(comments) ? comments.length : 0;
-    } catch (e) {
-      return 0;
-    }
+    return normalizeInstructorComments(instructorComment).length;
   };
 
   // コメントを取得（新しい順）
   const getComments = (instructorComment) => {
-    if (!instructorComment) return [];
-    try {
-      const comments = JSON.parse(instructorComment);
-      return Array.isArray(comments) ? comments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) : [];
-    } catch (e) {
-      return [];
-    }
+    return normalizeInstructorComments(instructorComment)
+      .slice()
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   };
 
   // 指導員名の色を取得
@@ -679,6 +737,60 @@ const DailyReportManagement = ({ student, onClose }) => {
                           </div>
                         </>
                       )}
+
+                      {/* コメント（編集モードでも参照・削除可能） */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-lg font-semibold text-gray-800">指導員コメント</h4>
+                          <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
+                            {getCommentCount(selectedReport.instructor_comment)}件
+                          </span>
+                        </div>
+                        {selectedReport.instructor_comment ? (
+                          <div className="space-y-4">
+                            {getComments(selectedReport.instructor_comment).map((comment, index) => (
+                              <div key={comment.id || index} className="bg-white border border-gray-200 p-4 rounded-lg shadow-sm">
+                                <div className="flex justify-between items-start mb-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getInstructorColor(comment.instructor_name)}`}>
+                                      {comment.instructor_name}
+                                    </span>
+                                    {comment.instructor_name === currentUser.name && (
+                                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                        あなた
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-sm text-gray-500">
+                                    {new Date(comment.created_at).toLocaleString('ja-JP')}
+                                  </span>
+                                </div>
+                                <div className="bg-gray-50 p-3 rounded-lg">
+                                  <p className="text-gray-700 whitespace-pre-wrap">{comment.comment}</p>
+                                </div>
+                                <div className="flex justify-end mt-3">
+                                  <button
+                                    onClick={() => deleteComment(comment)}
+                                    className="px-3 py-1 text-sm text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors duration-200"
+                                  >
+                                    コメント削除
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 bg-gray-50 rounded-lg">
+                            <div className="text-gray-400 mb-2">
+                              <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                              </svg>
+                            </div>
+                            <p className="text-gray-500">まだコメントはありません</p>
+                            <p className="text-sm text-gray-400 mt-1">最初のコメントを追加してみましょう</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-6">
@@ -795,6 +907,14 @@ const DailyReportManagement = ({ student, onClose }) => {
                                 </div>
                                 <div className="bg-gray-50 p-3 rounded-lg">
                                   <p className="text-gray-700 whitespace-pre-wrap">{comment.comment}</p>
+                                </div>
+                                <div className="flex justify-end mt-3">
+                                  <button
+                                    onClick={() => deleteComment(comment)}
+                                    className="px-3 py-1 text-sm text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors duration-200"
+                                  >
+                                    コメント削除
+                                  </button>
                                 </div>
                               </div>
                             ))}

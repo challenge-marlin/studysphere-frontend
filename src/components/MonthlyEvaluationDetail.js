@@ -1,84 +1,385 @@
-import React, { useState } from 'react';
-
-const instructorList = [
-  '佐藤指導員',
-  '田中指導員',
-  '山田指導員',
-  '鈴木指導員',
-];
+import React, { useState, useEffect } from 'react';
+import { apiCall } from '../utils/api';
 
 const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, onDownloadPDF }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    evalDate: report?.evalDate || new Date().toISOString().split('T')[0],
-    prevEvalDate: report?.prevEvalDate || '',
-    method: report?.method || '通所',
-    otherMethod: report?.otherMethod || '',
-    goal: report?.goal || '',
-    work: report?.work || '',
-    achievement: report?.achievement || '',
-    issue: report?.issue || '',
-    improve: report?.improve || '',
-    health: report?.health || '',
-    note: report?.note || '',
-    validity: report?.validity || '',
-    instructor: report?.instructor || student?.instructorName || instructorList[0]
+  const [isLoading, setIsLoading] = useState(false);
+  const [isGenerating, setIsGenerating] = useState({});
+  const [instructorList, setInstructorList] = useState([]);
+
+  const normalizeDateValue = (value) => {
+    if (!value) return '';
+    if (typeof value === 'string') return value;
+    if (value instanceof Date) return value.toISOString().split('T')[0];
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().split('T')[0];
+    }
+    return '';
+  };
+
+  const computeDefaultPeriod = (baseDate) => {
+    if (!baseDate) return { start: '', end: '' };
+    const dateObj = new Date(baseDate);
+    if (Number.isNaN(dateObj.getTime())) return { start: '', end: '' };
+    const start = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1);
+    const end = new Date(dateObj.getFullYear(), dateObj.getMonth() + 1, 0);
+    return {
+      start: start.toISOString().split('T')[0],
+      end: end.toISOString().split('T')[0]
+    };
+  };
+
+  // バックエンドデータをフロントエンド形式に変換
+  const convertBackendToFrontend = (data) => {
+    if (!data) return null;
+    const defaultPeriod = computeDefaultPeriod(data.date);
+    return {
+      evalDate: data.date || new Date().toISOString().split('T')[0],
+      prevEvalDate: data.prev_evaluation_date || '',
+      method: data.evaluation_method || '通所',
+      otherMethod: data.method_other || '',
+      goal: data.goal || '',
+      work: data.effort || '',
+      achievement: data.achievement || '',
+      issue: data.issues || '',
+      improve: data.improvement || '',
+      health: data.health || '',
+      note: data.others || '',
+      validity: data.appropriateness || '',
+      instructor: data.evaluator_name || '',
+      periodStart: normalizeDateValue(data.period_start) || defaultPeriod.start,
+      periodEnd: normalizeDateValue(data.period_end) || defaultPeriod.end
+    };
+  };
+
+  // フロントエンドデータをバックエンド形式に変換
+  const convertFrontendToBackend = (data) => {
+    return {
+      date: data.evalDate,
+      mark_start: null, // MonthlyEvaluationDetailには時刻フィールドがないためnull
+      mark_end: null,
+      evaluation_method: data.method === 'その他' ? 'その他' : data.method,
+      method_other: data.method === 'その他' ? data.otherMethod : null,
+      goal: data.goal || null,
+      effort: data.work || null,
+      achievement: data.achievement || null,
+      issues: data.issue || null,
+      improvement: data.improve || null,
+      health: data.health || null,
+      others: data.note || null,
+      appropriateness: data.validity || null,
+      evaluator_name: data.instructor || null,
+      prev_evaluation_date: data.prevEvalDate || null,
+      recipient_number: student?.recipientNumber || null,
+      user_name: student?.name || null,
+      period_start: data.periodStart || null,
+      period_end: data.periodEnd || null
+    };
+  };
+
+  const [formData, setFormData] = useState(() => {
+    const converted = convertBackendToFrontend(report);
+    return {
+      evalDate: converted?.evalDate || report?.evalDate || new Date().toISOString().split('T')[0],
+      prevEvalDate: converted?.prevEvalDate || report?.prevEvalDate || '',
+      method: converted?.method || report?.method || '通所',
+      otherMethod: converted?.otherMethod || report?.otherMethod || '',
+      goal: converted?.goal || report?.goal || '',
+      work: converted?.work || report?.work || '',
+      achievement: converted?.achievement || report?.achievement || '',
+      issue: converted?.issue || report?.issue || '',
+      improve: converted?.improve || report?.improve || '',
+      health: converted?.health || report?.health || '',
+      note: converted?.note || report?.note || '',
+      validity: converted?.validity || report?.validity || '',
+      instructor: converted?.instructor || report?.instructor || student?.instructorName || '',
+      periodStart: converted?.periodStart || report?.periodStart || '',
+      periodEnd: converted?.periodEnd || report?.periodEnd || ''
+    };
   });
 
-  const handleSave = () => {
+  // 指導員リストを取得
+  useEffect(() => {
+    const fetchInstructors = async () => {
+      if (!student?.satellite_id && !student?.location?.id) return;
+      
+      try {
+        const satelliteId = student.satellite_id || student.location?.id;
+        const response = await apiCall(`/api/users/satellite/${satelliteId}/weekly-evaluation-instructors`, {
+          method: 'GET'
+        });
+        
+        if (response.success && response.data) {
+          setInstructorList(response.data);
+          // デフォルトの指導員が設定されていない場合、最初の指導員を設定
+          setFormData(prev => {
+            if (!prev.instructor && response.data.length > 0) {
+              return { ...prev, instructor: response.data[0].name };
+            }
+            return prev;
+          });
+        }
+      } catch (error) {
+        console.error('指導員リスト取得エラー:', error);
+      }
+    };
+
+    fetchInstructors();
+  }, [student?.satellite_id, student?.location?.id]);
+
+  // 前回評価日を取得
+  useEffect(() => {
+    const fetchPrevEvalDate = async () => {
+      if (!student?.id || report?.id) return; // 既存のレコードの場合はスキップ
+      
+      try {
+        const response = await apiCall(`/api/monthly-evaluations/user/${student.id}/latest`, {
+          method: 'GET'
+        });
+        
+        if (response.success && response.data?.date) {
+          setFormData(prev => ({ ...prev, prevEvalDate: response.data.date }));
+        }
+      } catch (error) {
+        console.error('前回評価日取得エラー:', error);
+      }
+    };
+
+    if (!isEditing && !report?.id) {
+      fetchPrevEvalDate();
+    }
+  }, [student?.id, report?.id]);
+
+  const handleSave = async () => {
     if (!formData.goal.trim() || !formData.work.trim()) {
       alert('訓練目標と取組内容は必須項目です。');
       return;
     }
 
-    const saveData = {
-      ...formData,
-      method: formData.method === 'その他' ? formData.otherMethod : formData.method
-    };
+    if (!student?.id) {
+      alert('利用者情報が取得できません。');
+      return;
+    }
 
-    onSave(saveData);
-    setIsEditing(false);
+    setIsLoading(true);
+    try {
+      const backendData = convertFrontendToBackend(formData);
+
+      if (!backendData.period_start || !backendData.period_end) {
+        const defaults = computeDefaultPeriod(formData.evalDate || new Date().toISOString().split('T')[0]);
+        backendData.period_start = backendData.period_start || defaults.start;
+        backendData.period_end = backendData.period_end || defaults.end;
+      }
+
+      let response;
+      if (report?.id) {
+        // 更新
+        response = await apiCall(`/api/monthly-evaluations/${report.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(backendData)
+        });
+      } else {
+        // 作成
+        response = await apiCall('/api/monthly-evaluations', {
+          method: 'POST',
+          body: JSON.stringify({
+            ...backendData,
+            user_id: student.id
+          })
+        });
+      }
+
+      if (response.success) {
+        alert(report?.id ? '達成度評価を更新しました。' : '達成度評価を保存しました。');
+        setIsEditing(false);
+        setFormData(prev => ({
+          ...prev,
+          periodStart: backendData.period_start,
+          periodEnd: backendData.period_end
+        }));
+        // 親コンポーネントのコールバックを呼び出し
+        if (onSave) {
+          onSave({
+            ...formData,
+            id: report?.id || response.data?.id,
+            method: formData.method === 'その他' ? formData.otherMethod : formData.method,
+            periodStart: backendData.period_start,
+            periodEnd: backendData.period_end
+          });
+        }
+      } else {
+        alert('保存に失敗しました: ' + (response.message || 'エラーが発生しました'));
+      }
+    } catch (error) {
+      console.error('保存エラー:', error);
+      alert('保存中にエラーが発生しました: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCancel = () => {
     setIsEditing(false);
+    const converted = convertBackendToFrontend(report);
     setFormData({
-      evalDate: report?.evalDate || new Date().toISOString().split('T')[0],
-      prevEvalDate: report?.prevEvalDate || '',
-      method: report?.method || '通所',
-      otherMethod: report?.otherMethod || '',
-      goal: report?.goal || '',
-      work: report?.work || '',
-      achievement: report?.achievement || '',
-      issue: report?.issue || '',
-      improve: report?.improve || '',
-      health: report?.health || '',
-      note: report?.note || '',
-      validity: report?.validity || '',
-      instructor: report?.instructor || student?.instructorName || instructorList[0]
+      evalDate: converted?.evalDate || report?.evalDate || new Date().toISOString().split('T')[0],
+      prevEvalDate: converted?.prevEvalDate || report?.prevEvalDate || '',
+      method: converted?.method || report?.method || '通所',
+      otherMethod: converted?.otherMethod || report?.otherMethod || '',
+      goal: converted?.goal || report?.goal || '',
+      work: converted?.work || report?.work || '',
+      achievement: converted?.achievement || report?.achievement || '',
+      issue: converted?.issue || report?.issue || '',
+      improve: converted?.improve || report?.improve || '',
+      health: converted?.health || report?.health || '',
+      note: converted?.note || report?.note || '',
+      validity: converted?.validity || report?.validity || '',
+      instructor: converted?.instructor || report?.instructor || student?.instructorName || '',
+      periodStart: converted?.periodStart || report?.periodStart || '',
+      periodEnd: converted?.periodEnd || report?.periodEnd || ''
     });
   };
 
-  const handleDelete = () => {
-    if (window.confirm('この月次評価を削除しますか？')) {
-      onDelete(report?.id);
+  const handleDelete = async () => {
+    if (!window.confirm('この達成度評価を削除しますか？')) {
+      return;
+    }
+
+    if (!report?.id) {
+      alert('削除する評価が見つかりません。');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await apiCall(`/api/monthly-evaluations/${report.id}`, {
+        method: 'DELETE'
+      });
+
+      if (response.success) {
+        alert('達成度評価を削除しました。');
+        // 親コンポーネントのコールバックを呼び出し
+        if (onDelete) {
+          onDelete(report.id);
+        }
+      } else {
+        alert('削除に失敗しました: ' + (response.message || 'エラーが発生しました'));
+      }
+    } catch (error) {
+      console.error('削除エラー:', error);
+      alert('削除中にエラーが発生しました: ' + error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // AIアシスト機能（モック）
+  // AIアシスト機能
   const handleAiAssist = async (field) => {
-    const suggestions = {
-      goal: `${student?.class}の習得と実践的なスキルアップ`,
-      work: `${student?.class}の学習と実習、課題への取り組み`,
-      achievement: '基礎知識の習得ができ、実践的な作業も可能になった',
-      issue: 'より高度な内容への理解を深める必要がある',
-      improve: '段階的な学習と実践を組み合わせた指導を継続',
-      health: '体調管理を適切に行い、無理のない学習を継続',
-      note: '学習意欲が高く、着実にスキルアップしている',
-      validity: '在宅就労の継続は妥当。適切なサポート体制を維持'
-    };
-    
-    setFormData(prev => ({ ...prev, [field]: suggestions[field] || '' }));
+    if (!student?.id) {
+      alert('利用者情報が取得できません。');
+      return;
+    }
+
+    setIsGenerating(prev => ({ ...prev, [field]: true }));
+    try {
+      let endpoint = '';
+      let requestBody = { user_id: student.id };
+
+      // フィールドごとのエンドポイントとパラメータを設定
+      switch (field) {
+        case 'goal':
+          endpoint = '/api/monthly-evaluation-ai/generate-goal';
+          break;
+        case 'work':
+          // 取組内容は期間が必要な場合があるが、ここではユーザーIDのみで実行
+          endpoint = '/api/monthly-evaluation-ai/generate-effort';
+          // 期間は評価実施日から1か月前として計算
+          const today = new Date(formData.evalDate || new Date());
+          const periodStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          const periodEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+          requestBody.period_start = periodStart.toISOString().split('T')[0];
+          requestBody.period_end = periodEnd.toISOString().split('T')[0];
+          break;
+        case 'achievement':
+          endpoint = '/api/monthly-evaluation-ai/generate-achievement';
+          requestBody.goal = formData.goal;
+          requestBody.effort = formData.work;
+          break;
+        case 'issue':
+          endpoint = '/api/monthly-evaluation-ai/generate-issues';
+          requestBody.goal = formData.goal;
+          requestBody.achievement = formData.achievement;
+          break;
+        case 'improve':
+          endpoint = '/api/monthly-evaluation-ai/generate-improvement';
+          requestBody.issues = formData.issue;
+          const today2 = new Date(formData.evalDate || new Date());
+          const periodStart2 = new Date(today2.getFullYear(), today2.getMonth() - 1, 1);
+          const periodEnd2 = new Date(today2.getFullYear(), today2.getMonth(), 0);
+          requestBody.period_start = periodStart2.toISOString().split('T')[0];
+          requestBody.period_end = periodEnd2.toISOString().split('T')[0];
+          break;
+        case 'health':
+          endpoint = '/api/monthly-evaluation-ai/generate-health';
+          const today3 = new Date(formData.evalDate || new Date());
+          const periodStart3 = new Date(today3.getFullYear(), today3.getMonth() - 1, 1);
+          const periodEnd3 = new Date(today3.getFullYear(), today3.getMonth(), 0);
+          requestBody.period_start = periodStart3.toISOString().split('T')[0];
+          requestBody.period_end = periodEnd3.toISOString().split('T')[0];
+          break;
+        case 'validity':
+          endpoint = '/api/monthly-evaluation-ai/generate-appropriateness';
+          requestBody.goal = formData.goal;
+          requestBody.effort = formData.work;
+          requestBody.achievement = formData.achievement;
+          requestBody.issues = formData.issue;
+          requestBody.improvement = formData.improve;
+          requestBody.health = formData.health;
+          break;
+        default:
+          return;
+      }
+
+      const response = await apiCall(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(requestBody)
+      });
+
+      if (response.success && response.data) {
+        // フィールド名のマッピング
+        const fieldMap = {
+          'goal': 'goal',
+          'work': 'effort',
+          'achievement': 'achievement',
+          'issue': 'issues',
+          'improve': 'improvement',
+          'health': 'health',
+          'validity': 'appropriateness'
+        };
+        
+        const backendField = fieldMap[field];
+        if (backendField && response.data[backendField]) {
+          const frontendFieldMap = {
+            'goal': 'goal',
+            'effort': 'work',
+            'achievement': 'achievement',
+            'issues': 'issue',
+            'improvement': 'improve',
+            'health': 'health',
+            'appropriateness': 'validity'
+          };
+          setFormData(prev => ({ ...prev, [frontendFieldMap[backendField]]: response.data[backendField] }));
+        }
+      } else {
+        alert('AI提案の生成に失敗しました: ' + (response.message || 'エラーが発生しました'));
+      }
+    } catch (error) {
+      console.error('AI提案エラー:', error);
+      alert('AI提案の生成中にエラーが発生しました: ' + error.message);
+    } finally {
+      setIsGenerating(prev => ({ ...prev, [field]: false }));
+    }
   };
 
   return (
@@ -86,19 +387,21 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
       <div className="max-w-4xl mx-auto">
         <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-2xl font-bold text-gray-800">📈 月次評価（在宅における就労達成度評価シート）</h3>
+            <h3 className="text-2xl font-bold text-gray-800">📈 達成度評価（在宅における就労達成度評価シート）</h3>
             <div className="flex gap-2">
               {!isEditing ? (
                 <>
                   <button 
-                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all duration-200"
+                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={() => setIsEditing(true)}
+                    disabled={isLoading}
                   >
                     ✏️ 編集
                   </button>
                   <button 
-                    className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-all duration-200"
+                    className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={handleDelete}
+                    disabled={isLoading || !report?.id}
                   >
                     🗑️ 削除
                   </button>
@@ -113,14 +416,16 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
               ) : (
                 <>
                   <button 
-                    className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-all duration-200"
+                    className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={handleSave}
+                    disabled={isLoading}
                   >
-                    💾 保存
+                    {isLoading ? '💾 保存中...' : '💾 保存'}
                   </button>
                   <button 
-                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-all duration-200"
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={handleCancel}
+                    disabled={isLoading}
                   >
                     キャンセル
                   </button>
@@ -206,10 +511,11 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
                     訓練目標 *
                     <button 
                       type="button" 
-                      className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200"
+                      className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={() => handleAiAssist('goal')}
+                      disabled={isGenerating.goal || !student?.id}
                     >
-                      🤖 AI
+                      {isGenerating.goal ? '🤖 生成中...' : '🤖 AI'}
                     </button>
                   </label>
                   <textarea 
@@ -226,10 +532,11 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
                     取組内容 *
                     <button 
                       type="button" 
-                      className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200"
+                      className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={() => handleAiAssist('work')}
+                      disabled={isGenerating.work || !student?.id}
                     >
-                      🤖 AI
+                      {isGenerating.work ? '🤖 生成中...' : '🤖 AI'}
                     </button>
                   </label>
                   <textarea 
@@ -246,10 +553,11 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
                     訓練目標に対する達成度
                     <button 
                       type="button" 
-                      className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200"
+                      className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={() => handleAiAssist('achievement')}
+                      disabled={isGenerating.achievement || !student?.id || !formData.goal || !formData.work}
                     >
-                      🤖 AI
+                      {isGenerating.achievement ? '🤖 生成中...' : '🤖 AI'}
                     </button>
                   </label>
                   <textarea 
@@ -266,10 +574,11 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
                     課題
                     <button 
                       type="button" 
-                      className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200"
+                      className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={() => handleAiAssist('issue')}
+                      disabled={isGenerating.issue || !student?.id || !formData.goal || !formData.achievement}
                     >
-                      🤖 AI
+                      {isGenerating.issue ? '🤖 生成中...' : '🤖 AI'}
                     </button>
                   </label>
                   <textarea 
@@ -286,10 +595,11 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
                     今後の課題改善方針
                     <button 
                       type="button" 
-                      className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200"
+                      className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={() => handleAiAssist('improve')}
+                      disabled={isGenerating.improve || !student?.id || !formData.issue}
                     >
-                      🤖 AI
+                      {isGenerating.improve ? '🤖 生成中...' : '🤖 AI'}
                     </button>
                   </label>
                   <textarea 
@@ -306,10 +616,11 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
                     健康・体調面での留意事項
                     <button 
                       type="button" 
-                      className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200"
+                      className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={() => handleAiAssist('health')}
+                      disabled={isGenerating.health || !student?.id}
                     >
-                      🤖 AI
+                      {isGenerating.health ? '🤖 生成中...' : '🤖 AI'}
                     </button>
                   </label>
                   <textarea 
@@ -324,13 +635,6 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     その他特記事項
-                    <button 
-                      type="button" 
-                      className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200"
-                      onClick={() => handleAiAssist('note')}
-                    >
-                      🤖 AI
-                    </button>
                   </label>
                   <textarea 
                     value={formData.note} 
@@ -346,10 +650,11 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
                     在宅就労継続の妥当性
                     <button 
                       type="button" 
-                      className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200"
+                      className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={() => handleAiAssist('validity')}
+                      disabled={isGenerating.validity || !student?.id || !formData.goal || !formData.work || !formData.achievement}
                     >
-                      🤖 AI
+                      {isGenerating.validity ? '🤖 生成中...' : '🤖 AI'}
                     </button>
                   </label>
                   <textarea 
@@ -368,9 +673,15 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
                     onChange={(e) => setFormData(prev => ({ ...prev, instructor: e.target.value }))}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   >
-                    {instructorList.map(name => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
+                    {instructorList.length > 0 ? (
+                      instructorList.map(instructor => (
+                        <option key={instructor.id || instructor.name} value={instructor.name}>
+                          {instructor.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">指導員が見つかりません</option>
+                    )}
                   </select>
                 </div>
               </div>
@@ -379,76 +690,79 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-700">評価実施日:</span>
-                    <span className="text-gray-800">{report?.evalDate || '未設定'}</span>
+                    <span className="text-gray-800">{report?.evalDate || report?.date || '未設定'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-700">前回の達成度評価日:</span>
-                    <span className="text-gray-800">{report?.prevEvalDate || 'なし'}</span>
+                    <span className="text-gray-800">{report?.prevEvalDate || report?.prev_evaluation_date || 'なし'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-700">実施方法:</span>
-                    <span className="text-gray-800">{report?.method || '未設定'}</span>
+                    <span className="text-gray-800">
+                      {report?.method || report?.evaluation_method || '未設定'}
+                      {report?.method_other && `（${report.method_other}）`}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-medium text-gray-700">評価実施者:</span>
-                    <span className="text-gray-800">{report?.instructor || '未設定'}</span>
+                    <span className="text-gray-800">{report?.instructor || report?.evaluator_name || '未設定'}</span>
                   </div>
                 </div>
 
                 <div className="space-y-4">
                   <div>
                     <label className="block font-medium text-gray-700 mb-2">訓練目標:</label>
-                    <div className="p-4 bg-gray-50 rounded-lg">
+                    <div className="p-4 bg-gray-50 rounded-lg whitespace-pre-wrap">
                       {report?.goal || '未入力'}
                     </div>
                   </div>
 
                   <div>
                     <label className="block font-medium text-gray-700 mb-2">取組内容:</label>
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      {report?.work || '未入力'}
+                    <div className="p-4 bg-gray-50 rounded-lg whitespace-pre-wrap">
+                      {report?.work || report?.effort || '未入力'}
                     </div>
                   </div>
 
                   <div>
                     <label className="block font-medium text-gray-700 mb-2">訓練目標に対する達成度:</label>
-                    <div className="p-4 bg-gray-50 rounded-lg">
+                    <div className="p-4 bg-gray-50 rounded-lg whitespace-pre-wrap">
                       {report?.achievement || '未入力'}
                     </div>
                   </div>
 
                   <div>
                     <label className="block font-medium text-gray-700 mb-2">課題:</label>
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      {report?.issue || '未入力'}
+                    <div className="p-4 bg-gray-50 rounded-lg whitespace-pre-wrap">
+                      {report?.issue || report?.issues || '未入力'}
                     </div>
                   </div>
 
                   <div>
                     <label className="block font-medium text-gray-700 mb-2">今後の課題改善方針:</label>
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      {report?.improve || '未入力'}
+                    <div className="p-4 bg-gray-50 rounded-lg whitespace-pre-wrap">
+                      {report?.improve || report?.improvement || '未入力'}
                     </div>
                   </div>
 
                   <div>
                     <label className="block font-medium text-gray-700 mb-2">健康・体調面での留意事項:</label>
-                    <div className="p-4 bg-gray-50 rounded-lg">
+                    <div className="p-4 bg-gray-50 rounded-lg whitespace-pre-wrap">
                       {report?.health || '未入力'}
                     </div>
                   </div>
 
                   <div>
                     <label className="block font-medium text-gray-700 mb-2">その他特記事項:</label>
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      {report?.note || '未入力'}
+                    <div className="p-4 bg-gray-50 rounded-lg whitespace-pre-wrap">
+                      {report?.note || report?.others || '未入力'}
                     </div>
                   </div>
 
                   <div>
                     <label className="block font-medium text-gray-700 mb-2">在宅就労継続の妥当性:</label>
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      {report?.validity || '未入力'}
+                    <div className="p-4 bg-gray-50 rounded-lg whitespace-pre-wrap">
+                      {report?.validity || report?.appropriateness || '未入力'}
                     </div>
                   </div>
                 </div>

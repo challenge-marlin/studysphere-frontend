@@ -20,6 +20,15 @@ const isAuthRequiredEndpoint = (url) => {
     '/forgot-password',
     '/api/messages/unread-count',
     '/verify-temp-password',
+    '/api/users/verify-temp-password',
+    '/api/users/login',
+    '/api/users/instructor-login',
+    '/api/users/refresh',
+    '/api/users/register',
+    '/api/users/forgot-password',
+    '/api/remote-support/login',
+    '/api/remote-support/check-temp-password',
+    '/api/remote-support/auto-login',
     '/restore-master-user'
   ];
   

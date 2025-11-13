@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../../config/apiConfig';
 
 const LearningHeader = ({ 
   lessonData, 
@@ -11,10 +12,59 @@ const LearningHeader = ({
   onUploadModalOpen,
   onTestNavigate,
   isTestEnabled,
+  testDisabledReason,
   hasAssignment,
   assignmentSubmitted
 }) => {
   const navigate = useNavigate();
+  const [localSectionData, setLocalSectionData] = useState([]);
+  const [isLoadingSections, setIsLoadingSections] = useState(false);
+  const [sectionError, setSectionError] = useState(null);
+
+  // セクションデータを取得
+  useEffect(() => {
+    const fetchSectionData = async () => {
+      if (!currentLesson) return;
+      
+      try {
+        setIsLoadingSections(true);
+        setSectionError(null);
+        
+        console.log('セクションデータを取得中:', currentLesson);
+        
+        const response = await fetch(`${API_BASE_URL}/api/lesson-text-video-links/lesson/${currentLesson}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data) {
+            console.log('セクションデータ取得成功:', data.data);
+            setLocalSectionData(data.data);
+          } else {
+            console.warn('セクションデータの取得に失敗:', data.message);
+            setSectionError(data.message || 'セクションデータの取得に失敗しました');
+          }
+        } else {
+          console.error('セクションデータの取得に失敗:', response.status, response.statusText);
+          setSectionError(`セクションデータの取得に失敗しました: ${response.status}`);
+        }
+      } catch (error) {
+        console.error('セクションデータ取得エラー:', error);
+        setSectionError('セクションデータの取得中にエラーが発生しました');
+      } finally {
+        setIsLoadingSections(false);
+      }
+    };
+
+    fetchSectionData();
+  }, [currentLesson]);
+
+  // 表示用のセクションデータを決定（propsから渡されたものがあればそれを使用、なければローカルで取得したもの）
+  const displaySectionData = sectionData && sectionData.length > 0 ? sectionData : localSectionData;
 
   return (
     <div className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg">
@@ -47,12 +97,21 @@ const LearningHeader = ({
               <select 
                 value={currentSection} 
                 onChange={(e) => onSectionChange(parseInt(e.target.value))}
-                className="px-3 py-1 bg-white bg-opacity-10 border border-white border-opacity-30 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
+                disabled={isLoadingSections}
+                className="px-3 py-1 bg-white bg-opacity-10 border border-white border-opacity-30 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {sectionData && sectionData.length > 0 ? (
-                  sectionData.map((section, index) => (
+                {isLoadingSections ? (
+                  <option value={currentSection} className="text-gray-800">
+                    読み込み中...
+                  </option>
+                ) : sectionError ? (
+                  <option value={currentSection} className="text-gray-800">
+                    エラー: セクション取得失敗
+                  </option>
+                ) : displaySectionData && displaySectionData.length > 0 ? (
+                  displaySectionData.map((section, index) => (
                     <option key={section.id || index} value={index} className="text-gray-800">
-                      {section.video_title || `セクション ${index + 1}`}
+                      {section.video_title || section.section_title || `セクション ${index + 1}`}
                     </option>
                   ))
                 ) : (
@@ -61,6 +120,11 @@ const LearningHeader = ({
                   </option>
                 )}
               </select>
+              {sectionError && (
+                <span className="text-xs text-red-200" title={sectionError}>
+                  ⚠️
+                </span>
+              )}
             </div>
             
             {/* 成果物アップロードボタン（課題がある場合のみ表示） */}
@@ -81,7 +145,7 @@ const LearningHeader = ({
             )}
             
             {/* テストメニュー */}
-            <div className="relative group">
+            <div className="relative group flex flex-col items-start">
               <button 
                 className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all duration-200 hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!isTestEnabled}
@@ -121,6 +185,12 @@ const LearningHeader = ({
                     </button>
                   </div>
                 </div>
+              )}
+              
+              {!isTestEnabled && testDisabledReason && (
+                <p className="mt-2 text-xs text-yellow-100 max-w-xs leading-snug">
+                  {testDisabledReason}
+                </p>
               )}
             </div>
           </div>

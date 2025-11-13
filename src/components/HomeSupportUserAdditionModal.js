@@ -16,12 +16,28 @@ const HomeSupportUserAdditionModal = ({ isOpen, onClose, onSuccess }) => {
   const [currentSatellite, setCurrentSatellite] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
 
+  const getInstructorKey = (instructor) => {
+    if (!instructor) return '';
+    if (instructor.id !== null && instructor.id !== undefined) {
+      return String(instructor.id);
+    }
+    return 'unassigned';
+  };
+
+  const isInstructorSelected = (instructor) => {
+    const key = getInstructorKey(instructor);
+    return key !== '' && selectedInstructors.includes(key);
+  };
+
   // ストレージから拠点情報とユーザー情報を取得
   useEffect(() => {
     if (isOpen) {
+      console.log('モーダルが開かれました。拠点情報とユーザー情報を取得します。');
+      
       // 現在のユーザー情報を取得
       try {
         const storedUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+        console.log('取得したユーザー情報:', storedUser);
         setCurrentUser(storedUser);
       } catch (error) {
         console.error('ユーザー情報のパースエラー:', error);
@@ -29,9 +45,12 @@ const HomeSupportUserAdditionModal = ({ isOpen, onClose, onSuccess }) => {
 
       // sessionStorageから拠点情報を取得
       const storedLocation = sessionStorage.getItem('selectedSatellite');
+      console.log('sessionStorageの拠点情報:', storedLocation);
+      
       if (storedLocation) {
         try {
           const locationData = JSON.parse(storedLocation);
+          console.log('パースした拠点情報:', locationData);
           setCurrentSatellite(locationData);
         } catch (error) {
           console.error('拠点情報のパースエラー:', error);
@@ -39,16 +58,20 @@ const HomeSupportUserAdditionModal = ({ isOpen, onClose, onSuccess }) => {
           setMessageType('error');
         }
       } else {
+        console.log('sessionStorageに拠点情報がありません。フォールバック処理を実行します。');
         // フォールバック: localStorageからユーザー情報を取得
         try {
           const storedUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
           if (storedUser.satellite_ids && storedUser.satellite_ids.length > 0) {
             // 簡易的な拠点情報を作成
-            setCurrentSatellite({
+            const fallbackSatellite = {
               id: storedUser.satellite_ids[0],
               name: storedUser.location?.name || '拠点名未設定'
-            });
+            };
+            console.log('フォールバック拠点情報:', fallbackSatellite);
+            setCurrentSatellite(fallbackSatellite);
           } else {
+            console.log('ユーザー情報に拠点IDがありません。');
             setMessage('拠点が選択されていません。拠点を選択してから再度お試しください。');
             setMessageType('error');
           }
@@ -63,9 +86,13 @@ const HomeSupportUserAdditionModal = ({ isOpen, onClose, onSuccess }) => {
 
   // 拠点情報が取得できたら指導員と利用者を取得
   useEffect(() => {
+    console.log('拠点情報チェック:', currentSatellite);
     if (currentSatellite?.id) {
+      console.log('拠点情報が取得できました。指導員と利用者を取得します。');
       fetchInstructors();
       fetchUsers();
+    } else {
+      console.log('拠点情報が取得できていません。');
     }
   }, [currentSatellite]);
 
@@ -79,19 +106,45 @@ const HomeSupportUserAdditionModal = ({ isOpen, onClose, onSuccess }) => {
   const fetchInstructors = async () => {
     try {
       setLoading(true);
+      setMessage('');
+      setMessageType('');
+      
+      console.log('指導員取得開始 - 拠点ID:', currentSatellite.id);
+      
+      if (!currentSatellite.id) {
+        throw new Error('拠点IDが設定されていません');
+      }
+      
       const response = await getSatelliteInstructorsForHomeSupport(currentSatellite.id);
+      console.log('指導員取得レスポンス:', response);
+      
       if (response.success) {
-        setInstructors(response.data);
+        console.log('取得した指導員データ:', response.data);
+        const formattedInstructors = (response.data || []).sort((a, b) => {
+          if ((a.is_unassigned ?? false) === (b.is_unassigned ?? false)) {
+            return a.name.localeCompare(b.name, 'ja');
+          }
+          return a.is_unassigned ? 1 : -1;
+        });
+        setInstructors(formattedInstructors);
         // 初期状態では指導員は選択されていない
         setSelectedInstructors([]);
+        
+        if (!response.data || response.data.length === 0) {
+          setMessage('この拠点には指導員が登録されていません');
+          setMessageType('warning');
+        }
       } else {
-        setMessage('指導員の取得に失敗しました');
+        console.error('指導員取得失敗:', response.message);
+        setMessage('指導員の取得に失敗しました: ' + (response.message || '不明なエラー'));
         setMessageType('error');
+        setInstructors([]);
       }
     } catch (error) {
       console.error('指導員取得エラー:', error);
-      setMessage('指導員の取得に失敗しました');
+      setMessage('指導員の取得に失敗しました: ' + error.message);
       setMessageType('error');
+      setInstructors([]);
     } finally {
       setLoading(false);
     }
@@ -101,7 +154,9 @@ const HomeSupportUserAdditionModal = ({ isOpen, onClose, onSuccess }) => {
     try {
       setLoading(true);
       // 指導員が選択されていない場合は現在のユーザーのみの利用者を取得
-      const instructorIds = selectedInstructors.length > 0 ? selectedInstructors : [currentUser?.id].filter(Boolean);
+      const instructorIds = selectedInstructors.length > 0 
+        ? selectedInstructors 
+        : [currentUser?.id].filter(Boolean).map(String);
       const response = await getSatelliteUsersForHomeSupport(currentSatellite.id, instructorIds);
       if (response.success) {
         console.log('取得した利用者データ:', response.data);
@@ -228,6 +283,8 @@ const HomeSupportUserAdditionModal = ({ isOpen, onClose, onSuccess }) => {
           <div className={
             messageType === 'success' 
               ? 'bg-green-50 border-l-4 border-green-400 p-4' 
+              : messageType === 'warning'
+              ? 'bg-yellow-50 border-l-4 border-yellow-400 p-4'
               : 'bg-red-50 border-l-4 border-red-400 p-4'
           }>
             <div className="flex">
@@ -235,6 +292,10 @@ const HomeSupportUserAdditionModal = ({ isOpen, onClose, onSuccess }) => {
                 {messageType === 'success' ? (
                   <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                ) : messageType === 'warning' ? (
+                  <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
                 ) : (
                   <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -246,6 +307,8 @@ const HomeSupportUserAdditionModal = ({ isOpen, onClose, onSuccess }) => {
                 <p className={
                   messageType === 'success' 
                     ? 'text-sm text-green-700' 
+                    : messageType === 'warning'
+                    ? 'text-sm text-yellow-700'
                     : 'text-sm text-red-700'
                 }>
                   {message}
@@ -261,24 +324,47 @@ const HomeSupportUserAdditionModal = ({ isOpen, onClose, onSuccess }) => {
           <div className="bg-gray-50 rounded-xl p-6">
             <h4 className="text-lg font-semibold text-gray-800 mb-4">👨‍🏫 指導員選択</h4>
             <div className="space-y-4">
-              <div className="flex flex-wrap gap-3">
-                {instructors.map(instructor => (
-                  <button
-                    key={instructor.id}
-                    onClick={() => handleInstructorToggle(instructor.id)}
-                    className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 ${
-                      selectedInstructors.includes(instructor.id)
-                        ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
-                        : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                    }`}
-                  >
-                    {instructor.name} ({instructor.student_count}名)
-                  </button>
-                ))}
-              </div>
-              <p className="text-sm text-gray-600">
-                選択中の指導員: {selectedInstructors.length}名
-              </p>
+              {loading ? (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">指導員を読み込み中...</p>
+                </div>
+              ) : instructors.length === 0 ? (
+                <div className="text-center py-8 text-gray-600">
+                  <p>指導員が見つかりませんでした</p>
+                  <p className="text-sm mt-2">拠点に指導員が登録されているか確認してください</p>
+                  <div className="mt-4 text-xs text-gray-500">
+                    <p>デバッグ情報:</p>
+                    <p>拠点ID: {currentSatellite?.id}</p>
+                    <p>指導員数: {instructors.length}</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-3">
+                    {instructors.map(instructor => {
+                      const instructorKey = getInstructorKey(instructor);
+                      const selected = isInstructorSelected(instructor);
+                      return (
+                        <button
+                          key={instructorKey}
+                          onClick={() => handleInstructorToggle(instructorKey)}
+                          className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 ${
+                            selected
+                              ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
+                              : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                          }`}
+                        >
+                          {instructor.name} ({instructor.student_count}名)
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    選択中の指導員: {selectedInstructors.length}名
+                  </p>
+                </>
+              )}
             </div>
           </div>
 

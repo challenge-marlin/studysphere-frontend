@@ -19,6 +19,12 @@ import HomeSupportUserDetailPage from './pages/HomeSupportUserDetailPage';
 import DailyRecordsPage from './pages/DailyRecordsPage';
 import HomeSupportDailyRecordsPage from './pages/HomeSupportDailyRecordsPage';
 import HomeSupportEvaluationsPage from './pages/HomeSupportEvaluationsPage';
+import HomeSupportDashboard from './pages/HomeSupportDashboard_new';
+import WeeklyEvaluationPage from './pages/WeeklyEvaluationPage';
+import MonthlyEvaluationPage from './pages/MonthlyEvaluationPage';
+import MonthlyEvaluationHistoryPage from './pages/MonthlyEvaluationHistoryPage';
+import MonthlyAttendancePage from './pages/MonthlyAttendancePage';
+import HomeSupportRecordsPage from './pages/HomeSupportRecordsPage';
 import InstructorStudentDetail from './pages/InstructorStudentDetail';
 import './App.css';
 
@@ -35,9 +41,12 @@ const TestComponent = () => (
 
 function App() {
   // 環境に応じてbasenameを設定
-  const basename = process.env.NODE_ENV === 'production' 
-    ? process.env.PUBLIC_URL || '/'  // 本番環境ではプレフィックスなし
-    : '/studysphere';  // 開発環境では/studysphereプレフィックス
+  // const basename = process.env.NODE_ENV === 'production' 
+  //   ? process.env.PUBLIC_URL || '/'  // 本番環境ではプレフィックスなし
+  //   : '/studysphere';  // 開発環境では/studysphereプレフィックス
+  
+  // 開発環境でも "/" を使用（localhost:3000/ でアクセスするため）
+  const basename = process.env.PUBLIC_URL || '/';
 
   return (
     <Router 
@@ -62,6 +71,8 @@ function App() {
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
             {/* 指導員用ダッシュボード */}
             <Route path="/instructor/dashboard" element={<InstructorDashboard />} />
+            {/* 在宅支援専用ダッシュボード */}
+            <Route path="/instructor/home-support" element={<HomeSupportDashboard />} />
             {/* 互換性のため古いパスも残す */}
             <Route path="/teacher/dashboard" element={<InstructorDashboard />} />
             {/* 利用者用ログイン（トークンベース） */}
@@ -93,6 +104,16 @@ function App() {
             {/* 在宅支援管理：達成度評価管理 */}
             <Route path="/instructor/evaluations" element={<HomeSupportEvaluationsPage />} />
             <Route path="/instructor/home-support-evaluations" element={<HomeSupportEvaluationsPage />} />
+            {/* 在宅支援管理：週次評価作成 */}
+            <Route path="/instructor/home-support/weekly-evaluation/:studentId" element={<WeeklyEvaluationPage />} />
+            {/* 在宅支援管理：月次評価作成 */}
+            <Route path="/instructor/home-support/monthly-evaluation/:studentId" element={<MonthlyEvaluationPage />} />
+            {/* 在宅支援管理：月次達成度評価確認・履歴 */}
+            <Route path="/instructor/home-support/monthly-evaluation-history/:userId" element={<MonthlyEvaluationHistoryPage />} />
+            {/* 在宅支援管理：月次勤怠管理 */}
+            <Route path="/instructor/home-support/monthly-attendance" element={<MonthlyAttendancePage />} />
+            {/* 在宅支援管理：記録確認（日次＋週次統合表示） */}
+            <Route path="/instructor/home-support/records/:userId" element={<HomeSupportRecordsPage />} />
             {/* 在宅支援管理：利用者詳細画面 */}
             <Route path="/instructor/student-detail/:studentId" element={<HomeSupportUserDetailPage />} />
           </Routes>

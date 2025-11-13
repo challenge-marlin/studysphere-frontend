@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPut } from '../utils/api';
 import { useAuth } from './contexts/AuthContext';
 
-const StudentVoiceCareView = ({ studentId, studentName }) => {
+const StudentVoiceCareView = ({ studentId, studentName, refreshSignal = 0 }) => {
   const { currentUser } = useAuth();
   const [voiceMessages, setVoiceMessages] = useState([]);
   const [selectedMessage, setSelectedMessage] = useState(null);
@@ -19,7 +19,7 @@ const StudentVoiceCareView = ({ studentId, studentName }) => {
   useEffect(() => {
     // アナウンスメッセージと1対1メッセージを統合して取得
     loadVoiceMessages();
-  }, [studentId]);
+  }, [studentId, refreshSignal]);
 
   const loadVoiceMessages = async () => {
     try {
@@ -57,12 +57,12 @@ const StudentVoiceCareView = ({ studentId, studentName }) => {
                 type: 'conversation',
                 title: `${conversation.other_user_name}指導員との会話`,
                 message: latestMessage.message,
-                sentDate: new Date(latestMessage.created_at).toLocaleString('ja-JP', { timeZone: 'UTC' }),
+                sentDate: new Date(latestMessage.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }),
                 instructorName: conversation.other_user_name, // 指導員名（送信先）
                 senderName: senderName, // 実際の送信者名
                 hasReplied: latestMessage.is_read,
                 myReply: '',
-                replyDate: latestMessage.read_at ? new Date(latestMessage.read_at).toLocaleString('ja-JP', { timeZone: 'UTC' }) : '',
+                replyDate: latestMessage.read_at ? new Date(latestMessage.read_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }) : '',
                 canReply: true,
                 fromStudent: isFromStudent,
                 conversationId: conversation.other_user_id,
@@ -84,11 +84,11 @@ const StudentVoiceCareView = ({ studentId, studentName }) => {
             type: 'announcement',
             title: announcement.title,
             message: announcement.message,
-            sentDate: new Date(announcement.created_at).toLocaleString('ja-JP', { timeZone: 'UTC' }),
+            sentDate: new Date(announcement.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }),
             instructorName: announcement.created_by_name || '指導員',
             hasReplied: announcement.is_read,
             myReply: '',
-            replyDate: announcement.read_at ? new Date(announcement.read_at).toLocaleString('ja-JP', { timeZone: 'UTC' }) : '',
+            replyDate: announcement.read_at ? new Date(announcement.read_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }) : '',
             canReply: true
           }));
         allMessages.push(...announcements);
@@ -333,7 +333,7 @@ const StudentVoiceCareView = ({ studentId, studentName }) => {
             
             {/* 会話タイプの場合は会話全体を表示 */}
             {selectedMessage.type === 'conversation' && selectedMessage.allMessages ? (
-              <div className="space-y-4 mb-4">
+              <div className="space-y-4 mb-4 max-h-80 overflow-y-auto pr-2">
                 <div className="text-sm text-gray-600 mb-3">
                   {selectedMessage.messageCount}通のメッセージ
                 </div>
@@ -350,7 +350,7 @@ const StudentVoiceCareView = ({ studentId, studentName }) => {
                         {msg.sender_id === currentUser.id ? 'あなた' : selectedMessage.instructorName}
                       </span>
                       <span className="text-xs text-gray-500">
-                        {new Date(msg.created_at).toLocaleString('ja-JP', { timeZone: 'UTC' })}
+                        {new Date(msg.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
                       </span>
                     </div>
                     <p className="text-gray-800 text-sm">{msg.message}</p>

@@ -41,24 +41,14 @@ const MultipleChoiceTest = ({
     }
   }, [testData, testStarted, shuffledQuestions.length]);
 
-  // 回答の更新（数字入力）
-  const handleAnswerInput = (questionId, inputValue) => {
-    const answerNumber = parseInt(inputValue);
-    if (answerNumber >= 1 && answerNumber <= 4) {
-      const answerIndex = answerNumber - 1; // 1-4を0-3に変換
-      const newAnswers = {
-        ...answers,
-        [questionId]: answerIndex
-      };
-      setAnswers(newAnswers);
-      onAnswerChange(newAnswers);
-    } else if (inputValue === '') {
-      // 空の場合は回答を削除
-      const newAnswers = { ...answers };
-      delete newAnswers[questionId];
-      setAnswers(newAnswers);
-      onAnswerChange(newAnswers);
-    }
+  // 回答の更新（選択クリック）
+  const handleAnswerSelect = (questionId, answerIndex) => {
+    const newAnswers = {
+      ...answers,
+      [questionId]: answerIndex
+    };
+    setAnswers(newAnswers);
+    onAnswerChange(newAnswers);
   };
 
   // 次の問題へ
@@ -139,7 +129,7 @@ const MultipleChoiceTest = ({
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-medium">形式:</span>
-                <span>4択問題（数字入力）</span>
+                <span>4択問題（選択クリック）</span>
               </div>
             </div>
           </div>
@@ -149,7 +139,7 @@ const MultipleChoiceTest = ({
             <ul className="text-left space-y-2 text-yellow-700">
               <li className="flex items-start gap-2">
                 <span className="text-yellow-500 mt-1">•</span>
-                <span>各問題に1〜4の数字で回答してください</span>
+                <span>各問題の選択肢をクリックして回答してください</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-yellow-500 mt-1">•</span>
@@ -265,38 +255,42 @@ const MultipleChoiceTest = ({
                   </div>
 
                   <div className="space-y-3 mb-6">
-                    {currentQuestion.options.map((option, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center p-4 border border-gray-200 rounded-xl"
-                      >
-                        <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mr-4 font-bold text-gray-600">
-                          {index + 1}
-                        </div>
-                        <span className="flex-1 text-gray-800 font-medium">
-                          {option}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* 数字入力エリア */}
-                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-6">
-                    <div className="flex items-center gap-4">
-                      <label className="text-lg font-semibold text-gray-700">
-                        回答:
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="4"
-                        value={answers[currentQuestion.id] !== undefined ? answers[currentQuestion.id] + 1 : ''}
-                        onChange={(e) => handleAnswerInput(currentQuestion.id, e.target.value)}
-                        className="w-20 px-4 py-2 border border-gray-300 rounded-lg text-center text-lg font-bold focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="?"
-                      />
-                      <span className="text-gray-600">（1〜4の数字を入力）</span>
-                    </div>
+                    {currentQuestion.options.map((option, index) => {
+                      const isSelected = answers[currentQuestion.id] === index;
+                      return (
+                        <button
+                          key={index}
+                          onClick={() => handleAnswerSelect(currentQuestion.id, index)}
+                          className={`w-full flex items-center p-4 border-2 rounded-xl transition-all duration-200 hover:shadow-md ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-50 shadow-md'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-4 font-bold transition-all duration-200 ${
+                            isSelected
+                              ? 'bg-blue-500 text-white'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {index + 1}
+                          </div>
+                          <span className={`flex-1 text-left font-medium transition-colors duration-200 ${
+                            isSelected
+                              ? 'text-blue-800'
+                              : 'text-gray-800'
+                          }`}>
+                            {option}
+                          </span>
+                          {isSelected && (
+                            <div className="ml-2">
+                              <svg className="w-6 h-6 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 

@@ -6,11 +6,7 @@ import { useAuth } from './contexts/AuthContext';
 import { isExpired, getCurrentJapanTime } from '../utils/dateUtils';
 import ModalErrorDisplay from './common/ModalErrorDisplay';
 // import { fetch } from '../utils/httpInterceptor'; // 一時的に無効化
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 
-  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-    : 'http://localhost:5050');
+import { API_BASE_URL } from '../config/apiConfig';
 
 const LocationManagement = () => {
   const { currentUser } = useAuth();

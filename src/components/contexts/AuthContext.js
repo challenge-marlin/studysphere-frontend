@@ -16,12 +16,7 @@ import { refreshTokenAPI } from '../../utils/authUtils';
 import { setGlobalNavigate, setupFetchInterceptor } from '../../utils/httpInterceptor';
 import { addOperationLog } from '../../utils/operationLogManager';
 import { markTempPasswordAsUsedAPI } from '../../utils/api';
-
-// 開発環境では127.0.0.1:5050を使用（バックエンドのデータベース接続と統一）
-const API_BASE_URL = process.env.REACT_APP_API_URL || 
-  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-    : 'http://127.0.0.1:5050');
+import { API_BASE_URL } from '../../config/apiConfig';
 
 // 認証コンテキストの作成
 export const AuthContext = createContext();

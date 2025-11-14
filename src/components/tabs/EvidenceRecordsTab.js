@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getCaptureRecords, getSatelliteHomeSupportUsers } from '../../utils/api';
 import { getCurrentUser } from '../../utils/userContext';
+import { API_BASE_URL } from '../../config/apiConfig';
 
 const EvidenceRecordsTab = ({ 
   handleUserInputClick, 
@@ -130,11 +131,6 @@ const EvidenceRecordsTab = ({
           for (const record of response.data.records || []) {
             if (!reports[record.user.id]) {
               try {
-                const API_BASE_URL = process.env.REACT_APP_API_URL || 
-                  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-                    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-                    : 'http://localhost:5050');
-                
                 // ユーザーIDと日付で日報をフィルタリング
                 const reportResponse = await fetch(`${API_BASE_URL}/api/remote-support/daily-reports?userId=${record.user.id}&startDate=${record.date}&endDate=${record.date}`, {
                   headers: {

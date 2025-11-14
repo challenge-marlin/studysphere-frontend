@@ -157,10 +157,6 @@ const DailySupportRecordModal = ({
     setAiSuggesting(true);
     try {
       const token = localStorage.getItem('accessToken');
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 
-        (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-          ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-          : 'http://localhost:5050');
 
       const response = await fetch(`${API_BASE_URL}/api/ai/suggest-work-content`, {
         method: 'POST',
@@ -196,10 +192,6 @@ const DailySupportRecordModal = ({
     setAiSuggestingSupport(true);
     try {
       const token = localStorage.getItem('accessToken');
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 
-        (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-          ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-          : 'http://localhost:5050');
 
       const supportPlanText = supportPlan ? 
         `【短期目標】${supportPlan.short_term_goal || '未設定'}\n【長期目標】${supportPlan.long_term_goal || '未設定'}\n【課題】${supportPlan.issues || '未設定'}` : 
@@ -246,10 +238,6 @@ const DailySupportRecordModal = ({
     setAiSuggestingAdvice(true);
     try {
       const token = localStorage.getItem('accessToken');
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 
-        (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-          ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-          : 'http://localhost:5050');
 
       const response = await fetch(`${API_BASE_URL}/api/ai/suggest-advice`, {
         method: 'POST',

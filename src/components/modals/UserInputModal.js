@@ -450,10 +450,6 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
     try {
       // OpenAI APIを呼び出し
       const token = localStorage.getItem('accessToken');
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 
-        (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-          ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-          : 'http://localhost:5050');
 
       const response = await fetch(`${API_BASE_URL}/api/ai/suggest-work-content`, {
         method: 'POST',

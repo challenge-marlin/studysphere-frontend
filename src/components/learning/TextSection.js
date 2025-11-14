@@ -5,12 +5,6 @@ import MarkdownRenderer from './MarkdownRenderer';
 import { SessionStorageManager } from '../../utils/sessionStorage';
 import { API_BASE_URL } from '../../config/apiConfig';
 
-const TEXT_ERROR_KEYWORDS = [
-  'テキストファイルの読み込みに失敗しました',
-  'テキストファイルが設定されていません',
-  'テキスト内容が利用できません'
-];
-
 const TextSection = ({
   lessonData,
   textContent,
@@ -100,18 +94,6 @@ const TextSection = ({
         textLength: textContent.length,
         s3Key: lessonData.s3_key
       });
-      
-      const normalizedText = textContent.trim();
-      const isErrorContent = !normalizedText || TEXT_ERROR_KEYWORDS.some(keyword => normalizedText.includes(keyword));
-      
-      if (isErrorContent) {
-        console.warn('テキストコンテンツがエラー状態のため、セッションストレージへの保存をスキップします');
-        if (onTextContentUpdate) {
-          onTextContentUpdate(textContent);
-        }
-        processedS3KeyRef.current = lessonData.s3_key;
-        return;
-      }
       
       // セッションストレージにコンテキストを保存
       const saveSuccess = SessionStorageManager.saveContext(
@@ -424,8 +406,8 @@ const TextSection = ({
 
   if (textLoading) {
     return (
-      <div className="bg-white rounded-2xl shadow-xl p-6">
-        <div className="flex items-center gap-3 mb-4">
+      <div className="bg-white rounded-2xl shadow-xl p-6 h-full flex flex-col overflow-hidden">
+        <div className="flex items-center gap-3 mb-4 workspace-widget-handle cursor-move select-none">
           <span className="text-2xl">📄</span>
           <h3 className="text-xl font-bold text-gray-800">テキスト内容</h3>
         </div>
@@ -440,8 +422,8 @@ const TextSection = ({
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl p-6">
-      <div className="flex items-center gap-3 mb-4">
+    <div className="bg-white rounded-2xl shadow-xl p-6 h-full flex flex-col overflow-hidden">
+      <div className="flex items-center gap-3 mb-4 workspace-widget-handle cursor-move select-none">
         <span className="text-2xl">📄</span>
         <h3 className="text-xl font-bold text-gray-800">テキスト内容</h3>
         {lessonData?.file_type === 'pdf' && (
@@ -487,7 +469,7 @@ const TextSection = ({
       {/* テキスト内容表示 */}
       <div 
         ref={textContainerRef}
-        className="h-[85vh] overflow-y-auto custom-scrollbar border border-gray-200 rounded-lg p-2 bg-gray-50"
+        className="flex-1 overflow-y-auto custom-scrollbar border border-gray-200 rounded-lg p-2 bg-gray-50"
       >
         {lessonData?.file_type === 'pdf' ? (
           <div className="h-full">

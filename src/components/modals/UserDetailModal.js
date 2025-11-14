@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { formatUTCToJapanTimeString } from '../../utils/dateUtils';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 
-  (window.location.hostname === 'studysphere.ayatori-inc.co.jp' 
-    ? 'https://backend.studysphere.ayatori-inc.co.jp' 
-    : 'http://localhost:5050');
+import { API_BASE_URL } from '../../config/apiConfig';
 
 const UserDetailModal = ({ isOpen, onClose, selectedUser }) => {
   const [captureRecords, setCaptureRecords] = useState({ photos: [], screenshots: [] });

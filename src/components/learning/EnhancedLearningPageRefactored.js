@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useContext } from 'react';
+import React, { useState, useRef, useEffect, useContext, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
 import { useLearningProgress } from './LearningProgressManager';
@@ -11,13 +11,7 @@ import UploadModal from './UploadModal';
 import AIAssistantService from './AIAssistantService';
 import { SessionStorageManager } from '../../utils/sessionStorage';
 import { API_BASE_URL } from '../../config/apiConfig';
-
-const TEXT_ERROR_KEYWORDS = [
-  'テキストファイルの読み込みに失敗しました',
-  'テキストファイルが設定されていません',
-  'テキスト内容が利用できません',
-  '教材テキストを読み込めません'
-];
+import LearningWorkspaceLayout, { createDefaultLayouts, normalizeLayouts } from './LearningWorkspaceLayout';
 
 const EnhancedLearningPageRefactored = () => {
   const navigate = useNavigate();
@@ -42,17 +36,70 @@ const EnhancedLearningPageRefactored = () => {
   const [pdfTextExtracted, setPdfTextExtracted] = useState(false);
   const [pdfProcessingStatus, setPdfProcessingStatus] = useState('idle'); // 'idle', 'processing', 'completed', 'error'
   const [assignmentStatus, setAssignmentStatus] = useState({ hasAssignment: false, assignmentSubmitted: false });
+  const [workspaceLayouts, setWorkspaceLayouts] = useState(() => ({
+    withAssignment: createDefaultLayouts(true),
+    withoutAssignment: createDefaultLayouts(false)
+  }));
   const textContainerRef = useRef(null);
   const latestFetchId = useRef(0); // レースコンディション防止用
   const abortControllerRef = useRef(null); // リクエストキャンセル用
+  const layoutStorageKeyRef = useRef(null);
+  const layoutInitializedRef = useRef(false);
 
-  const isErrorTextContent = (content) => {
-    const normalized = (content || '').trim();
-    if (!normalized) {
-      return true;
+  const getUserId = useCallback(() => {
+    // 1. 認証コンテキストから取得
+    if (currentUser && currentUser.id) {
+      console.log('認証コンテキストからユーザーID取得:', currentUser.id);
+      return currentUser.id;
     }
-    return TEXT_ERROR_KEYWORDS.some(keyword => normalized.includes(keyword));
-  };
+    
+    // 2. localStorageのcurrentUserから取得
+    const storedUser = localStorage.getItem('currentUser');
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        if (userData && userData.id) {
+          console.log('localStorageのcurrentUserからユーザーID取得:', userData.id);
+          return userData.id;
+        }
+      } catch (error) {
+        console.error('localStorageのcurrentUserパースエラー:', error);
+      }
+    }
+    
+    // 3. フォールバック: localStorageのuserIdから取得
+    const fallbackUserId = localStorage.getItem('userId');
+    if (fallbackUserId) {
+      console.log('localStorageのuserIdからユーザーID取得:', fallbackUserId);
+      return fallbackUserId;
+    }
+    
+    // 4. 最終フォールバック
+    console.warn('ユーザーIDが取得できません。デフォルト値24を使用します。');
+    return '24'; // 現在受講しているユーザーID
+  }, [currentUser]);
+
+  const buildLayoutStorageKey = (userId) => `studysphere:workspaceLayouts:user:${userId}`;
+
+  const getLayoutStorageKey = useCallback(() => {
+    if (layoutStorageKeyRef.current) {
+      return layoutStorageKeyRef.current;
+    }
+    const userId = getUserId();
+    const storageKey = buildLayoutStorageKey(userId);
+    layoutStorageKeyRef.current = storageKey;
+    return storageKey;
+  }, [getUserId]);
+
+  const persistWorkspaceLayouts = useCallback((layouts) => {
+    try {
+      const storageKey = getLayoutStorageKey();
+      localStorage.setItem(storageKey, JSON.stringify(layouts));
+      console.log('学習ワークスペースレイアウトを保存しました:', storageKey);
+    } catch (error) {
+      console.error('学習ワークスペースレイアウトの保存に失敗しました:', error);
+    }
+  }, [getLayoutStorageKey]);
 
   // 学習進捗管理フックを使用
   const {
@@ -351,6 +398,44 @@ const EnhancedLearningPageRefactored = () => {
     }
   }, [currentLesson]); // currentLessonのみに依存
 
+  useEffect(() => {
+    const userId = getUserId();
+    if (!userId) {
+      return;
+    }
+
+    const storageKey = buildLayoutStorageKey(userId);
+
+    if (layoutStorageKeyRef.current !== storageKey) {
+      layoutStorageKeyRef.current = storageKey;
+      layoutInitializedRef.current = false;
+    }
+
+    if (layoutInitializedRef.current) {
+      return;
+    }
+
+    try {
+      const storedLayouts = localStorage.getItem(storageKey);
+      if (storedLayouts) {
+        const parsedLayouts = JSON.parse(storedLayouts);
+        console.log('保存済みワークスペースレイアウトを読み込みます:', parsedLayouts);
+        setWorkspaceLayouts(prevLayouts => ({
+          withAssignment: parsedLayouts.withAssignment
+            ? normalizeLayouts(parsedLayouts.withAssignment, true)
+            : prevLayouts.withAssignment,
+          withoutAssignment: parsedLayouts.withoutAssignment
+            ? normalizeLayouts(parsedLayouts.withoutAssignment, false)
+            : prevLayouts.withoutAssignment
+        }));
+      }
+    } catch (error) {
+      console.error('学習ワークスペースレイアウトの読み込みに失敗しました:', error);
+    } finally {
+      layoutInitializedRef.current = true;
+    }
+  }, [currentUser, getUserId]);
+
   // コンポーネントのアンマウント時にセッションストレージをクリーンアップ
   useEffect(() => {
     return () => {
@@ -575,39 +660,6 @@ const EnhancedLearningPageRefactored = () => {
      // セクションテキストコンテンツ取得は不要（PDF処理はTextSectionで自動実行）
 
   // ユーザーIDを取得する関数
-  const getUserId = () => {
-    // 1. 認証コンテキストから取得
-    if (currentUser && currentUser.id) {
-      console.log('認証コンテキストからユーザーID取得:', currentUser.id);
-      return currentUser.id;
-    }
-    
-    // 2. localStorageのcurrentUserから取得
-    const storedUser = localStorage.getItem('currentUser');
-    if (storedUser) {
-      try {
-        const userData = JSON.parse(storedUser);
-        if (userData && userData.id) {
-          console.log('localStorageのcurrentUserからユーザーID取得:', userData.id);
-          return userData.id;
-        }
-      } catch (error) {
-        console.error('localStorageのcurrentUserパースエラー:', error);
-      }
-    }
-    
-    // 3. フォールバック: localStorageのuserIdから取得
-    const fallbackUserId = localStorage.getItem('userId');
-    if (fallbackUserId) {
-      console.log('localStorageのuserIdからユーザーID取得:', fallbackUserId);
-      return fallbackUserId;
-    }
-    
-    // 4. 最終フォールバック
-    console.warn('ユーザーIDが取得できません。デフォルト値24を使用します。');
-    return '24'; // 現在受講しているユーザーID
-  };
-
   // コースデータを取得
   const fetchCourseData = async (courseId, retryCount = 0, searchParams = null) => {
     try {
@@ -783,7 +835,7 @@ const EnhancedLearningPageRefactored = () => {
     // セッションストレージからコンテキストを確認
     if (lessonData?.s3_key && lessonData?.id) {
       const storedContext = SessionStorageManager.getContext(lessonData.id, lessonData.s3_key, lessonData.file_type);
-      if (storedContext && !isErrorTextContent(storedContext.context)) {
+      if (storedContext) {
         console.log('AIサポート用にセッションストレージからコンテキスト取得:', {
           contextLength: storedContext.context.length
         });
@@ -794,13 +846,11 @@ const EnhancedLearningPageRefactored = () => {
     // フォールバック: 既存のロジック
     if (currentSection >= 0 && sectionData && sectionData[currentSection]) {
       // セクション固有のテキストがある場合はそれを返す
-      const fallbackText = textContent || pdfTextContent || lessonData?.description || '';
-      return isErrorTextContent(fallbackText) ? '' : fallbackText;
+      return textContent || pdfTextContent || lessonData?.description || 'テキスト内容が利用できません';
     }
     
     // デフォルトはレッスンのテキスト内容
-    const fallbackText = textContent || pdfTextContent || lessonData?.description || '';
-    return isErrorTextContent(fallbackText) ? '' : fallbackText;
+    return textContent || pdfTextContent || lessonData?.description || 'テキスト内容が利用できません';
   };
 
   // PDFテキスト更新ハンドラー
@@ -811,30 +861,23 @@ const EnhancedLearningPageRefactored = () => {
       isCancel: newPdfText?.includes('キャンセル')
     });
     
-    const incomingText = newPdfText || '';
-    
-    if (incomingText && incomingText.length > 0) {
-      if (
-        incomingText.startsWith('エラー:') ||
-        incomingText.includes('失敗') ||
-        incomingText.includes('タイムアウト')
-      ) {
+    if (newPdfText && newPdfText.length > 0) {
+      // エラーメッセージの場合は処理状態をerrorに設定
+      if (newPdfText.startsWith('エラー:') || newPdfText.includes('失敗') || newPdfText.includes('タイムアウト')) {
         setPdfProcessingStatus('error');
-        setPdfTextContent('');
-        console.log('PDF処理でエラーが発生しました:', incomingText);
-      } else if (incomingText.includes('キャンセル')) {
+        console.log('PDF処理でエラーが発生しました:', newPdfText);
+      } else if (newPdfText.includes('キャンセル')) {
         setPdfProcessingStatus('idle');
-        setPdfTextContent('');
         console.log('PDF処理がキャンセルされました');
       } else {
+        // 正常にテキストが抽出された場合
         setPdfTextExtracted(true);
         setPdfProcessingStatus('completed');
-        setPdfTextContent(incomingText);
-        console.log('PDFテキスト抽出完了:', { textLength: incomingText.length });
+        console.log('PDFテキスト抽出完了:', { textLength: newPdfText.length });
       }
     } else {
+      // 空のテキストの場合はエラーとして扱う
       setPdfProcessingStatus('error');
-      setPdfTextContent('');
       console.log('PDF処理で空のテキストが返されました');
     }
   };
@@ -955,6 +998,25 @@ const EnhancedLearningPageRefactored = () => {
     }
   };
 
+  const handleWorkspaceLayoutChange = useCallback((newLayouts) => {
+    setWorkspaceLayouts(prevLayouts => {
+      if (assignmentStatus.hasAssignment) {
+        const updatedLayouts = {
+          ...prevLayouts,
+          withAssignment: normalizeLayouts(newLayouts, true)
+        };
+        persistWorkspaceLayouts(updatedLayouts);
+        return updatedLayouts;
+      }
+      const updatedLayouts = {
+        ...prevLayouts,
+        withoutAssignment: normalizeLayouts(newLayouts, false)
+      };
+      persistWorkspaceLayouts(updatedLayouts);
+      return updatedLayouts;
+    });
+  }, [assignmentStatus.hasAssignment, persistWorkspaceLayouts]);
+
   // テスト完了時の処理
   const handleTestCompletedLocal = async (testScore) => {
     await progressHandleTestCompleted(testScore, currentLesson, currentUser);
@@ -965,6 +1027,46 @@ const EnhancedLearningPageRefactored = () => {
     title: `第${currentLesson}回　学習内容`,
     description: 'レッスンの説明が読み込めませんでした。',
     videos: []
+  };
+
+  const workspaceWidgets = {
+    video: (
+      <VideoSection lessonData={lessonData} />
+    ),
+    text: (
+      <TextSection
+        lessonData={lessonData}
+        textContent={textContent}
+        textLoading={textLoading}
+        textContainerRef={textContainerRef}
+        onTextContentUpdate={handlePdfTextUpdate}
+      />
+    ),
+    chat: (
+      <ChatSection
+        chatMessages={chatMessages}
+        chatInput={chatInput}
+        onChatInputChange={(e) => setChatInput(e.target.value)}
+        onSendMessage={handleSendMessage}
+        currentLessonData={currentLessonData}
+        currentSectionText={getCurrentSectionText()}
+        isAILoading={isAILoading}
+        isAIEnabled={
+          pdfProcessingStatus === 'completed' || 
+          (lessonData?.file_type === 'pdf' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type)) ||
+          (lessonData?.file_type === 'txt' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type)) ||
+          (lessonData?.file_type === 'md' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type)) ||
+          (lessonData?.file_type === 'application/rtf' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type)) ||
+          (lessonData?.file_type !== 'pdf' && lessonData?.textContent)
+        }
+      />
+    ),
+    assignment: assignmentStatus.hasAssignment ? (
+      <FileUploadSection
+        uploadedFiles={uploadedFiles}
+        onFileDelete={handleFileDelete}
+      />
+    ) : null
   };
 
   // レンダリング時の状態確認
@@ -1007,39 +1109,6 @@ const EnhancedLearningPageRefactored = () => {
     );
   }
 
-  const isPdfLesson = lessonData?.file_type === 'pdf';
-  const effectiveTextContent = isPdfLesson ? pdfTextContent : textContent;
-  let textStatusType = null;
-  let textStatusMessage = '';
-
-  if (!lessonData) {
-    textStatusType = 'loading';
-    textStatusMessage = '教材データを読み込み中です。';
-  } else if (!lessonData?.s3_key) {
-    textStatusType = 'error';
-    textStatusMessage = '教材のテキストファイルが設定されていないため、テストとAIサポートを利用できません。';
-  } else if (isPdfLesson) {
-    if (pdfProcessingStatus === 'processing' || (pdfProcessingStatus === 'idle' && !pdfTextContent)) {
-      textStatusType = 'loading';
-      textStatusMessage = '教材PDFを処理中です。完了後にテストとAIサポートを利用できます。';
-    } else if (pdfProcessingStatus === 'error' || isErrorTextContent(effectiveTextContent)) {
-      textStatusType = 'error';
-      textStatusMessage = '教材PDFの読み込みに失敗しました。ページを再読み込みしてください。';
-    }
-  } else if (textLoading) {
-    textStatusType = 'loading';
-    textStatusMessage = '教材テキストを読み込み中です。完了後にテストとAIサポートを利用できます。';
-  } else if (isErrorTextContent(effectiveTextContent)) {
-    textStatusType = 'error';
-    textStatusMessage = '教材テキストの読み込みに失敗しました。ページを再読み込みしてください。';
-  }
-
-  const isTextReady = textStatusType === null;
-  const isTestEnabled = isTextReady;
-  const testDisabledReason = isTextReady ? '' : textStatusMessage;
-  const isAIEnabled = isTextReady;
-  const aiStatus = isTextReady ? null : { type: textStatusType, message: textStatusMessage };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50">
       {/* ヘッダー */}
@@ -1052,8 +1121,10 @@ const EnhancedLearningPageRefactored = () => {
         onSectionChange={changeSection}
         onUploadModalOpen={() => setShowUploadModal(true)}
         onTestNavigate={(lessonId) => navigate(`/student/test?lesson=${lessonId}`)}
-        isTestEnabled={isTestEnabled}
-        testDisabledReason={testDisabledReason}
+        isTestEnabled={
+          pdfProcessingStatus === 'completed' || // PDF処理完了時
+          (lessonData?.file_type !== 'pdf' && lessonData?.textContent) // テキストファイルの場合
+        }
         hasAssignment={assignmentStatus.hasAssignment}
         assignmentSubmitted={assignmentStatus.assignmentSubmitted}
       />
@@ -1112,52 +1183,14 @@ const EnhancedLearningPageRefactored = () => {
         </div>
       )}
 
-      {/* メインコンテンツ - 3カラムレイアウト */}
+      {/* メインコンテンツ - カスタマイズ可能レイアウト */}
       <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* 左カラム: 動画 */}
-          <div className="lg:col-span-1">
-            <VideoSection lessonData={lessonData} />
-          </div>
-
-          {/* 中央カラム: テキスト */}
-          <div className="lg:col-span-1">
-                         {console.log('TextSection呼び出し前 - lessonData:', lessonData)}
-             {console.log('TextSection呼び出し前 - lessonData.file_type:', lessonData?.file_type)}
-             {console.log('TextSection呼び出し前 - lessonData.s3_key:', lessonData?.s3_key)}
-             {console.log('セッションストレージ状態:', SessionStorageManager.getStoredContexts())}
-             <TextSection
-              lessonData={lessonData}
-              textContent={textContent}
-              textLoading={textLoading}
-              textContainerRef={textContainerRef}
-              onTextContentUpdate={handlePdfTextUpdate}
-            />
-          </div>
-
-          {/* 右カラム: AIチャット */}
-          <div className="lg:col-span-1">
-                         <ChatSection
-               chatMessages={chatMessages}
-               chatInput={chatInput}
-               onChatInputChange={(e) => setChatInput(e.target.value)}
-               onSendMessage={handleSendMessage}
-               currentLessonData={currentLessonData}
-               currentSectionText={getCurrentSectionText()}
-               isAILoading={isAILoading}
-              isAIEnabled={isAIEnabled}
-              aiStatus={aiStatus}
-             />
-
-            {/* 提出物確認（課題がある場合のみ表示） */}
-            {assignmentStatus.hasAssignment && (
-              <FileUploadSection
-                uploadedFiles={uploadedFiles}
-                onFileDelete={handleFileDelete}
-              />
-            )}
-          </div>
-        </div>
+        <LearningWorkspaceLayout
+          widgets={workspaceWidgets}
+          layouts={assignmentStatus.hasAssignment ? workspaceLayouts.withAssignment : workspaceLayouts.withoutAssignment}
+          hasAssignment={assignmentStatus.hasAssignment}
+          onLayoutsChange={handleWorkspaceLayoutChange}
+        />
       </div>
 
       {/* アップロードモーダル（課題がある場合のみ表示） */}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useInstructorGuard } from '../utils/hooks/useAuthGuard';
 import { API_BASE_URL } from '../config/apiConfig';
-import { getCurrentUserSatelliteId } from '../utils/locationUtils';
+import { getCurrentUserSatelliteId, normalizeSatelliteId } from '../utils/locationUtils';
 
 /**
  * 評価(週次)作成画面
@@ -104,7 +104,7 @@ const WeeklyEvaluationPage = () => {
     const fetchInstructors = async () => {
       try {
         // まず生徒情報から拠点IDを取得
-        let satelliteId = student?.satellite_id;
+        let satelliteId = normalizeSatelliteId(student?.satellite_id);
         
         // 生徒情報にsatellite_idがない場合、satellite_idsから取得を試みる
         if (!satelliteId && student?.satellite_ids) {
@@ -117,15 +117,15 @@ const WeeklyEvaluationPage = () => {
             }
           }
           if (Array.isArray(satelliteIds) && satelliteIds.length > 0) {
-            satelliteId = satelliteIds[0];
+            satelliteId = normalizeSatelliteId(satelliteIds[0]);
           } else if (satelliteIds && !Array.isArray(satelliteIds)) {
-            satelliteId = satelliteIds;
+            satelliteId = normalizeSatelliteId(satelliteIds);
           }
         }
         
         // 生徒情報に拠点IDがない場合、現在選択中の拠点IDを取得
         if (!satelliteId && currentUser) {
-          satelliteId = getCurrentUserSatelliteId(currentUser);
+          satelliteId = normalizeSatelliteId(getCurrentUserSatelliteId(currentUser));
         }
         
         // セッションストレージからも取得を試みる
@@ -134,12 +134,14 @@ const WeeklyEvaluationPage = () => {
           if (savedSatellite) {
             try {
               const satellite = JSON.parse(savedSatellite);
-              satelliteId = satellite.id;
+              satelliteId = normalizeSatelliteId(satellite.id);
             } catch (e) {
               console.error('拠点情報のパースエラー:', e);
             }
           }
         }
+        
+        satelliteId = normalizeSatelliteId(satelliteId);
 
         if (!satelliteId) {
           console.warn('拠点IDが取得できません。指導員一覧を取得できません。');

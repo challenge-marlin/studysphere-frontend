@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiCall } from '../utils/api';
+import { normalizeSatelliteId } from '../utils/locationUtils';
 
 const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, onDownloadPDF }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -102,10 +103,22 @@ const MonthlyEvaluationDetail = ({ student, report, onSave, onEdit, onDelete, on
   // 指導員リストを取得
   useEffect(() => {
     const fetchInstructors = async () => {
-      if (!student?.satellite_id && !student?.location?.id) return;
-      
+      let satelliteId = normalizeSatelliteId(student?.satellite_id ?? student?.location?.id);
+      if (!satelliteId) {
+        const savedSatellite = sessionStorage.getItem('selectedSatellite');
+        if (savedSatellite) {
+          try {
+            const parsed = JSON.parse(savedSatellite);
+            satelliteId = normalizeSatelliteId(parsed?.id);
+          } catch (error) {
+            console.error('selectedSatelliteのパースエラー:', error);
+          }
+        }
+      }
+
+      if (!satelliteId) return;
+
       try {
-        const satelliteId = student.satellite_id || student.location?.id;
         const response = await apiCall(`/api/users/satellite/${satelliteId}/weekly-evaluation-instructors`, {
           method: 'GET'
         });

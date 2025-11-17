@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useInstructorGuard } from '../utils/hooks/useAuthGuard';
 import { apiCall } from '../utils/api';
 import { getSupportPlanByUserId } from '../utils/api';
+import { normalizeSatelliteId, getCurrentUserSatelliteId } from '../utils/locationUtils';
 import MonthlyReportPrintModal from '../components/modals/MonthlyReportPrintModal';
 import ExcelJS from 'exceljs';
 
@@ -129,9 +130,28 @@ const MonthlyEvaluationPage = () => {
             }
             return userData.satellite_ids;
           })();
-          if (satelliteId) {
+
+          let normalizedSatelliteId = normalizeSatelliteId(satelliteId) ?? normalizeSatelliteId(userData.satellite_id);
+
+          if (!normalizedSatelliteId && currentUser) {
+            normalizedSatelliteId = normalizeSatelliteId(getCurrentUserSatelliteId(currentUser));
+          }
+
+          if (!normalizedSatelliteId) {
+            const savedSatellite = sessionStorage.getItem('selectedSatellite');
+            if (savedSatellite) {
+              try {
+                const parsed = JSON.parse(savedSatellite);
+                normalizedSatelliteId = normalizeSatelliteId(parsed?.id);
+              } catch (error) {
+                console.error('selectedSatelliteパースエラー:', error);
+              }
+            }
+          }
+
+          if (normalizedSatelliteId) {
             try {
-              const instructorResponse = await apiCall(`/api/users/satellite/${satelliteId}/weekly-evaluation-instructors`, {
+              const instructorResponse = await apiCall(`/api/users/satellite/${normalizedSatelliteId}/weekly-evaluation-instructors`, {
                 method: 'GET'
               });
               if (instructorResponse.success && instructorResponse.data) {
@@ -140,6 +160,8 @@ const MonthlyEvaluationPage = () => {
             } catch (error) {
               console.error('指導員リスト取得エラー:', error);
             }
+          } else {
+            console.warn('拠点IDが取得できなかったため、指導員リストを取得できませんでした');
           }
 
           // 前回評価日を取得

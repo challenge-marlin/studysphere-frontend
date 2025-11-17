@@ -4,6 +4,7 @@ import { useInstructorGuard } from '../utils/hooks/useAuthGuard';
 import InstructorHeader from '../components/InstructorHeader';
 import { apiCall } from '../utils/api';
 import ExcelJS from 'exceljs';
+import { normalizeSatelliteId, getCurrentUserSatelliteId } from '../utils/locationUtils';
 
 const MonthlyEvaluationHistoryPage = () => {
   const { userId } = useParams();
@@ -290,7 +291,30 @@ const MonthlyEvaluationHistoryPage = () => {
         if (!Array.isArray(satelliteIds) || satelliteIds.length === 0) return;
         
         const satelliteId = satelliteIds[0]; // 最初の拠点を使用
-        const response = await apiCall(`/api/users/satellite/${satelliteId}/weekly-evaluation-instructors`, {
+        let normalizedSatelliteId = normalizeSatelliteId(satelliteId);
+
+        if (!normalizedSatelliteId) {
+          normalizedSatelliteId = normalizeSatelliteId(getCurrentUserSatelliteId(currentUser));
+        }
+
+        if (!normalizedSatelliteId) {
+          const savedSatellite = sessionStorage.getItem('selectedSatellite');
+          if (savedSatellite) {
+            try {
+              const parsed = JSON.parse(savedSatellite);
+              normalizedSatelliteId = normalizeSatelliteId(parsed?.id);
+            } catch (error) {
+              console.error('selectedSatelliteパースエラー:', error);
+            }
+          }
+        }
+
+        if (!normalizedSatelliteId) {
+          console.warn('拠点IDが取得できなかったため、指導員リストを取得できませんでした');
+          return;
+        }
+
+        const response = await apiCall(`/api/users/satellite/${normalizedSatelliteId}/weekly-evaluation-instructors`, {
           method: 'GET'
         });
         

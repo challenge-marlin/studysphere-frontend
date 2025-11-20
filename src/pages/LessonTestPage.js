@@ -88,11 +88,14 @@ const LessonTestPage = () => {
   }, [currentLesson]);
 
   // セクションデータが取得された後にテストデータを生成
+  // 修正: セクションデータが空（動画がない場合）でも、レッスンデータがあればテストを生成
   useEffect(() => {
-    if (sectionData && sectionData.length > 0 && lessonData) {
+    // セクションデータが取得された（空配列でもOK）かつレッスンデータがある場合
+    if (sectionData !== null && lessonData) {
       console.log('セクションデータ取得完了、テストデータ生成開始:', {
         sectionCount: sectionData.length,
-        lessonTitle: lessonData.title
+        lessonTitle: lessonData.title,
+        hasSections: sectionData.length > 0
       });
       generateTestData();
     }
@@ -283,6 +286,7 @@ const LessonTestPage = () => {
       }
       
       // 各セクションのテキスト内容を取得
+      // 修正: セクションデータがない場合でも、レッスンのテキストファイルから直接取得
       if (sectionData && sectionData.length > 0) {
         for (let i = 0; i < sectionData.length; i++) {
           const section = sectionData[i];
@@ -444,10 +448,47 @@ const LessonTestPage = () => {
           }
         }
       } else {
-        console.warn('セクションデータがありません:', {
-          sectionData,
-          currentLesson
+        // セクションデータが空の場合（動画がない場合）、レッスンのテキストファイルから直接取得
+        console.log('セクションデータが空です。レッスンのテキストファイルから直接取得します:', {
+          lessonId: currentLesson,
+          lessonS3Key: lessonData?.s3_key,
+          fileType: lessonData?.file_type
         });
+        
+        if (lessonData?.s3_key) {
+          try {
+            // セッションストレージからコンテキストを取得
+            const fileType = lessonData.file_type || 'pdf';
+            const storedContext = SessionStorageManager.getContext(currentLesson, lessonData.s3_key, fileType);
+            
+            if (storedContext && storedContext.context) {
+              console.log('セッションストレージからレッスンテキストを取得:', {
+                contextLength: storedContext.context.length,
+                lessonId: currentLesson,
+                s3Key: lessonData.s3_key
+              });
+              allTextContent += storedContext.context;
+            } else {
+              // セッションストレージにない場合は、APIから取得
+              console.log('セッションストレージにコンテキストがないため、APIから取得します');
+              const response = await fetch(`${API_BASE_URL}/api/learning/lesson/${currentLesson}/content`, {
+                headers: {
+                  'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+                  'Content-Type': 'application/json'
+                }
+              });
+              
+              if (response.ok) {
+                const result = await response.json();
+                if (result.success && result.data.textContent) {
+                  allTextContent += result.data.textContent;
+                }
+              }
+            }
+          } catch (error) {
+            console.error('レッスンテキスト取得エラー:', error);
+          }
+        }
       }
       
       // コンテキスト化の完了を確認

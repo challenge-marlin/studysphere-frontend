@@ -469,7 +469,7 @@ const TextSection = ({
       {/* テキスト内容表示 */}
       <div 
         ref={textContainerRef}
-        className="flex-1 overflow-y-auto custom-scrollbar border border-gray-200 rounded-lg p-2 bg-gray-50"
+        className="flex-1 overflow-y-auto custom-scrollbar border border-gray-200 rounded-lg p-2 bg-gray-50 max-h-[1000px]"
       >
         {lessonData?.file_type === 'pdf' ? (
           <div className="h-full">

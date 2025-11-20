@@ -459,16 +459,23 @@ const DailySupportRecordModal = ({
 
             {/* 作業・訓練内容 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                <span>作業・訓練内容 <span className="text-red-500">*</span></span>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">
+                  作業・訓練内容 <span className="text-red-500">*</span>
+                </label>
                 <button
-                  onClick={handleAISuggestWork}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleAISuggestWork();
+                  }}
                   disabled={aiSuggesting || !workNote}
                   className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed transition-all duration-200"
                 >
                   {aiSuggesting ? '🤖 生成中...' : '🤖 AI提案'}
                 </button>
-              </label>
+              </div>
               <p className="text-xs text-gray-500 mb-2">実施した作業や訓練の内容を記録してください</p>
               <textarea
                 value={record.workContent}
@@ -481,16 +488,23 @@ const DailySupportRecordModal = ({
 
             {/* 支援内容（1日2回以上） */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                <span>支援内容（1日2回以上） <span className="text-red-500">*</span></span>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">
+                  支援内容（1日2回以上） <span className="text-red-500">*</span>
+                </label>
                 <button
-                  onClick={handleAISuggestSupport}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleAISuggestSupport();
+                  }}
                   disabled={aiSuggestingSupport || !record.startTime || !record.endTime || !record.supportMethod}
                   className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed transition-all duration-200"
                 >
                   {aiSuggestingSupport ? '🤖 生成中...' : '🤖 AI提案'}
                 </button>
-              </label>
+              </div>
               <p className="text-xs text-gray-500 mb-2">
                 時系列で複数回（2回以上）の支援・連絡内容を記録してください
               </p>
@@ -505,16 +519,23 @@ const DailySupportRecordModal = ({
 
             {/* 対象者の心身の状況及びそれに対する助言の内容 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                <span>対象者の心身の状況及びそれに対する助言の内容 <span className="text-red-500">*</span></span>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">
+                  対象者の心身の状況及びそれに対する助言の内容 <span className="text-red-500">*</span>
+                </label>
                 <button
-                  onClick={handleAISuggestAdvice}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleAISuggestAdvice();
+                  }}
                   disabled={aiSuggestingAdvice || !healthData?.condition || !record.remarks}
                   className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed transition-all duration-200"
                 >
                   {aiSuggestingAdvice ? '🤖 生成中...' : '🤖 AI提案'}
                 </button>
-              </label>
+              </div>
               <p className="text-xs text-gray-500 mb-2">時系列で体調確認と助言内容を記録してください</p>
               <textarea
                 value={record.healthStatus}

@@ -273,20 +273,47 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
         }
         // すべてのIDを数値に変換して統一
         satelliteIds = satelliteIds.map(id => parseInt(id)).filter(id => !isNaN(id));
+        console.log('正規化後のsatelliteIds:', satelliteIds);
+        
         if (satelliteIds.length > 0) {
-          const firstSatelliteId = parseInt(satelliteIds[0]); // 数値に変換
-          console.log('複数拠点所属指導員: 最初の拠点IDを設定:', firstSatelliteId);
-          setCurrentSatelliteId(firstSatelliteId);
-          setCurrentSatelliteName(currentUser?.satellite_name || `拠点${firstSatelliteId}`);
+          // セッションストレージに保存された拠点IDがある場合、それが所属拠点に含まれているか確認
+          const sessionSelectedSatellite = sessionStorage.getItem('selectedSatellite');
+          let selectedSatelliteId = parseInt(satelliteIds[0]); // デフォルトは最初の拠点
           
-          // sessionStorageにも保存
+          if (sessionSelectedSatellite) {
+            try {
+              const satelliteData = JSON.parse(sessionSelectedSatellite);
+              const sessionSatelliteId = parseInt(satelliteData.id);
+              
+              // セッションストレージの拠点IDが所属拠点に含まれているか確認
+              if (!isNaN(sessionSatelliteId) && satelliteIds.includes(sessionSatelliteId)) {
+                selectedSatelliteId = sessionSatelliteId;
+                console.log('セッションストレージから有効な拠点IDを取得:', selectedSatelliteId);
+              } else {
+                console.log('セッションストレージの拠点IDが所属拠点に含まれていません。最初の拠点を使用します。');
+                console.log('セッションストレージの拠点ID:', sessionSatelliteId);
+                console.log('所属拠点:', satelliteIds);
+              }
+            } catch (error) {
+              console.error('セッションストレージの拠点情報パースエラー:', error);
+            }
+          }
+          
+          console.log('最終的に選択された拠点ID:', selectedSatelliteId);
+          console.log('この拠点IDが所属拠点に含まれているか:', satelliteIds.includes(selectedSatelliteId));
+          
+          setCurrentSatelliteId(selectedSatelliteId);
+          setCurrentSatelliteName(currentUser?.satellite_name || `拠点${selectedSatelliteId}`);
+          
+          // sessionStorageにも保存（整合性を確保）
           const selectedSatelliteInfo = {
-            id: firstSatelliteId,
-            name: currentUser.satellite_name || `拠点${firstSatelliteId}`,
+            id: selectedSatelliteId,
+            name: currentUser.satellite_name || `拠点${selectedSatelliteId}`,
             company_id: currentUser.company_id,
             company_name: currentUser.company_name
           };
           sessionStorage.setItem('selectedSatellite', JSON.stringify(selectedSatelliteInfo));
+          console.log('sessionStorageに拠点情報を保存:', selectedSatelliteInfo);
         }
       }
     }
@@ -299,14 +326,34 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
     try {
       console.log('=== fetchStudents開始 ===');
       console.log('currentSatelliteId:', currentSatelliteId);
+      console.log('currentUser:', currentUser);
+      console.log('currentUser.satellite_ids:', currentUser?.satellite_ids);
       console.log('localStorage accessToken:', localStorage.getItem('accessToken') ? '存在' : 'なし');
       setLoading(true);
       setError(null); // エラーをクリア
       
-      // 拠点IDが取得できない場合はエラーを設定
+      // 拠点IDが取得できない場合の処理を改善
       if (!currentSatelliteId) {
         console.log('拠点IDが取得できないため、利用者取得をスキップします');
-        setError('拠点IDが取得できません。拠点を選択してください。');
+        
+        // 複数拠点に所属する指導員の場合の特別なメッセージ
+        if (currentUser && currentUser.satellite_ids) {
+          let satelliteIds = currentUser.satellite_ids;
+          if (typeof satelliteIds === 'string') {
+            try {
+              satelliteIds = JSON.parse(satelliteIds);
+            } catch (e) {
+              // JSONパースに失敗した場合は文字列として扱う
+            }
+          }
+          if (Array.isArray(satelliteIds) && satelliteIds.length > 1) {
+            setError('複数拠点に所属しています。右上の拠点切り替えボタンから拠点を選択してください。');
+          } else {
+            setError('拠点IDが取得できません。拠点を選択してください。');
+          }
+        } else {
+          setError('拠点IDが取得できません。拠点を選択してください。');
+        }
         setStudents([]);
         return;
       }
@@ -573,6 +620,29 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
 
   // 拠点が選択されていない場合のメッセージ
   if (!currentSatelliteId) {
+    // 複数拠点に所属する指導員かどうかを確認
+    let isMultiSatellite = false;
+    let satelliteIds = [];
+    if (currentUser && currentUser.satellite_ids) {
+      let ids = currentUser.satellite_ids;
+      if (typeof ids === 'string') {
+        try {
+          ids = JSON.parse(ids);
+        } catch (e) {
+          // JSONパースに失敗した場合は文字列として扱う
+          if (ids.includes(',')) {
+            ids = ids.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+          } else {
+            ids = [parseInt(ids)];
+          }
+        }
+      }
+      if (Array.isArray(ids) && ids.length > 1) {
+        isMultiSatellite = true;
+        satelliteIds = ids.filter(id => id !== null && id !== undefined);
+      }
+    }
+    
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
         <div className="max-w-7xl mx-auto">
@@ -583,11 +653,24 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
               <p className="text-gray-600 mb-6">
                 利用者一覧を表示するには、まず拠点を選択してください。
               </p>
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                <p className="text-yellow-800 text-sm">
-                  💡 ヒント: 右上の拠点切り替えボタンから拠点を選択してください。
-                </p>
-              </div>
+              {isMultiSatellite ? (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                  <p className="text-blue-800 text-sm font-medium mb-2">
+                    💡 複数拠点に所属しています
+                  </p>
+                  <p className="text-blue-700 text-sm">
+                    あなたは {satelliteIds.length} つの拠点に所属しています。
+                    <br />
+                    右上の拠点切り替えボタンから、表示したい拠点を選択してください。
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                  <p className="text-yellow-800 text-sm">
+                    💡 ヒント: 右上の拠点切り替えボタンから拠点を選択してください。
+                  </p>
+                </div>
+              )}
               {currentUser && currentUser.role >= 6 && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                   <p className="text-blue-800 text-sm">

@@ -40,6 +40,8 @@ const EnhancedLearningPageRefactored = () => {
     withAssignment: createDefaultLayouts(true),
     withoutAssignment: createDefaultLayouts(false)
   }));
+  // ウィジェットの表示/非表示を管理
+  const [widgetVisibility, setWidgetVisibility] = useState({ video: true, text: true, chat: true, assignment: true });
   const textContainerRef = useRef(null);
   const latestFetchId = useRef(0); // レースコンディション防止用
   const abortControllerRef = useRef(null); // リクエストキャンセル用
@@ -343,6 +345,10 @@ const EnhancedLearningPageRefactored = () => {
         // 提出物確認ファイルを取得
         await fetchUploadedFiles(targetLessonId);
         
+        // レッスンデータ取得成功後、セクションデータを取得
+        console.log('レッスンデータ取得成功、セクションデータを取得開始:', data.data);
+        await fetchSectionData(targetLessonId, 0, data.data);
+        
         console.log('レッスンデータ取得成功:', data.data);
       } else {
         setError(data.message || 'レッスンデータの取得に失敗しました');
@@ -398,6 +404,21 @@ const EnhancedLearningPageRefactored = () => {
     }
   }, [currentLesson]); // currentLessonのみに依存
 
+  // レッスンデータが設定された時点で、セッションストレージにコンテキストがある場合は完了状態に設定
+  useEffect(() => {
+    if (lessonData && lessonData.file_type === 'pdf' && lessonData.s3_key) {
+      const hasContext = SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type);
+      if (hasContext) {
+        console.log('セッションストレージにコンテキストが存在するため、PDF処理状態を完了に設定');
+        setPdfProcessingStatus('completed');
+        setPdfTextExtracted(true);
+      } else {
+        console.log('セッションストレージにコンテキストが存在しないため、PDF処理状態をidleに設定');
+        setPdfProcessingStatus('idle');
+      }
+    }
+  }, [lessonData]);
+
   useEffect(() => {
     const userId = getUserId();
     if (!userId) {
@@ -422,10 +443,10 @@ const EnhancedLearningPageRefactored = () => {
         console.log('保存済みワークスペースレイアウトを読み込みます:', parsedLayouts);
         setWorkspaceLayouts(prevLayouts => ({
           withAssignment: parsedLayouts.withAssignment
-            ? normalizeLayouts(parsedLayouts.withAssignment, true)
+            ? normalizeLayouts(parsedLayouts.withAssignment, true, null)
             : prevLayouts.withAssignment,
           withoutAssignment: parsedLayouts.withoutAssignment
-            ? normalizeLayouts(parsedLayouts.withoutAssignment, false)
+            ? normalizeLayouts(parsedLayouts.withoutAssignment, false, null)
             : prevLayouts.withoutAssignment
         }));
       }
@@ -433,6 +454,25 @@ const EnhancedLearningPageRefactored = () => {
       console.error('学習ワークスペースレイアウトの読み込みに失敗しました:', error);
     } finally {
       layoutInitializedRef.current = true;
+    }
+  }, [currentUser, getUserId]);
+
+  // ウィジェット表示状態をlocalStorageから読み込み
+  useEffect(() => {
+    const userId = getUserId();
+    if (!userId) {
+      return;
+    }
+
+    const storageKey = `studysphere:widgetVisibility:user:${userId}`;
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setWidgetVisibility(parsed);
+      }
+    } catch (error) {
+      console.error('ウィジェット表示状態の読み込みに失敗しました:', error);
     }
   }, [currentUser, getUserId]);
 
@@ -483,6 +523,16 @@ const EnhancedLearningPageRefactored = () => {
      
      setCurrentSection(sectionIndex);
      
+     // 修正: レッスンのテキストファイル（lessonData.s3_key）を基準にする
+     // セクション変更時は、そのテキストファイルに紐づいた動画のみを更新
+     // text_file_keyでlessonData.s3_keyを上書きしない
+     console.log('セクション変更:', {
+       sectionIndex,
+       newSection,
+       lessonS3Key: lessonData?.s3_key,
+       sectionTextFileKey: newSection?.text_file_key
+     });
+     
      // 動画がある場合のみ更新
      if (newSection.video_id && newSection.youtube_url) {
        const sectionVideo = {
@@ -493,51 +543,33 @@ const EnhancedLearningPageRefactored = () => {
          duration: newSection.video_duration || ''
        };
        
-       setLessonData(prev => ({
-         ...prev,
-         videos: [sectionVideo]
-       }));
-     }
-     
-     // セクション固有のテキストファイルがある場合は、新しいコンテキストで処理
-     if (newSection.text_file_key && newSection.text_file_key !== lessonData?.s3_key) {
-       console.log('セクション変更: 新しいテキストファイルを検出:', newSection.text_file_key);
-       
-       // ファイルタイプを拡張子から判定
-       const fileExtension = newSection.text_file_key.split('.').pop().toLowerCase();
-       const detectedFileType = fileExtension === 'md' ? 'md' : 
-                               fileExtension === 'txt' ? 'text/plain' : 
-                               fileExtension === 'rtf' ? 'application/rtf' : 
-                               fileExtension === 'pdf' ? 'pdf' : 
-                               'pdf';  // デフォルトはpdf
-       
-       // 新しいセクション用のlessonDataを設定
-       setLessonData(prev => ({
-         ...prev,
-         s3_key: newSection.text_file_key, // セクション固有のS3キー
-         file_type: detectedFileType
-       }));
-       
-       // ファイルタイプに応じて処理状態をリセット
-       if (detectedFileType === 'pdf') {
-         setPdfProcessingStatus('processing');
-         setPdfTextExtracted(false);
-         setTextContent('');
-         setPdfTextContent('');
-       } else {
-         // テキストファイルの場合は既存のtextContentを保持
-         console.log('テキストファイルのため、既存のtextContentを保持します');
-       }
-       
-       // 前のセクションのコンテキストをクリア（PDFの場合のみ）
-       if (detectedFileType === 'pdf' && lessonData?.id) {
-         SessionStorageManager.clearLessonContext(lessonData.id);
-       }
+       setLessonData(prev => {
+         if (!prev) {
+           console.warn('lessonDataがnullのため、動画を設定できません');
+           return prev;
+         }
+         return {
+           ...prev,
+           videos: [sectionVideo]
+         };
+       });
+     } else {
+       // 動画がない場合は空の配列に設定
+       setLessonData(prev => {
+         if (!prev) {
+           console.warn('lessonDataがnullのため、動画配列を設定できません');
+           return prev;
+         }
+         return {
+           ...prev,
+           videos: []
+         };
+       });
      }
    };
 
   // セクションデータを取得
-  const fetchSectionData = async (lessonId, retryCount = 0) => {
+  const fetchSectionData = async (lessonId, retryCount = 0, currentLessonData = null) => {
     try {
       console.log(`セクションデータを取得中: レッスンID ${lessonId} (試行回数: ${retryCount + 1})`);
       
@@ -561,49 +593,116 @@ const EnhancedLearningPageRefactored = () => {
          });
          setSectionData(data.data);
           
-                     if (data.data.length > 0) {
-             setCurrentSection(0);
+         // セクションデータが空の場合（動画がない場合）でも処理を続行
+         if (data.data.length > 0) {
+           setCurrentSection(0);
+           
+           // 修正: レッスンのテキストファイル（lessonData.s3_key）を基準にする
+           // セクションデータは、そのテキストファイルに紐づいた動画のリストとして扱う
+           // text_file_keyでlessonData.s3_keyを上書きしない
+           const firstSection = data.data[0];
+           const lessonS3Key = currentLessonData?.s3_key || lessonData?.s3_key;
+           console.log('セクションデータ取得成功:', {
+             sectionCount: data.data.length,
+             firstSection: firstSection,
+             lessonS3Key: lessonS3Key,
+             sectionTextFileKey: firstSection?.text_file_key,
+             currentLessonData: currentLessonData,
+             hasVideoId: !!firstSection?.video_id,
+             hasYoutubeUrl: !!firstSection?.youtube_url,
+             videoId: firstSection?.video_id,
+             youtubeUrl: firstSection?.youtube_url
+           });
+           
+           // 動画がある場合のみ更新
+           if (firstSection.video_id && firstSection.youtube_url) {
+             const sectionVideo = {
+               id: firstSection.video_id,
+               title: firstSection.video_title || 'セクション動画',
+               description: firstSection.video_description || '',
+               youtube_url: firstSection.youtube_url,
+               duration: firstSection.video_duration || ''
+             };
              
-            // 最初のセクションのテキストファイルがある場合は、lessonDataを更新
-            const firstSection = data.data[0];
-            if (firstSection.text_file_key && firstSection.text_file_key !== lessonData?.s3_key) {
-              console.log('セクションデータ取得: 最初のセクションのテキストファイルを設定:', firstSection.text_file_key);
-              
-              // ファイルタイプを拡張子から判定
-              const fileExtension = firstSection.text_file_key.split('.').pop().toLowerCase();
-              const detectedFileType = fileExtension === 'md' ? 'md' : 
-                                      fileExtension === 'txt' ? 'text/plain' : 
-                                      fileExtension === 'rtf' ? 'application/rtf' : 
-                                      fileExtension === 'pdf' ? 'pdf' : 
-                                      lessonData?.file_type || 'pdf';  // 元のfile_typeを保持、なければpdf
-              
-              console.log('ファイルタイプ判定:', {
-                text_file_key: firstSection.text_file_key,
-                fileExtension: fileExtension,
-                detectedFileType: detectedFileType,
-                originalFileType: lessonData?.file_type
-              });
-              
-              setLessonData(prev => ({
-                ...prev,
-                s3_key: firstSection.text_file_key, // セクション固有のS3キー
-                file_type: detectedFileType  // 拡張子に基づいてfile_typeを設定
-              }));
-              
-              // 処理状態をリセット（PDFの場合のみPDF処理用の状態をリセット）
-              if (detectedFileType === 'pdf') {
-                setPdfProcessingStatus('processing');
-                setPdfTextExtracted(false);
-                setTextContent('');
-                setPdfTextContent('');
-              } else {
-                // テキストファイル（MD、TXT、RTF）の場合はtextContentを保持
-                console.log('テキストファイルのため、既存のtextContentを保持します');
-              }
-            }
+             console.log('🎬 動画を設定します:', {
+               sectionVideo,
+               currentLessonData,
+               hasCurrentLessonData: !!currentLessonData
+             });
              
-             displaySectionContent(firstSection);
+             setLessonData(prev => {
+               // currentLessonDataが存在する場合はそれを優先（fetchLessonDataから渡された最新データ）
+               const baseData = currentLessonData || prev;
+               if (!baseData) {
+                 console.warn('lessonDataがnullのため、動画を設定できません');
+                 return prev;
+               }
+               const updatedData = {
+                 ...baseData,
+                 videos: [sectionVideo]
+               };
+               console.log('🎬 動画設定後のlessonData:', {
+                 videos: updatedData.videos,
+                 videoCount: updatedData.videos.length,
+                 lessonId: updatedData.id,
+                 usedCurrentLessonData: !!currentLessonData,
+                 prevVideos: prev?.videos
+               });
+               return updatedData;
+             });
+           } else {
+             // セクションに動画がない場合: 既存の動画を保持（上書きしない）
+             console.log('🎬 セクションに動画がありません。既存の動画を保持します');
+             setLessonData(prev => {
+               const baseData = currentLessonData || prev;
+               if (!baseData) {
+                 console.warn('lessonDataがnullのため、動画配列を設定できません');
+                 return prev;
+               }
+               // 既存の動画がある場合は保持、ない場合のみ空配列に設定
+               const existingVideos = baseData.videos || [];
+               if (existingVideos.length > 0) {
+                 console.log('🎬 既存の動画を保持します:', existingVideos);
+                 return baseData; // 既存のデータをそのまま返す
+               }
+               console.log('🎬 既存の動画がないため、空配列に設定します');
+               return {
+                 ...baseData,
+                 videos: [] // 既存の動画がない場合のみ空配列
+               };
+             });
            }
+         } else {
+           // セクションデータが空の場合: 既存の動画を保持（上書きしない）
+           console.log('セクションデータが空です。既存の動画を保持します:', {
+             lessonId: lessonId,
+             lessonS3Key: currentLessonData?.s3_key || lessonData?.s3_key,
+             existingVideos: currentLessonData?.videos || lessonData?.videos,
+             existingVideoCount: (currentLessonData?.videos || lessonData?.videos || []).length
+           });
+           setCurrentSection(0);
+           // セクションデータが空でも、既存の動画がある場合は保持するため、lessonDataを更新しない
+           // 動画がない場合のみ空配列に設定（既存の動画がない場合のみ）
+           setLessonData(prev => {
+             const baseData = currentLessonData || prev;
+             if (!baseData) {
+               console.warn('lessonDataがnullのため、動画配列を設定できません');
+               return prev;
+             }
+             // 既存の動画がある場合は保持、ない場合のみ空配列に設定
+             const existingVideos = baseData.videos || [];
+             if (existingVideos.length > 0) {
+               console.log('🎬 既存の動画を保持します:', existingVideos);
+               return baseData; // 既存のデータをそのまま返す
+             }
+             console.log('🎬 既存の動画がないため、空配列に設定します');
+             return {
+               ...baseData,
+               videos: [] // 既存の動画がない場合のみ空配列
+             };
+           });
+           // PDFの処理はTextSectionコンポーネントで自動的に開始されるため、ここでは何もしない
+         }
         } else {
           console.error('セクションデータ取得失敗:', data.message);
         }
@@ -615,7 +714,7 @@ const EnhancedLearningPageRefactored = () => {
         if (response.status >= 500 && retryCount < 2) {
           console.log(`${retryCount + 1}回目のリトライを実行します...`);
           setTimeout(() => {
-            fetchSectionData(lessonId, retryCount + 1);
+            fetchSectionData(lessonId, retryCount + 1, currentLessonData);
           }, 2000 * (retryCount + 1));
           return;
         }
@@ -627,7 +726,7 @@ const EnhancedLearningPageRefactored = () => {
       if (retryCount < 2 && (error.name === 'TypeError' || error.message.includes('Failed to fetch'))) {
         console.log(`${retryCount + 1}回目のリトライを実行します...`);
         setTimeout(() => {
-          fetchSectionData(lessonId, retryCount + 1);
+          fetchSectionData(lessonId, retryCount + 1, currentLessonData);
         }, 2000 * (retryCount + 1));
         return;
       }
@@ -650,10 +749,28 @@ const EnhancedLearningPageRefactored = () => {
          duration: section.video_duration || ''
        };
        
-       setLessonData(prev => ({
-         ...prev,
-         videos: [sectionVideo]
-       }));
+       setLessonData(prev => {
+         if (!prev) {
+           console.warn('lessonDataがnullのため、動画を設定できません');
+           return prev;
+         }
+         return {
+           ...prev,
+           videos: [sectionVideo]
+         };
+       });
+     } else {
+       // 動画がない場合は空の配列に設定
+       setLessonData(prev => {
+         if (!prev) {
+           console.warn('lessonDataがnullのため、動画配列を設定できません');
+           return prev;
+         }
+         return {
+           ...prev,
+           videos: []
+         };
+       });
      }
    };
 
@@ -858,27 +975,35 @@ const EnhancedLearningPageRefactored = () => {
     console.log('handlePdfTextUpdate 呼び出し:', { 
       textLength: newPdfText?.length,
       isError: newPdfText?.startsWith('エラー:'),
-      isCancel: newPdfText?.includes('キャンセル')
+      isCancel: newPdfText?.includes('キャンセル'),
+      textPreview: newPdfText?.substring(0, 100)
     });
     
     if (newPdfText && newPdfText.length > 0) {
-      // エラーメッセージの場合は処理状態をerrorに設定
-      if (newPdfText.startsWith('エラー:') || newPdfText.includes('失敗') || newPdfText.includes('タイムアウト')) {
+      // エラーメッセージの判定をより厳密にする
+      // 「失敗」や「タイムアウト」という文字列が含まれていても、エラーメッセージの形式でない場合は正常とみなす
+      const isError = newPdfText.startsWith('エラー:') || 
+                     newPdfText.startsWith('PDFファイルが見つかりません') ||
+                     newPdfText.startsWith('テキスト抽出に失敗しました') ||
+                     (newPdfText.includes('失敗') && newPdfText.length < 200) || // 短いエラーメッセージの場合
+                     (newPdfText.includes('タイムアウト') && newPdfText.length < 200); // 短いエラーメッセージの場合
+      
+      if (isError) {
         setPdfProcessingStatus('error');
         console.log('PDF処理でエラーが発生しました:', newPdfText);
       } else if (newPdfText.includes('キャンセル')) {
         setPdfProcessingStatus('idle');
         console.log('PDF処理がキャンセルされました');
       } else {
-        // 正常にテキストが抽出された場合
+        // 正常にテキストが抽出された場合（セッションストレージから取得した場合も含む）
         setPdfTextExtracted(true);
         setPdfProcessingStatus('completed');
         console.log('PDFテキスト抽出完了:', { textLength: newPdfText.length });
       }
     } else {
-      // 空のテキストの場合はエラーとして扱う
-      setPdfProcessingStatus('error');
-      console.log('PDF処理で空のテキストが返されました');
+      // 空のテキストの場合はエラーとして扱わない（まだ処理中の可能性がある）
+      console.log('PDFテキストが空です（処理中または未処理）');
+      // エラー状態に設定しない（処理中または未処理の可能性があるため）
     }
   };
 
@@ -1003,19 +1128,38 @@ const EnhancedLearningPageRefactored = () => {
       if (assignmentStatus.hasAssignment) {
         const updatedLayouts = {
           ...prevLayouts,
-          withAssignment: normalizeLayouts(newLayouts, true)
+          withAssignment: normalizeLayouts(newLayouts, true, widgetVisibility)
         };
         persistWorkspaceLayouts(updatedLayouts);
         return updatedLayouts;
       }
       const updatedLayouts = {
         ...prevLayouts,
-        withoutAssignment: normalizeLayouts(newLayouts, false)
+        withoutAssignment: normalizeLayouts(newLayouts, false, widgetVisibility)
       };
       persistWorkspaceLayouts(updatedLayouts);
       return updatedLayouts;
     });
-  }, [assignmentStatus.hasAssignment, persistWorkspaceLayouts]);
+  }, [assignmentStatus.hasAssignment, persistWorkspaceLayouts, widgetVisibility]);
+
+  // ウィジェットの表示/非表示を切り替え
+  const toggleWidgetVisibility = useCallback((widgetKey) => {
+    setWidgetVisibility(prev => {
+      const newVisibility = {
+        ...prev,
+        [widgetKey]: !prev[widgetKey]
+      };
+      // localStorageに保存
+      const userId = getUserId();
+      const storageKey = `studysphere:widgetVisibility:user:${userId}`;
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(newVisibility));
+      } catch (error) {
+        console.error('ウィジェット表示状態の保存に失敗しました:', error);
+      }
+      return newVisibility;
+    });
+  }, [getUserId]);
 
   // テスト完了時の処理
   const handleTestCompletedLocal = async (testScore) => {
@@ -1029,11 +1173,12 @@ const EnhancedLearningPageRefactored = () => {
     videos: []
   };
 
+  // 表示状態に基づいてウィジェットをフィルタリング
   const workspaceWidgets = {
-    video: (
+    video: widgetVisibility.video ? (
       <VideoSection lessonData={lessonData} />
-    ),
-    text: (
+    ) : null,
+    text: widgetVisibility.text ? (
       <TextSection
         lessonData={lessonData}
         textContent={textContent}
@@ -1041,8 +1186,8 @@ const EnhancedLearningPageRefactored = () => {
         textContainerRef={textContainerRef}
         onTextContentUpdate={handlePdfTextUpdate}
       />
-    ),
-    chat: (
+    ) : null,
+    chat: widgetVisibility.chat ? (
       <ChatSection
         chatMessages={chatMessages}
         chatInput={chatInput}
@@ -1060,8 +1205,8 @@ const EnhancedLearningPageRefactored = () => {
           (lessonData?.file_type !== 'pdf' && lessonData?.textContent)
         }
       />
-    ),
-    assignment: assignmentStatus.hasAssignment ? (
+    ) : null,
+    assignment: (assignmentStatus.hasAssignment && widgetVisibility.assignment) ? (
       <FileUploadSection
         uploadedFiles={uploadedFiles}
         onFileDelete={handleFileDelete}
@@ -1183,14 +1328,102 @@ const EnhancedLearningPageRefactored = () => {
         </div>
       )}
 
-      {/* メインコンテンツ - カスタマイズ可能レイアウト */}
+      {/* ウィジェット表示切り替えバー - 一時的に無効化（将来的には戻す予定） */}
+      {/* TODO: 表示切替機能を再度有効化する場合は、以下のコメントを解除してください */}
+      {/*
+      <div className="w-full bg-white border-b border-gray-200 px-4 py-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3 justify-center">
+          <span className="text-sm font-medium text-gray-700">表示切替:</span>
+          <button
+            onClick={() => toggleWidgetVisibility('video')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+              widgetVisibility.video
+                ? 'bg-blue-500 text-white hover:bg-blue-600'
+                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+            }`}
+          >
+            🎥 動画学習 {widgetVisibility.video ? '✓' : '✗'}
+          </button>
+          <button
+            onClick={() => toggleWidgetVisibility('text')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+              widgetVisibility.text
+                ? 'bg-blue-500 text-white hover:bg-blue-600'
+                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+            }`}
+          >
+            📄 テキスト教材 {widgetVisibility.text ? '✓' : '✗'}
+          </button>
+          <button
+            onClick={() => toggleWidgetVisibility('chat')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+              widgetVisibility.chat
+                ? 'bg-blue-500 text-white hover:bg-blue-600'
+                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+            }`}
+          >
+            🤖 AIアシスタント {widgetVisibility.chat ? '✓' : '✗'}
+          </button>
+          {assignmentStatus.hasAssignment && (
+            <button
+              onClick={() => toggleWidgetVisibility('assignment')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                widgetVisibility.assignment
+                  ? 'bg-blue-500 text-white hover:bg-blue-600'
+                  : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+              }`}
+            >
+              📁 課題提出 {widgetVisibility.assignment ? '✓' : '✗'}
+            </button>
+          )}
+        </div>
+      </div>
+      */}
+
+      {/* メインコンテンツ - 固定レイアウト（フリーレイアウト機能は一時的に無効化） */}
+      {/* TODO: フリーレイアウト機能を再度有効化する場合は、以下の固定レイアウトをコメントアウトし、
+          元のLearningWorkspaceLayoutコンポーネントのコメントを解除してください */}
       <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
+        {/* 固定レイアウト（3列グリッド） */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* 左列：動画学習 */}
+          {workspaceWidgets.video && (
+            <div className="lg:col-span-1 self-start w-full min-h-[500px]">
+              {workspaceWidgets.video}
+            </div>
+          )}
+          {/* 中央列：テキスト教材 */}
+          {workspaceWidgets.text && (
+            <div className="lg:col-span-1 min-h-[800px]">
+              {workspaceWidgets.text}
+            </div>
+          )}
+          {/* 右列：AIアシスタント＆提出物確認 */}
+          <div className="lg:col-span-1 flex flex-col gap-6">
+            {/* AIアシスタント */}
+            {workspaceWidgets.chat && (
+              <div className="min-h-[800px]">
+                {workspaceWidgets.chat}
+              </div>
+            )}
+            {/* 提出物確認 */}
+            {workspaceWidgets.assignment && (
+              <div>
+                {workspaceWidgets.assignment}
+              </div>
+            )}
+          </div>
+        </div>
+        {/* 元のフリーレイアウト（一時的に無効化） */}
+        {/*
         <LearningWorkspaceLayout
           widgets={workspaceWidgets}
           layouts={assignmentStatus.hasAssignment ? workspaceLayouts.withAssignment : workspaceLayouts.withoutAssignment}
           hasAssignment={assignmentStatus.hasAssignment}
+          widgetVisibility={widgetVisibility}
           onLayoutsChange={handleWorkspaceLayoutChange}
         />
+        */}
       </div>
 
       {/* アップロードモーダル（課題がある場合のみ表示） */}

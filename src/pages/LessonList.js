@@ -208,7 +208,8 @@ const LessonList = ({ selectedCourseId }) => {
                 passed: result.passed || false,
                 percentage: result.percentage || 0,
                 testType: result.test_type || 'lesson',
-                completedAt: result.completed_at
+                completedAt: result.completed_at,
+                instructorApproved: result.instructor_approved || false
               };
               console.log(`✅ テスト結果[${lessonId}]設定:`, resultsMap[lessonId]);
             } else {

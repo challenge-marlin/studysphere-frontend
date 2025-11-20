@@ -30,13 +30,18 @@ const LessonVideoPlayer = ({ videoUrl, title, containerClassName }) => {
   }
 
   return (
-    <div className={baseContainerClass}>
+    <div className={baseContainerClass} style={{ maxWidth: '100%', maxHeight: '100%', overflow: 'hidden' }}>
       <iframe
         src={`https://www.youtube.com/embed/${videoId}`}
         title={title}
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowFullScreen
         className="w-full h-full border-0"
+        style={{
+          maxWidth: '100%',
+          maxHeight: '100%',
+          display: 'block'
+        }}
       />
     </div>
   );

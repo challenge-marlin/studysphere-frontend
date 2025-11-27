@@ -115,10 +115,7 @@ const StudentTable = ({
                       {(() => {
                         // student.coursesからコース情報を取得（バックエンドから返される）
                         const displayCourses = student.courses || [];
-                        
-                                                 console.log(`利用者 ${student.name} のコース情報:`, displayCourses);
-                         console.log(`利用者 ${student.name} の全データ:`, student);
-                        
+
                         return (
                           <>
                             {displayCourses.slice(0, 4).map((course, index) => {

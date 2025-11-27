@@ -112,7 +112,7 @@ const LoginPage = () => {
 
       // レスポンスのテキストを先に取得
       const responseText = await response.text();
-      console.log('LoginPage: レスポンステキスト', responseText);
+      //console.log('LoginPage: レスポンステキスト', responseText);
       
       let data;
       try {

@@ -125,8 +125,8 @@ const TempPasswordManager = ({ students, onStudentsUpdate }) => {
       
       if (response.ok) {
         const result = await response.json();
-        console.log('APIから取得した全データ:', result);
-        console.log('データの型:', typeof result);
+        //console.log('APIから取得した全データ:', result);
+        //console.log('データの型:', typeof result);
         
         // バックエンドのレスポンス形式に合わせてデータを取得
         // レスポンスが配列の場合と、オブジェクトでラップされている場合の両方に対応
@@ -150,12 +150,7 @@ const TempPasswordManager = ({ students, onStudentsUpdate }) => {
         // 全ユーザーのロールを確認
         usersArray.forEach((user, index) => {
           if (user && typeof user === 'object' && user.id !== undefined) {
-            console.log(`ユーザー${index + 1}:`, {
-              id: user.id,
-              name: user.name,
-              role: user.role,
-              roleType: typeof user.role
-            });
+              console.log('ユーザーデータ取得成功');
           } else {
             console.warn(`ユーザー${index + 1}のデータ形式が不正:`, user);
           }
@@ -173,7 +168,7 @@ const TempPasswordManager = ({ students, onStudentsUpdate }) => {
           // ロールが数値または文字列の数値として扱えるか確認
           const roleValue = typeof user.role === 'string' ? parseInt(user.role, 10) : user.role;
           const isInstructor = roleValue === 4;
-          console.log(`ユーザー ${user.name} (ID: ${user.id}): ロール=${user.role} (${typeof user.role}), 数値化=${roleValue}, 指導員判定=${isInstructor}`);
+          //console.log(`ユーザー ${user.name} (ID: ${user.id}): ロール=${user.role} (${typeof user.role}), 数値化=${roleValue}, 指導員判定=${isInstructor}`);
           return isInstructor;
         });
         

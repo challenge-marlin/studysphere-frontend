@@ -313,12 +313,20 @@ const DailySupportRecordModal = ({
         return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
       };
 
+      // 時間フィールドが空文字列や空白の場合はnullに変換するヘルパー関数
+      const normalizeTimeField = (timeValue) => {
+        if (!timeValue || (typeof timeValue === 'string' && timeValue.trim() === '')) {
+          return null;
+        }
+        return convertTimeToMySQLDateTimeUTC(timeValue);
+      };
+
       // データを送信（UTC変換）
       const result = await updateUserDailyReport(reportId, {
-        mark_start: record.startTime ? convertTimeToMySQLDateTimeUTC(record.startTime) : null,
-        mark_end: record.endTime ? convertTimeToMySQLDateTimeUTC(record.endTime) : null,
-        mark_lunch_start: record.breakStartTime ? convertTimeToMySQLDateTimeUTC(record.breakStartTime) : null,
-        mark_lunch_end: record.breakEndTime ? convertTimeToMySQLDateTimeUTC(record.breakEndTime) : null,
+        mark_start: normalizeTimeField(record.startTime),
+        mark_end: normalizeTimeField(record.endTime),
+        mark_lunch_start: normalizeTimeField(record.breakStartTime),
+        mark_lunch_end: normalizeTimeField(record.breakEndTime),
         support_method: record.supportMethod,
         support_method_note: record.supportMethodOther,
         work_result: record.workContent,

@@ -122,6 +122,7 @@ const AttendanceTab = () => {
   const getStatusBadge = (status) => {
     const statusConfig = {
       '通所': { bg: 'bg-blue-100', text: 'text-blue-800' },
+      '業務終了': { bg: 'bg-green-100', text: 'text-green-800' },
       '作業中': { bg: 'bg-green-100', text: 'text-green-800' },
       '休憩中': { bg: 'bg-yellow-100', text: 'text-yellow-800' },
       '未開始': { bg: 'bg-red-100', text: 'text-red-800' }

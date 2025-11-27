@@ -128,30 +128,15 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
     console.log('currentUser.satellite_ids:', currentUser?.satellite_ids);
     console.log('currentUser.satellite_name:', currentUser?.satellite_name);
     
-    // デバッグ用：ユーザー情報をAPIから取得
+    // デバッグ用：ユーザー情報のログ出力（デバッグエンドポイントは削除）
     if (currentUser && currentUser.id) {
-      fetch(`${API_BASE_URL}/api/satellites/debug/user/${currentUser.id}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        }
-      })
-      .then(response => response.json())
-      .then(data => {
-        console.log('=== デバッグ：APIから取得したユーザー情報 ===');
-        console.log('APIレスポンス:', data);
-        if (data.success) {
-          console.log('ユーザーID:', data.data.user_id);
-          console.log('ユーザー名:', data.data.name);
-          console.log('ロール:', data.data.role);
-          console.log('会社ID:', data.data.company_id);
-          console.log('satellite_ids生データ:', data.data.satellite_ids_raw);
-          console.log('satellite_idsパース後:', data.data.satellite_ids_parsed);
-          console.log('satellite_ids型:', data.data.satellite_ids_type);
-        }
-      })
-      .catch(error => {
-        console.error('デバッグAPI呼び出しエラー:', error);
-      });
+      console.log('=== デバッグ：現在のユーザー情報 ===');
+      console.log('ユーザーID:', currentUser.id);
+      console.log('ユーザー名:', currentUser.name);
+      console.log('ロール:', currentUser.role);
+      console.log('会社ID:', currentUser.company_id);
+      console.log('satellite_ids:', currentUser.satellite_ids);
+      console.log('satellite_id:', currentUser.satellite_id);
     }
     
     // 全ストレージのデバッグ情報を出力
@@ -448,8 +433,12 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
         setError('バックエンドサーバーに接続できません。サーバーが起動しているか確認してください。');
       } else if (error.message && error.message.includes('拠点IDが無効です')) {
         setError('拠点IDが無効です。拠点を選択し直してください。');
+      } else if (error.message && (error.message.includes('アクセス権限') || error.message.includes('Access denied'))) {
+        setError('指定された拠点へのアクセス権限がありません。所属している拠点を選択してください。');
+      } else if (error.status === 404 || error.message && error.message.includes('404')) {
+        setError('指定された拠点が見つかりません。拠点を選択し直してください。');
       } else {
-        setError('利用者データの取得中にエラーが発生しました');
+        setError('利用者データの取得中にエラーが発生しました。ページを再読み込みしてください。');
       }
       setStudents([]);
     } finally {

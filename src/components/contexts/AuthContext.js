@@ -317,7 +317,18 @@ export const AuthProvider = ({ children }) => {
       const isValid = isTokenValid(accessToken);
       const shouldRefresh = shouldRefreshToken(accessToken);
       
-      if (!isValid && shouldRefresh) {
+      // アクセストークンが有効でも残り30分以下なら更新（有効期限切れ前に更新）
+      if (shouldRefresh) {
+        console.log('アクセストークンの残り時間が30分以下です。更新を試行します。');
+        const success = await handleTokenRefresh(refreshToken);
+        
+        if (!success) {
+          // 更新に失敗した場合はログアウト
+          console.log('トークン更新に失敗しました。ログアウトします。');
+          await logout();
+        }
+      } else if (!isValid) {
+        // アクセストークンが無効で、更新タイミングでない場合（残り30分以上あるが期限切れ）
         console.log('アクセストークンが無効です。更新を試行します。');
         const success = await handleTokenRefresh(refreshToken);
         

@@ -18,10 +18,10 @@ const DailySupportRecordModal = ({
   aiAssist 
 }) => {
   const [record, setRecord] = useState({
-    startTime: '10:00',
-    endTime: '16:00',
-    breakStartTime: '12:00',
-    breakEndTime: '13:00',
+    startTime: '',
+    endTime: '',
+    breakStartTime: '',
+    breakEndTime: '',
     supportMethod: '電話',
     supportMethodOther: '',
     workContent: '',
@@ -44,6 +44,20 @@ const DailySupportRecordModal = ({
 
   useEffect(() => {
     if (isOpen && student) {
+      // モーダルが開かれた時に初期状態をリセット
+      setRecord({
+        startTime: '',
+        endTime: '',
+        breakStartTime: '',
+        breakEndTime: '',
+        supportMethod: '電話',
+        supportMethodOther: '',
+        workContent: '',
+        supportContent: '',
+        healthStatus: '',
+        responder: '',
+        remarks: ''
+      });
       fetchUserData();
       fetchInstructors();
       fetchSupportPlan();
@@ -104,10 +118,10 @@ const DailySupportRecordModal = ({
         if (healthResult.data) {
           setRecord(prev => ({
             ...prev,
-            startTime: healthResult.data.mark_start ? new Date(healthResult.data.mark_start).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : prev.startTime,
-            endTime: healthResult.data.mark_end ? new Date(healthResult.data.mark_end).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : prev.endTime,
-            breakStartTime: healthResult.data.mark_lunch_start ? new Date(healthResult.data.mark_lunch_start).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : prev.breakStartTime,
-            breakEndTime: healthResult.data.mark_lunch_end ? new Date(healthResult.data.mark_lunch_end).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : prev.breakEndTime
+            startTime: healthResult.data.mark_start ? new Date(healthResult.data.mark_start).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : '',
+            endTime: healthResult.data.mark_end ? new Date(healthResult.data.mark_end).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : '',
+            breakStartTime: healthResult.data.mark_lunch_start ? new Date(healthResult.data.mark_lunch_start).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : '',
+            breakEndTime: healthResult.data.mark_lunch_end ? new Date(healthResult.data.mark_lunch_end).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : ''
           }));
         }
       }

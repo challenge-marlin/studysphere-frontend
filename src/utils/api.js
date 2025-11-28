@@ -122,20 +122,68 @@ export const apiCall = async (endpoint, options = {}, retryCount = 0) => {
         return response;
       }
       
-      isAuthErrorHandling = true;
-      console.warn('認証エラーを検出しました。リダイレクト処理を開始します。');
-      
-      // グローバルナビゲーション関数を取得
-      const { setGlobalNavigate } = await import('./httpInterceptor');
-      const { handleTokenInvalid } = await import('./authUtils');
-      
-      // 即座にリダイレクト処理を実行
-      setTimeout(() => {
-        handleTokenInvalid(window.navigate || (() => window.location.href = '/homepage'), '認証に失敗しました');
-        isAuthErrorHandling = false;
-      }, 100);
-      
-      throw new Error('Authentication failed');
+      // 403エラーの場合、レスポンスボディを確認して権限エラーかどうかを判定
+      if (response.status === 403) {
+        try {
+          const responseClone = response.clone();
+          const errorData = await responseClone.json();
+          // 権限エラー（拠点アクセス権限エラーなど）の場合は認証エラーとして扱わない
+          if (errorData.errorType === 'SATELLITE_ACCESS_DENIED' || 
+              errorData.message?.includes('所属拠点') ||
+              errorData.message?.includes('アクセス権限')) {
+            console.log('権限エラーのため、認証エラー処理をスキップします');
+            // 通常のエラー処理に進む（下のif (!response.ok)ブロックで処理される）
+          } else {
+            // 認証エラーとして処理
+            isAuthErrorHandling = true;
+            console.warn('認証エラーを検出しました。リダイレクト処理を開始します。');
+            
+            // グローバルナビゲーション関数を取得
+            const { setGlobalNavigate } = await import('./httpInterceptor');
+            const { handleTokenInvalid } = await import('./authUtils');
+            
+            // 即座にリダイレクト処理を実行
+            setTimeout(() => {
+              handleTokenInvalid(window.navigate || (() => window.location.href = '/homepage'), '認証に失敗しました');
+              isAuthErrorHandling = false;
+            }, 100);
+            
+            throw new Error('Authentication failed');
+          }
+        } catch (parseError) {
+          // JSONパースに失敗した場合は認証エラーとして処理
+          isAuthErrorHandling = true;
+          console.warn('認証エラーを検出しました。リダイレクト処理を開始します。');
+          
+          // グローバルナビゲーション関数を取得
+          const { setGlobalNavigate } = await import('./httpInterceptor');
+          const { handleTokenInvalid } = await import('./authUtils');
+          
+          // 即座にリダイレクト処理を実行
+          setTimeout(() => {
+            handleTokenInvalid(window.navigate || (() => window.location.href = '/homepage'), '認証に失敗しました');
+            isAuthErrorHandling = false;
+          }, 100);
+          
+          throw new Error('Authentication failed');
+        }
+      } else {
+        // 401エラーの場合は認証エラーとして処理
+        isAuthErrorHandling = true;
+        console.warn('認証エラーを検出しました。リダイレクト処理を開始します。');
+        
+        // グローバルナビゲーション関数を取得
+        const { setGlobalNavigate } = await import('./httpInterceptor');
+        const { handleTokenInvalid } = await import('./authUtils');
+        
+        // 即座にリダイレクト処理を実行
+        setTimeout(() => {
+          handleTokenInvalid(window.navigate || (() => window.location.href = '/homepage'), '認証に失敗しました');
+          isAuthErrorHandling = false;
+        }, 100);
+        
+        throw new Error('Authentication failed');
+      }
     }
     
     if (!response.ok) {

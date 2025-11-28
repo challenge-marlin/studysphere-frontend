@@ -137,6 +137,24 @@ export const setupFetchInterceptor = () => {
           return response;
         }
         
+        // 403エラーの場合、レスポンスボディを確認して権限エラーかどうかを判定
+        if (response.status === 403) {
+          try {
+            const responseClone = response.clone();
+            const errorData = await responseClone.json();
+            // 権限エラー（拠点アクセス権限エラーなど）の場合は認証エラーとして扱わない
+            if (errorData.errorType === 'SATELLITE_ACCESS_DENIED' || 
+                errorData.message?.includes('所属拠点') ||
+                errorData.message?.includes('アクセス権限')) {
+              console.log('Fetchインターセプター: 権限エラーのため、認証エラー処理をスキップ');
+              return response;
+            }
+          } catch (parseError) {
+            // JSONパースに失敗した場合は認証エラーとして処理を続行
+            console.log('Fetchインターセプター: レスポンスボディの解析に失敗、認証エラーとして処理');
+          }
+        }
+        
         // 認証エラー処理フラグを設定
         isAuthErrorHandling = true;
         

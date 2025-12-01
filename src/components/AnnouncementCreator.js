@@ -3,6 +3,8 @@ import { apiGet, apiPost } from '../utils/api';
 import { useAuth } from './contexts/AuthContext';
 import { sanitizeInput } from '../utils/sanitizeUtils';
 import UserFilter from './UserFilter';
+import { getCurrentUserSatelliteId } from '../utils/locationUtils';
+import { getCurrentUser } from '../utils/userContext';
 
 const AnnouncementCreator = () => {
     const { currentUser: user } = useAuth();
@@ -30,11 +32,23 @@ const AnnouncementCreator = () => {
 
         try {
             setSubmitting(true);
-            const response = await apiPost('/api/announcements/admin/create', {
+            
+            // 現在選択中の拠点IDを取得
+            const currentUser = getCurrentUser();
+            const currentSatelliteId = getCurrentUserSatelliteId(currentUser);
+            
+            const requestData = {
                 title: sanitizeInput(title.trim()),
                 message: sanitizeInput(message.trim()),
                 recipient_ids: selectedUsers.map(user => user.id)
-            });
+            };
+            
+            // 現在選択中の拠点IDがある場合は追加
+            if (currentSatelliteId) {
+                requestData.satellite_id = currentSatelliteId;
+            }
+            
+            const response = await apiPost('/api/announcements/admin/create', requestData);
 
             if (response.success) {
                 alert('アナウンスを送信しました。');
@@ -202,11 +216,11 @@ const AnnouncementCreator = () => {
                                                     <div className="flex-1">
                                                         <p className="font-medium">
                                                             {user.name}
-                                                            {user.is_my_assigned && ' ★'}
+                                                            {Boolean(user.is_my_assigned) && ' ★'}
                                                         </p>
                                                         <p className="text-xs text-gray-500">
-                                                            {user.role === 1 ? '利用者' : '指導員'} | 
-                                                            {user.company_name && ` ${user.company_name}`}
+                                                            利用者
+                                                            {user.company_name && ` | ${user.company_name}`}
                                                             {user.satellite_name && ` | ${user.satellite_name}`}
                                                             {user.instructor_name && ` | 担当: ${user.instructor_name}`}
                                                         </p>

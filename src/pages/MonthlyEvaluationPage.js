@@ -535,6 +535,14 @@ const MonthlyEvaluationPage = () => {
         period_end: periodEnd
       };
 
+      // 現在選択中の拠点IDを取得
+      const currentSatelliteId = getCurrentUserSatelliteId(currentUser);
+      
+      // 現在選択中の拠点IDがある場合は追加
+      if (currentSatelliteId) {
+        backendData.satellite_id = currentSatelliteId;
+      }
+
       // 送信データをログ出力（デバッグ用）
       console.log('送信データ:', JSON.stringify(backendData, null, 2));
       console.log('user_idの型:', typeof backendData.user_id, '値:', backendData.user_id);

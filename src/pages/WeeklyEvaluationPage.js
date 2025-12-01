@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useInstructorGuard } from '../utils/hooks/useAuthGuard';
 import { API_BASE_URL } from '../config/apiConfig';
 import { getCurrentUserSatelliteId, normalizeSatelliteId } from '../utils/locationUtils';
+import { getCurrentUser } from '../utils/userContext';
 
 /**
  * 評価(週次)作成画面
@@ -394,24 +395,49 @@ const WeeklyEvaluationPage = () => {
         alert('認証トークンが見つかりません。ログインし直してください。');
         return;
       }
+      
+      // 現在選択中の拠点IDを取得
+      const currentUser = getCurrentUser();
+      const currentSatelliteId = getCurrentUserSatelliteId(currentUser);
+      
+      const requestBody = {
+        user_id: student.id,
+        date: new Date().toISOString().split('T')[0],
+        prev_eval_date: prevEvalDate && prevEvalDate.trim() !== '' ? prevEvalDate : null, // 空文字列の場合はnullに変換
+        period_start: periodStart,
+        period_end: periodEnd,
+        evaluation_method: evaluationData.method, // ENUM値（'通所', '訪問', 'その他'）をそのまま送信
+        method_other: evaluationData.method === 'その他' ? evaluationData.methodOther : null, // 「その他」の場合のみ補足情報を送信
+        evaluation_content: evaluationData.content,
+        recorder_name: evaluationData.recorder,
+        confirm_name: evaluationData.confirmer
+      };
+      
+      // 現在選択中の拠点IDがある場合は追加
+      if (currentSatelliteId) {
+        requestBody.satellite_id = currentSatelliteId;
+        console.log('週報保存 - 送信データにsatellite_idを追加:', {
+          satellite_id: currentSatelliteId,
+          satellite_id_type: typeof currentSatelliteId,
+          user_id: student.id,
+          requestBody
+        });
+      } else {
+        console.warn('週報保存 - satellite_idが取得できませんでした:', {
+          currentUser,
+          currentSatelliteId
+        });
+      }
+      
+      console.log('週報保存 - 送信するリクエストボディ:', JSON.stringify(requestBody, null, 2));
+      
       const response = await fetch(`${API_BASE_URL}/api/weekly-evaluations`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          user_id: student.id,
-          date: new Date().toISOString().split('T')[0],
-          prev_eval_date: prevEvalDate && prevEvalDate.trim() !== '' ? prevEvalDate : null, // 空文字列の場合はnullに変換
-          period_start: periodStart,
-          period_end: periodEnd,
-          evaluation_method: evaluationData.method, // ENUM値（'通所', '訪問', 'その他'）をそのまま送信
-          method_other: evaluationData.method === 'その他' ? evaluationData.methodOther : null, // 「その他」の場合のみ補足情報を送信
-          evaluation_content: evaluationData.content,
-          recorder_name: evaluationData.recorder,
-          confirm_name: evaluationData.confirmer
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (response.ok) {
@@ -435,6 +461,11 @@ const WeeklyEvaluationPage = () => {
             errorMessage = errorData.message || errorMessage;
             if (errorData.sqlError) {
               errorMessage += `\nSQLエラー: ${errorData.sqlError}`;
+            }
+            // デバッグ情報がある場合は表示
+            if (errorData.debug) {
+              console.error('保存エラー詳細（デバッグ情報）:', errorData.debug);
+              errorMessage += `\n\nデバッグ情報:\n利用者拠点ID: ${JSON.stringify(errorData.debug.user_satellite_ids)}\n指導員拠点ID: ${JSON.stringify(errorData.debug.instructor_satellite_ids)}\n選択中拠点ID: ${errorData.debug.selected_satellite_id}`;
             }
             console.error('保存エラー詳細:', errorData);
           } catch (e) {

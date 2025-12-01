@@ -3,6 +3,8 @@ import { apiGet, apiPost } from '../utils/api';
 import { useAuth } from './contexts/AuthContext';
 import UserFilter from './UserFilter';
 import { sanitizeInput } from '../utils/sanitizeUtils';
+import { getCurrentUserSatelliteId } from '../utils/locationUtils';
+import { getCurrentUser } from '../utils/userContext';
 
 const MessageSender = () => {
     const { currentUser: user } = useAuth();
@@ -29,10 +31,22 @@ const MessageSender = () => {
 
         try {
             setSubmitting(true);
-            const response = await apiPost('/api/messages/send', {
+            
+            // 現在選択中の拠点IDを取得
+            const currentUser = getCurrentUser();
+            const currentSatelliteId = getCurrentUserSatelliteId(currentUser);
+            
+            const requestData = {
                 receiver_id: selectedStudent.id,
                 message: sanitizeInput(message.trim())
-            });
+            };
+            
+            // 現在選択中の拠点IDがある場合は追加
+            if (currentSatelliteId) {
+                requestData.satellite_id = currentSatelliteId;
+            }
+            
+            const response = await apiPost('/api/messages/send', requestData);
 
             if (response.success) {
                 alert('メッセージを送信しました。');

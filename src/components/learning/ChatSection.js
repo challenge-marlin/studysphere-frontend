@@ -102,14 +102,21 @@ const ChatSection = ({
       {/* チャット入力フォーム */}
       <div className="space-y-3 pt-2">
         <SanitizedInput
-          type="text"
+          type="textarea"
           value={chatInput}
           onChange={onChatInputChange}
-          onKeyPress={(e) => e.key === 'Enter' && onSendMessage()}
+          onKeyPress={(e) => {
+            // Shift+Enterで改行、Enterのみで送信
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              onSendMessage();
+            }
+          }}
           placeholder={isAIEnabled ? "学習内容について質問してください..." : "AI機能の準備が完了するまでお待ちください..."}
           sanitizeMode={SANITIZE_OPTIONS.FULL}
           debounceMs={300}
-          className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent text-base ${
+          rows={4}
+          className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent text-base resize-y ${
             isAIEnabled 
               ? 'border-gray-300 focus:ring-green-500' 
               : 'border-gray-200 bg-gray-50 text-gray-500'

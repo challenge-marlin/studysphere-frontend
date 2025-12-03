@@ -893,6 +893,11 @@ const EnhancedLearningPageRefactored = () => {
         return;
       }
 
+      // 会話履歴を取得（現在の質問を除く、送信前の状態）
+      const conversationHistory = chatMessages.filter(msg => 
+        msg.sender === 'user' || msg.sender === 'ai'
+      );
+
       // ユーザーメッセージを追加
       const userMessage = {
         id: Date.now(),
@@ -905,18 +910,21 @@ const EnhancedLearningPageRefactored = () => {
       setIsAILoading(true);
 
       try {
-        // AIアシスタントに質問を送信
+
+        // AIアシスタントに質問を送信（会話履歴を含める）
         const aiResponse = await AIAssistantService.askQuestion(
           question,
           currentSectionText,
-          lessonData?.title || `レッスン${currentLesson}`
+          lessonData?.title || `レッスン${currentLesson}`,
+          conversationHistory
         );
 
         if (aiResponse.success) {
-          // AIの回答を追加
+          // AIの回答を追加（要約も一緒に保存）
           const aiMessage = {
             id: Date.now() + 1,
-            text: aiResponse.answer,
+            text: aiResponse.answer, // 表示用の完全な回答
+            summary: aiResponse.summary || '', // 会話履歴用の要約
             sender: 'ai',
             timestamp: new Date().toLocaleTimeString()
           };

@@ -179,20 +179,24 @@ const HomeSupportRecordsPage = () => {
       return `${year}-${month}-${day}`;
     };
 
+    // work_result/workResultが存在し、task_content/workContentが空の場合はwork_resultをtask_contentにコピー
+    const taskContent = report.task_content || report.workContent || report.work_result || report.workResult || '';
+    const workResult = report.work_result || report.workResult || '';
+    
     setDailyEditForm({
       temperature: report.temperature || '',
       condition: report.condition || '',
       condition_note: report.condition_note || '',
       work_note: report.work_note || '',
-      work_result: report.work_result || '',
-      daily_report: report.daily_report || '',
-      support_method: report.support_method || '',
-      support_method_note: report.support_method_note || '',
-      task_content: report.task_content || '',
-      support_content: report.support_content || '',
+      work_result: workResult,
+      daily_report: report.daily_report || report.dailyReport || '',
+      support_method: report.support_method || report.supportMethod || '',
+      support_method_note: report.support_method_note || report.supportMethodNote || '',
+      task_content: taskContent,
+      support_content: report.support_content || report.supportContent || '',
       advice: report.advice || '',
-      instructor_comment: report.instructor_comment || '',
-      recorder_name: report.recorder_name || '',
+      instructor_comment: report.instructor_comment || report.instructorComment || '',
+      recorder_name: report.recorder_name || report.recorderName || '',
       report_date: formatDateForInput(report.date), // 日報の日付を保存
       mark_start: formatTimeForInput(report.mark_start),
       mark_lunch_start: formatTimeForInput(report.mark_lunch_start),
@@ -1076,11 +1080,12 @@ const HomeSupportRecordsPage = () => {
               
               // 作業・訓練内容の処理（D列から開始）
               if ((cellValue.includes('作業') && cellValue.includes('訓練')) || cellValue.includes('作業内容') || cellValue.includes('訓練内容')) {
-                if (record.task_content) {
+                const workContent = record.task_content || record.workContent || record.work_result || record.workResult;
+                if (workContent) {
                   // D列（4列目）から開始
                   const contentCell = worksheet.getCell(row, 4); // D列
                   if (contentCell.value === null || contentCell.value === '') {
-                    contentCell.value = record.task_content;
+                    contentCell.value = workContent;
                     contentCell.font = { ...(contentCell.font || {}), size: 10 };
                   }
                 }
@@ -1689,7 +1694,7 @@ const HomeSupportRecordsPage = () => {
                             )}
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">作業内容</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">作業・訓練内容</label>
                             <textarea
                               value={dailyEditForm.task_content || ''}
                               onChange={(e) => setDailyEditForm({ ...dailyEditForm, task_content: e.target.value })}
@@ -1761,7 +1766,7 @@ const HomeSupportRecordsPage = () => {
                                 <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">作業・訓練内容</span>
                               </h4>
                               <div className="bg-gray-50 rounded-lg p-3 whitespace-pre-wrap text-sm text-gray-700">
-                                {record.task_content || '-'}
+                                {record.task_content || record.workContent || record.work_result || record.workResult || '-'}
                               </div>
                             </div>
 

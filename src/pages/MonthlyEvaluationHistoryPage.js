@@ -363,6 +363,7 @@ const MonthlyEvaluationHistoryPage = () => {
 
       setEditingEvaluation({
         ...selectedEvaluation,
+        date: normalizeDateForInput(selectedEvaluation.date || selectedEvaluation.createdDate),
         startDate: normalizeDateForInput(selectedEvaluation.startDate),
         endDate: normalizeDateForInput(selectedEvaluation.endDate),
         startTime: normalizeTimeForInput(selectedEvaluation.startTime),
@@ -386,6 +387,11 @@ const MonthlyEvaluationHistoryPage = () => {
 
     if (!editingEvaluation.trainingGoal.trim() || !editingEvaluation.workContent.trim()) {
       alert('訓練目標と取組内容は必須項目です。');
+      return;
+    }
+
+    if (!editingEvaluation.date) {
+      alert('評価作成日は必須項目です。');
       return;
     }
 
@@ -838,7 +844,11 @@ const MonthlyEvaluationHistoryPage = () => {
                       </div>
                     </div>
                     <div className="text-sm text-gray-600 mt-2">
-                      評価作成日: {selectedEvaluation && new Date(selectedEvaluation.createdDate).toLocaleDateString('ja-JP')}
+                      評価作成日: {isEditing && editingEvaluation ? (
+                        editingEvaluation.date ? new Date(editingEvaluation.date).toLocaleDateString('ja-JP') : ''
+                      ) : (
+                        selectedEvaluation && new Date(selectedEvaluation.date || selectedEvaluation.createdDate).toLocaleDateString('ja-JP')
+                      )}
                     </div>
                     <div className="text-xs text-gray-500">
                       {evaluations.length > 0 && `${evaluations.findIndex(e => e.id === selectedEvaluationId) + 1} / ${evaluations.length} 件`}
@@ -850,7 +860,7 @@ const MonthlyEvaluationHistoryPage = () => {
                       {selectedEvaluation && `${new Date(selectedEvaluation.startDate).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })} 〜 ${new Date(selectedEvaluation.endDate).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}`}
                     </div>
                     <div className="text-sm text-gray-600 mt-1">
-                      評価作成日: {selectedEvaluation && new Date(selectedEvaluation.createdDate).toLocaleDateString('ja-JP')}
+                      評価作成日: {selectedEvaluation && new Date(selectedEvaluation.date || selectedEvaluation.createdDate).toLocaleDateString('ja-JP')}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
                       {evaluations.length > 0 && `${evaluations.findIndex(e => e.id === selectedEvaluationId) + 1} / ${evaluations.length} 件`}
@@ -894,7 +904,7 @@ const MonthlyEvaluationHistoryPage = () => {
                 <span className="font-semibold">評価期間:</span> {selectedEvaluation && `${new Date(selectedEvaluation.startDate).toLocaleDateString('ja-JP')} 〜 ${new Date(selectedEvaluation.endDate).toLocaleDateString('ja-JP')}`}
               </div>
               <div>
-                <span className="font-semibold">評価作成日:</span> {selectedEvaluation && new Date(selectedEvaluation.createdDate).toLocaleDateString('ja-JP')}
+                <span className="font-semibold">評価作成日:</span> {selectedEvaluation && new Date(selectedEvaluation.date || selectedEvaluation.createdDate).toLocaleDateString('ja-JP')}
               </div>
             </div>
           </div>
@@ -1197,8 +1207,9 @@ const MonthlyEvaluationHistoryPage = () => {
                     {isEditing ? (
                       <input
                         type="date"
-                        value={editingEvaluation?.date || ''}
+                        value={editingEvaluation?.date || editingEvaluation?.createdDate || ''}
                         onChange={(e) => updateEditingField('date', e.target.value)}
+                        required
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                       />
                     ) : (

@@ -491,6 +491,161 @@ const LessonTestPage = () => {
         }
       }
       
+      // 追加テキストファイル（lesson_text_files）の内容を取得
+      // セクションデータに既に含まれているものは除外する
+      try {
+        console.log('追加テキストファイルの取得を開始:', { lessonId: currentLesson });
+        
+        // セクションデータに既に含まれているtext_file_keyを収集
+        const sectionTextFileKeys = new Set();
+        if (sectionData && sectionData.length > 0) {
+          sectionData.forEach(section => {
+            if (section.text_file_key) {
+              sectionTextFileKeys.add(section.text_file_key);
+            }
+          });
+        }
+        
+        // 追加テキストファイルの一覧を取得
+        const additionalFilesResponse = await fetch(`${API_BASE_URL}/api/lesson-text-files/lesson/${currentLesson}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (additionalFilesResponse.ok) {
+          const additionalFilesResult = await additionalFilesResponse.json();
+          if (additionalFilesResult.success && additionalFilesResult.data && additionalFilesResult.data.length > 0) {
+            console.log('追加テキストファイル一覧取得成功:', {
+              fileCount: additionalFilesResult.data.length,
+              files: additionalFilesResult.data.map(f => ({ id: f.id, fileName: f.file_name, s3Key: f.s3_key }))
+            });
+            
+            // 各追加テキストファイルの内容を取得
+            for (const textFile of additionalFilesResult.data) {
+              // セクションデータに既に含まれている場合はスキップ
+              if (sectionTextFileKeys.has(textFile.s3_key)) {
+                console.log('追加テキストファイルはセクションデータに既に含まれているためスキップ:', {
+                  fileName: textFile.file_name,
+                  s3Key: textFile.s3_key
+                });
+                continue;
+              }
+              
+              try {
+                // セッションストレージからコンテキストを取得
+                const fileType = textFile.file_type || 'text/plain';
+                let storedContext = SessionStorageManager.getContext(currentLesson, textFile.s3_key, fileType);
+                
+                // メタデータから正確なレッスンIDを確認
+                if (storedContext && storedContext.metadata && storedContext.metadata.lessonId !== currentLesson) {
+                  console.warn('追加テキストファイルのコンテキストのレッスンIDが一致しません:', {
+                    expectedLessonId: currentLesson,
+                    actualLessonId: storedContext.metadata.lessonId,
+                    fileName: textFile.file_name,
+                    s3Key: textFile.s3_key
+                  });
+                  storedContext = null;
+                }
+                
+                let fileContent = null;
+                
+                if (storedContext && storedContext.context) {
+                  // コンテキストが有効かどうかを検証
+                  const contextLength = storedContext.context.length;
+                  const hasValidContent = storedContext.context.length > 50;
+                  
+                  if (contextLength > 50 && hasValidContent) {
+                    fileContent = storedContext.context;
+                    console.log('追加テキストファイルのコンテキストをセッションストレージから取得:', {
+                      fileName: textFile.file_name,
+                      contextLength: storedContext.context.length
+                    });
+                  } else {
+                    storedContext = null;
+                  }
+                }
+                
+                // セッションストレージにない場合は、APIから取得
+                if (!fileContent) {
+                  console.log('追加テキストファイルをAPIから取得:', {
+                    fileName: textFile.file_name,
+                    s3Key: textFile.s3_key,
+                    fileType: textFile.file_type
+                  });
+                  
+                  const extractResponse = await fetch(`${API_BASE_URL}/api/test/learning/extract-text/${encodeURIComponent(textFile.s3_key)}`, {
+                    headers: {
+                      'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+                      'Content-Type': 'application/json'
+                    }
+                  });
+                  
+                  if (extractResponse.ok) {
+                    const extractResult = await extractResponse.json();
+                    if (extractResult.success && extractResult.data && extractResult.data.text) {
+                      fileContent = extractResult.data.text;
+                      
+                      // 取得したテキストをセッションストレージに保存
+                      const saveSuccess = SessionStorageManager.saveContext(
+                        currentLesson,
+                        textFile.s3_key,
+                        fileContent,
+                        {
+                          fileType: textFile.file_type,
+                          lessonTitle: lessonData?.title,
+                          fileName: textFile.file_name,
+                          source: 'additional_text_file'
+                        }
+                      );
+                      
+                      if (saveSuccess) {
+                        console.log('追加テキストファイルのコンテキストをセッションストレージに保存完了:', {
+                          fileName: textFile.file_name
+                        });
+                      }
+                    }
+                  } else {
+                    console.warn('追加テキストファイルの取得に失敗:', {
+                      fileName: textFile.file_name,
+                      status: extractResponse.status,
+                      statusText: extractResponse.statusText
+                    });
+                  }
+                }
+                
+                // 取得した内容を追加
+                if (fileContent && fileContent.trim().length > 0) {
+                  allTextContent += `\n\n## 追加テキスト: ${textFile.file_name || '追加テキスト'}\n\n`;
+                  allTextContent += fileContent;
+                  console.log('追加テキストファイルの内容を追加:', {
+                    fileName: textFile.file_name,
+                    contentLength: fileContent.length
+                  });
+                }
+              } catch (error) {
+                console.error('追加テキストファイルの取得エラー:', {
+                  error: error.message,
+                  fileName: textFile.file_name,
+                  s3Key: textFile.s3_key
+                });
+              }
+            }
+          } else {
+            console.log('追加テキストファイルはありません');
+          }
+        } else {
+          console.warn('追加テキストファイル一覧の取得に失敗:', {
+            status: additionalFilesResponse.status,
+            statusText: additionalFilesResponse.statusText
+          });
+        }
+      } catch (error) {
+        console.error('追加テキストファイル取得処理エラー:', error);
+        // エラーが発生しても処理を続行
+      }
+      
       // コンテキスト化の完了を確認
       const finalTextLength = allTextContent.length;
       const hasValidFinalContent = allTextContent.includes('AI') || 

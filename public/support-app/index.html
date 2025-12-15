@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudySphere Support App - インストーラー一覧</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 15px;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+        
+        .file-list {
+            list-style: none;
+        }
+        
+        .file-item {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .file-item:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        .file-item.latest {
+            border-color: #28a745;
+            background: #f0fff4;
+        }
+        
+        .file-link {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            text-decoration: none;
+            color: #333;
+        }
+        
+        .file-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #667eea;
+            flex: 1;
+        }
+        
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .badge-latest {
+            background: #28a745;
+            color: white;
+        }
+        
+        .download-icon {
+            font-size: 24px;
+            color: #667eea;
+        }
+        
+        .file-item:hover .download-icon {
+            transform: scale(1.2);
+            transition: transform 0.2s ease;
+        }
+        
+        .instructions {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 20px;
+            margin-top: 30px;
+            border-radius: 4px;
+        }
+        
+        .instructions h2 {
+            color: #2196F3;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        
+        .instructions ol {
+            margin-left: 20px;
+            color: #555;
+            line-height: 1.8;
+        }
+        
+        .instructions li {
+            margin-bottom: 8px;
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            .file-link {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            
+            .file-info {
+                width: 100%;
+                justify-content: space-between;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>StudySphere Support App</h1>
+        <p class="subtitle">リモートサポートアプリケーション インストーラー</p>
+        
+        <ul class="file-list">
+            <li class="file-item latest">
+                <a href="StudySphereApp Setup 1.2.0.exe" class="file-link" download>
+                    <span class="file-name">StudySphereApp Setup 1.2.0.exe</span>
+                    <div class="file-info">
+                        <span class="badge badge-latest">最新版</span>
+                        <span class="download-icon">⬇️</span>
+                    </div>
+                </a>
+            </li>
+            <!-- 新しいバージョンを追加する場合は、ここに追加してください -->
+        </ul>
+        
+        <div class="instructions">
+            <h2>📥 インストール手順</h2>
+            <ol>
+                <li>上記の「最新版」をクリックしてインストーラーファイルをダウンロード</li>
+                <li>ダウンロードしたファイル（.exe）を実行</li>
+                <li>インストールウィザードの指示に従ってインストールを完了</li>
+                <li>インストール後、アプリケーションを起動して動作確認</li>
+            </ol>
+        </div>
+    </div>
+</body>
+</html>
+

@@ -239,7 +239,11 @@ const AnnouncementCreator = () => {
                                                     <input
                                                         type="checkbox"
                                                         checked={selectedUsers.some(selected => selected.id === user.id)}
-                                                        onChange={() => toggleUserSelection(user)}
+                                                        onChange={(e) => {
+                                                            e.stopPropagation();
+                                                            toggleUserSelection(user);
+                                                        }}
+                                                        onClick={(e) => e.stopPropagation()}
                                                         className="h-3 w-3 text-blue-600 focus:ring-blue-500 border-gray-300 rounded ml-2"
                                                     />
                                                 </div>

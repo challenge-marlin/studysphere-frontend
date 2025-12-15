@@ -21,6 +21,7 @@ const MonthlyEvaluationHistoryPage = () => {
   const [editingEvaluation, setEditingEvaluation] = useState(null);
   const [instructorList, setInstructorList] = useState([]);
   const [excelDownloading, setExcelDownloading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const timeOnlyPattern = useMemo(() => /^\d{2}:\d{2}/, []);
   const tokyoDateTimeFormatter = useMemo(() => new Intl.DateTimeFormat('ja-JP', {
@@ -344,8 +345,26 @@ const MonthlyEvaluationHistoryPage = () => {
   // 編集開始
   const handleEdit = () => {
     if (selectedEvaluation) {
+      // 日付をYYYY-MM-DD形式に正規化
+      const normalizeDateForInput = (dateValue) => {
+        if (!dateValue) return '';
+        if (typeof dateValue === 'string' && dateValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          return dateValue;
+        }
+        const date = new Date(dateValue);
+        if (!Number.isNaN(date.getTime())) {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        }
+        return '';
+      };
+
       setEditingEvaluation({
         ...selectedEvaluation,
+        startDate: normalizeDateForInput(selectedEvaluation.startDate),
+        endDate: normalizeDateForInput(selectedEvaluation.endDate),
         startTime: normalizeTimeForInput(selectedEvaluation.startTime),
         endTime: normalizeTimeForInput(selectedEvaluation.endTime)
       });
@@ -416,6 +435,69 @@ const MonthlyEvaluationHistoryPage = () => {
         ...editingEvaluation,
         [field]: value
       });
+    }
+  };
+
+  // 削除処理
+  const handleDelete = async () => {
+    if (!selectedEvaluation) {
+      alert('削除する評価が見つかりません。');
+      return;
+    }
+
+    // 削除確認ダイアログ
+    const confirmMessage = `この月報を削除しますか？\n\n評価期間: ${new Date(selectedEvaluation.startDate).toLocaleDateString('ja-JP')} 〜 ${new Date(selectedEvaluation.endDate).toLocaleDateString('ja-JP')}\n\nこの操作は取り消せません。`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const response = await apiCall(`/api/monthly-evaluations/${selectedEvaluation.id}`, {
+        method: 'DELETE'
+      });
+
+      if (response.success) {
+        alert('月報を削除しました。');
+        
+        // データを再取得
+        const refreshResponse = await apiCall(`/api/monthly-evaluations/user/${userId}`, {
+          method: 'GET'
+        });
+        
+        if (refreshResponse.success && refreshResponse.data) {
+          const convertedEvaluations = refreshResponse.data.map(convertBackendToFrontend);
+          setEvaluations(convertedEvaluations);
+          
+          // 削除後の評価を選択
+          if (convertedEvaluations.length > 0) {
+            // 削除された評価のインデックスを取得
+            const deletedIndex = evaluations.findIndex(e => e.id === selectedEvaluation.id);
+            
+            // 削除された評価が最後のものだった場合、前の評価を選択
+            if (deletedIndex >= convertedEvaluations.length) {
+              setSelectedEvaluationId(convertedEvaluations[convertedEvaluations.length - 1].id);
+            } else {
+              // それ以外の場合は、同じインデックスの評価を選択（存在する場合）
+              setSelectedEvaluationId(convertedEvaluations[deletedIndex]?.id || convertedEvaluations[0].id);
+            }
+          } else {
+            // 評価がなくなった場合
+            setSelectedEvaluationId(null);
+          }
+        } else {
+          // 再取得に失敗した場合でも、削除は成功しているのでリストをクリア
+          setEvaluations([]);
+          setSelectedEvaluationId(null);
+        }
+      } else {
+        alert('削除に失敗しました: ' + (response.message || 'エラーが発生しました'));
+      }
+    } catch (error) {
+      console.error('削除エラー:', error);
+      alert('削除中にエラーが発生しました: ' + error.message);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -686,12 +768,21 @@ const MonthlyEvaluationHistoryPage = () => {
               </div>
               <div className="flex gap-2">
                 {!isEditing && selectedEvaluation && (
-                  <button 
-                    onClick={handleEdit}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                  >
-                    ✏️ 編集
-                  </button>
+                  <>
+                    <button 
+                      onClick={handleEdit}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                    >
+                      ✏️ 編集
+                    </button>
+                    <button 
+                      onClick={handleDelete}
+                      disabled={isDeleting}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isDeleting ? '⏳ 削除中...' : '🗑️ 削除'}
+                    </button>
+                  </>
                 )}
                 <button 
                   onClick={handleDownloadExcel}
@@ -707,43 +798,81 @@ const MonthlyEvaluationHistoryPage = () => {
           {/* 評価期間ナビゲーション */}
           <div className="bg-gray-50 rounded-xl p-4">
             <div className="flex items-center justify-between gap-4">
-              <button
-                onClick={() => {
-                  const currentIndex = evaluations.findIndex(e => e.id === selectedEvaluationId);
-                  if (currentIndex < evaluations.length - 1) {
-                    setSelectedEvaluationId(evaluations[currentIndex + 1].id);
-                  }
-                }}
-                disabled={evaluations.findIndex(e => e.id === selectedEvaluationId) >= evaluations.length - 1}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-              >
-                ← 前回記録
-              </button>
+              {!isEditing && (
+                <button
+                  onClick={() => {
+                    const currentIndex = evaluations.findIndex(e => e.id === selectedEvaluationId);
+                    if (currentIndex < evaluations.length - 1) {
+                      setSelectedEvaluationId(evaluations[currentIndex + 1].id);
+                    }
+                  }}
+                  disabled={evaluations.findIndex(e => e.id === selectedEvaluationId) >= evaluations.length - 1}
+                  className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                >
+                  ← 前回記録
+                </button>
+              )}
               
               <div className="flex-1 text-center">
-                <div className="font-bold text-lg text-gray-800">
-                  {selectedEvaluation && `${new Date(selectedEvaluation.startDate).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })} 〜 ${new Date(selectedEvaluation.endDate).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}`}
-                </div>
-                <div className="text-sm text-gray-600 mt-1">
-                  評価作成日: {selectedEvaluation && new Date(selectedEvaluation.createdDate).toLocaleDateString('ja-JP')}
-                </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {evaluations.length > 0 && `${evaluations.findIndex(e => e.id === selectedEvaluationId) + 1} / ${evaluations.length} 件`}
-                </div>
+                {isEditing && editingEvaluation ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-center gap-4">
+                      <div className="flex flex-col items-center">
+                        <label className="text-sm text-gray-600 mb-1">開始日</label>
+                        <input
+                          type="date"
+                          value={editingEvaluation.startDate || ''}
+                          onChange={(e) => updateEditingField('startDate', e.target.value)}
+                          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-semibold text-gray-800"
+                        />
+                      </div>
+                      <span className="text-lg font-bold text-gray-600 mt-6">〜</span>
+                      <div className="flex flex-col items-center">
+                        <label className="text-sm text-gray-600 mb-1">終了日</label>
+                        <input
+                          type="date"
+                          value={editingEvaluation.endDate || ''}
+                          onChange={(e) => updateEditingField('endDate', e.target.value)}
+                          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-semibold text-gray-800"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-600 mt-2">
+                      評価作成日: {selectedEvaluation && new Date(selectedEvaluation.createdDate).toLocaleDateString('ja-JP')}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {evaluations.length > 0 && `${evaluations.findIndex(e => e.id === selectedEvaluationId) + 1} / ${evaluations.length} 件`}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="font-bold text-lg text-gray-800">
+                      {selectedEvaluation && `${new Date(selectedEvaluation.startDate).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })} 〜 ${new Date(selectedEvaluation.endDate).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}`}
+                    </div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      評価作成日: {selectedEvaluation && new Date(selectedEvaluation.createdDate).toLocaleDateString('ja-JP')}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {evaluations.length > 0 && `${evaluations.findIndex(e => e.id === selectedEvaluationId) + 1} / ${evaluations.length} 件`}
+                    </div>
+                  </>
+                )}
               </div>
               
-              <button
-                onClick={() => {
-                  const currentIndex = evaluations.findIndex(e => e.id === selectedEvaluationId);
-                  if (currentIndex > 0) {
-                    setSelectedEvaluationId(evaluations[currentIndex - 1].id);
-                  }
-                }}
-                disabled={evaluations.findIndex(e => e.id === selectedEvaluationId) <= 0}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-              >
-                次回記録 →
-              </button>
+              {!isEditing && (
+                <button
+                  onClick={() => {
+                    const currentIndex = evaluations.findIndex(e => e.id === selectedEvaluationId);
+                    if (currentIndex > 0) {
+                      setSelectedEvaluationId(evaluations[currentIndex - 1].id);
+                    }
+                  }}
+                  disabled={evaluations.findIndex(e => e.id === selectedEvaluationId) <= 0}
+                  className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                >
+                  次回記録 →
+                </button>
+              )}
             </div>
           </div>
         </div>

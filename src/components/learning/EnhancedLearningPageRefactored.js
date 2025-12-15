@@ -319,7 +319,12 @@ const EnhancedLearningPageRefactored = () => {
           return;
         }
         
-        setLessonData(data.data);
+        // レッスンデータを設定（videosは空配列に設定 - セクションデータで設定される）
+        const lessonDataWithoutVideos = {
+          ...data.data,
+          videos: [] // セクションデータで動画を設定するため、ここでは空配列に設定
+        };
+        setLessonData(lessonDataWithoutVideos);
         setTextLoading(false);
         
         // レッスンデータにtextContentが含まれている場合は、textContentステートに設定
@@ -346,8 +351,13 @@ const EnhancedLearningPageRefactored = () => {
         await fetchUploadedFiles(targetLessonId);
         
         // レッスンデータ取得成功後、セクションデータを取得
-        console.log('レッスンデータ取得成功、セクションデータを取得開始:', data.data);
-        await fetchSectionData(targetLessonId, 0, data.data);
+        // currentLessonDataにはvideosを含めない（セクションデータで設定される）
+        const lessonDataForSection = {
+          ...data.data,
+          videos: [] // セクションデータで動画を設定するため、ここでは空配列に設定
+        };
+        console.log('レッスンデータ取得成功、セクションデータを取得開始:', lessonDataForSection);
+        await fetchSectionData(targetLessonId, 0, lessonDataForSection);
         
         console.log('レッスンデータ取得成功:', data.data);
       } else {
@@ -523,15 +533,74 @@ const EnhancedLearningPageRefactored = () => {
      
      setCurrentSection(sectionIndex);
      
-     // 修正: レッスンのテキストファイル（lessonData.s3_key）を基準にする
-     // セクション変更時は、そのテキストファイルに紐づいた動画のみを更新
-     // text_file_keyでlessonData.s3_keyを上書きしない
      console.log('セクション変更:', {
        sectionIndex,
        newSection,
        lessonS3Key: lessonData?.s3_key,
        sectionTextFileKey: newSection?.text_file_key
      });
+     
+     // セクションのtext_file_keyが存在し、現在のlessonData.s3_keyと異なる場合はテキストファイルを更新
+     const sectionTextFileKey = newSection?.text_file_key;
+     const currentS3Key = lessonData?.s3_key;
+     
+     if (sectionTextFileKey && sectionTextFileKey !== currentS3Key) {
+       console.log('セクションのテキストファイルを更新します:', {
+         sectionTextFileKey,
+         currentS3Key,
+         newSection
+       });
+       
+       // バックエンドから完全パスとfile_typeが返されているので、それを使用
+       const finalS3Key = sectionTextFileKey; // バックエンドで既に完全パスに変換されている
+       
+       // ファイルタイプを判定（newSection.file_typeが存在する場合はそれを使用）
+       let fileType = newSection?.file_type;
+       if (!fileType) {
+         // 拡張子から判定（フォールバック）
+         const lowerKey = finalS3Key.toLowerCase();
+         if (lowerKey.endsWith('.md')) {
+           fileType = 'text/markdown';
+         } else if (lowerKey.endsWith('.txt')) {
+           fileType = 'text/plain';
+         } else if (lowerKey.endsWith('.pdf')) {
+           fileType = 'application/pdf';
+         } else if (lowerKey.endsWith('.rtf')) {
+           fileType = 'application/rtf';
+         } else {
+           fileType = 'text/plain'; // デフォルト
+         }
+       }
+       
+       console.log('ファイルタイプ判定:', {
+         sectionFileType: newSection?.file_type,
+         finalFileType: fileType,
+         s3Key: finalS3Key,
+         source: newSection?.source
+       });
+       
+       // lessonDataを更新（s3_keyとfile_typeを更新）
+       // TextSectionコンポーネントがs3_keyの変更を検知して、新しいテキストファイルを読み込む
+       setLessonData(prev => {
+         if (!prev) {
+           console.warn('lessonDataがnullのため、テキストファイルを更新できません');
+           return prev;
+         }
+         return {
+           ...prev,
+           s3_key: finalS3Key,
+           file_type: fileType,
+           textContent: '' // テキストコンテンツをリセット（新しいファイルを読み込むため）
+         };
+       });
+       
+       // テキストコンテンツをリセット
+       setTextContent('');
+       setPdfTextContent('');
+       setTextLoading(true);
+       setPdfTextExtracted(false);
+       setPdfProcessingStatus('idle');
+     }
      
      // 動画がある場合のみ更新
      if (newSection.video_id && newSection.youtube_url) {
@@ -584,29 +653,89 @@ const EnhancedLearningPageRefactored = () => {
         const data = await response.json();
                if (data.success) {
          console.log('セクションデータ取得成功:', data.data);
-         console.log('セクションデータ - text_file_key詳細:', {
-           text_file_key: data.data[0]?.text_file_key,
-           text_file_key_type: typeof data.data[0]?.text_file_key,
-           text_file_key_length: data.data[0]?.text_file_key?.length,
-           text_file_key_starts_with_lessons: data.data[0]?.text_file_key?.startsWith('lessons/'),
-           first_section: data.data[0]
+         
+         // 重複を除去（ファイル名のみで比較、大文字小文字を区別せず）
+         // 単独登録（lesson_text_video_links）を優先し、複数登録（lesson_text_files）で重複する場合は除外
+         // text_file_keyはファイル名のみ、s3_keyは完全パスの可能性があるため、ファイル名のみを抽出
+         const extractFileName = (key) => {
+           if (!key) return '';
+           // スラッシュで分割して最後の部分（ファイル名）を取得
+           const parts = key.split('/');
+           return parts[parts.length - 1].trim().toLowerCase();
+         };
+         
+         const seenTextFileKeys = new Set();
+         const uniqueSections = data.data.filter(section => {
+           if (!section.text_file_key) return true; // text_file_keyがない場合は含める
+           const fileName = extractFileName(section.text_file_key);
+           if (seenTextFileKeys.has(fileName)) {
+             // 既に存在する場合、単独登録を優先（sourceがlesson_text_video_linksの場合は既に追加されている）
+             console.warn('重複セクションを除外:', {
+               text_file_key: section.text_file_key,
+               extractedFileName: fileName,
+               video_title: section.video_title,
+               section_title: section.section_title,
+               source: section.source
+             });
+             return false;
+           }
+           seenTextFileKeys.add(fileName);
+           return true;
          });
-         setSectionData(data.data);
+         
+         // ソート: まずソース（単独登録を先）、次にlink_order、最後にcreated_at
+         const sortedSections = uniqueSections.sort((a, b) => {
+           // 1. ソースでソート（lesson_text_video_linksを先、lesson_text_filesを後）
+           const sourceOrder = { 'lesson_text_video_links': 0, 'lesson_text_files': 1 };
+           const sourceA = sourceOrder[a.source] ?? 1;
+           const sourceB = sourceOrder[b.source] ?? 1;
+           
+           if (sourceA !== sourceB) {
+             return sourceA - sourceB;
+           }
+           
+           // 2. link_orderでソート（link_orderがNULLの場合は最後に配置）
+           const orderA = a.link_order != null ? Number(a.link_order) : 999999;
+           const orderB = b.link_order != null ? Number(b.link_order) : 999999;
+           
+           if (orderA !== orderB) {
+             return orderA - orderB;
+           }
+           
+           // 3. link_orderが同じ場合はcreated_atでソート
+           const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
+           const dateB = b.created_at ? new Date(b.created_at) : new Date(0);
+           return dateA - dateB;
+         });
+         
+         console.log('セクションデータ処理完了:', {
+           元の数: data.data.length,
+           重複除去後: uniqueSections.length,
+           ソート後: sortedSections.length,
+           ソート済みセクション: sortedSections.map(s => ({
+             link_order: s.link_order,
+             title: s.video_title || s.section_title,
+             text_file_key: s.text_file_key
+           }))
+         });
+         
+         setSectionData(sortedSections);
           
          // セクションデータが空の場合（動画がない場合）でも処理を続行
-         if (data.data.length > 0) {
+         if (sortedSections.length > 0) {
            setCurrentSection(0);
            
-           // 修正: レッスンのテキストファイル（lessonData.s3_key）を基準にする
-           // セクションデータは、そのテキストファイルに紐づいた動画のリストとして扱う
-           // text_file_keyでlessonData.s3_keyを上書きしない
-           const firstSection = data.data[0];
+           // 修正: ソート済みの最初のセクションを使用
+           const firstSection = sortedSections[0];
            const lessonS3Key = currentLessonData?.s3_key || lessonData?.s3_key;
+           const sectionTextFileKey = firstSection?.text_file_key;
+           
            console.log('セクションデータ取得成功:', {
              sectionCount: data.data.length,
              firstSection: firstSection,
              lessonS3Key: lessonS3Key,
-             sectionTextFileKey: firstSection?.text_file_key,
+             sectionTextFileKey: sectionTextFileKey,
+             sectionFileType: firstSection?.file_type,
              currentLessonData: currentLessonData,
              hasVideoId: !!firstSection?.video_id,
              hasYoutubeUrl: !!firstSection?.youtube_url,
@@ -614,7 +743,63 @@ const EnhancedLearningPageRefactored = () => {
              youtubeUrl: firstSection?.youtube_url
            });
            
-           // 動画がある場合のみ更新
+           // テキストファイルの更新（text_file_keyとfile_typeを更新）
+           if (sectionTextFileKey && sectionTextFileKey !== lessonS3Key) {
+             console.log('最初のセクションのテキストファイルを更新します:', {
+               sectionTextFileKey,
+               lessonS3Key,
+               sectionFileType: firstSection?.file_type
+             });
+             
+             // ファイルタイプを判定（firstSection.file_typeが存在する場合はそれを使用）
+             let fileType = firstSection?.file_type;
+             if (!fileType) {
+               // 拡張子から判定（フォールバック）
+               const lowerKey = sectionTextFileKey.toLowerCase();
+               if (lowerKey.endsWith('.md')) {
+                 fileType = 'text/markdown';
+               } else if (lowerKey.endsWith('.txt')) {
+                 fileType = 'text/plain';
+               } else if (lowerKey.endsWith('.pdf')) {
+                 fileType = 'application/pdf';
+               } else if (lowerKey.endsWith('.rtf')) {
+                 fileType = 'application/rtf';
+               } else {
+                 fileType = 'text/plain'; // デフォルト
+               }
+             }
+             
+             console.log('最初のセクションのファイルタイプ判定:', {
+               sectionFileType: firstSection?.file_type,
+               finalFileType: fileType,
+               s3Key: sectionTextFileKey,
+               source: firstSection?.source
+             });
+             
+             // lessonDataを更新（s3_keyとfile_typeを更新）
+             setLessonData(prev => {
+               const baseData = currentLessonData || prev;
+               if (!baseData) {
+                 console.warn('lessonDataがnullのため、テキストファイルを更新できません');
+                 return prev;
+               }
+               return {
+                 ...baseData,
+                 s3_key: sectionTextFileKey,
+                 file_type: fileType,
+                 textContent: '' // テキストコンテンツをリセット
+               };
+             });
+             
+             // テキストコンテンツをリセット
+             setTextContent('');
+             setPdfTextContent('');
+             setTextLoading(true);
+             setPdfTextExtracted(false);
+             setPdfProcessingStatus('idle');
+           }
+           
+           // 動画がある場合のみ更新（既存の動画をクリアしてから新しい動画を設定）
            if (firstSection.video_id && firstSection.youtube_url) {
              const sectionVideo = {
                id: firstSection.video_id,
@@ -637,9 +822,10 @@ const EnhancedLearningPageRefactored = () => {
                  console.warn('lessonDataがnullのため、動画を設定できません');
                  return prev;
                }
+               // 既存の動画をクリアして、最初のセクションの動画のみを設定
                const updatedData = {
                  ...baseData,
-                 videos: [sectionVideo]
+                 videos: [sectionVideo] // 常に1つの動画のみ
                };
                console.log('🎬 動画設定後のlessonData:', {
                  videos: updatedData.videos,
@@ -978,14 +1164,18 @@ const EnhancedLearningPageRefactored = () => {
     return textContent || pdfTextContent || lessonData?.description || 'テキスト内容が利用できません';
   };
 
-  // PDFテキスト更新ハンドラー
+  // PDFテキスト更新ハンドラー（テキストファイルも含む）
   const handlePdfTextUpdate = (newPdfText) => {
     console.log('handlePdfTextUpdate 呼び出し:', { 
       textLength: newPdfText?.length,
       isError: newPdfText?.startsWith('エラー:'),
       isCancel: newPdfText?.includes('キャンセル'),
-      textPreview: newPdfText?.substring(0, 100)
+      textPreview: newPdfText?.substring(0, 100),
+      fileType: lessonData?.file_type
     });
+    
+    // textLoadingをfalseに設定（読み込み完了）
+    setTextLoading(false);
     
     if (newPdfText && newPdfText.length > 0) {
       // エラーメッセージの判定をより厳密にする
@@ -993,24 +1183,60 @@ const EnhancedLearningPageRefactored = () => {
       const isError = newPdfText.startsWith('エラー:') || 
                      newPdfText.startsWith('PDFファイルが見つかりません') ||
                      newPdfText.startsWith('テキスト抽出に失敗しました') ||
+                     newPdfText.startsWith('テキストファイルの読み込みに失敗しました') ||
                      (newPdfText.includes('失敗') && newPdfText.length < 200) || // 短いエラーメッセージの場合
                      (newPdfText.includes('タイムアウト') && newPdfText.length < 200); // 短いエラーメッセージの場合
       
       if (isError) {
         setPdfProcessingStatus('error');
-        console.log('PDF処理でエラーが発生しました:', newPdfText);
+        console.log('テキスト処理でエラーが発生しました:', newPdfText);
       } else if (newPdfText.includes('キャンセル')) {
         setPdfProcessingStatus('idle');
-        console.log('PDF処理がキャンセルされました');
+        console.log('テキスト処理がキャンセルされました');
       } else {
         // 正常にテキストが抽出された場合（セッションストレージから取得した場合も含む）
-        setPdfTextExtracted(true);
-        setPdfProcessingStatus('completed');
-        console.log('PDFテキスト抽出完了:', { textLength: newPdfText.length });
+        // PDF判定関数（TextSectionと同じロジック）
+        const isPdfFile = (fileType, s3Key) => {
+          if (!fileType && !s3Key) return false;
+          const lowerFileType = fileType?.toLowerCase() || '';
+          const lowerS3Key = s3Key?.toLowerCase() || '';
+          
+          // MD、TXT、RTFファイルの場合はPDFではない
+          if (lowerFileType === 'text/markdown' || lowerFileType === 'md' || 
+              lowerFileType === 'text/plain' || lowerFileType === 'txt' ||
+              lowerFileType === 'application/rtf' || lowerFileType === 'rtf') {
+            return false;
+          }
+          
+          // PDF判定
+          return lowerFileType === 'pdf' || 
+                 lowerFileType === 'application/pdf' ||
+                 lowerS3Key.endsWith('.pdf');
+        };
+        
+        const isPdf = isPdfFile(lessonData?.file_type, lessonData?.s3_key);
+        
+        if (isPdf) {
+          // PDFファイルの場合
+          setPdfTextExtracted(true);
+          setPdfProcessingStatus('completed');
+          setPdfTextContent(newPdfText);
+          console.log('PDFテキスト抽出完了:', { textLength: newPdfText.length });
+        } else {
+          // テキストファイル（MD、TXT、RTF）の場合
+          // pdfProcessingStatusを'completed'に設定して、AIアシスタントを有効化
+          setPdfProcessingStatus('completed');
+          setTextContent(newPdfText);
+          console.log('テキストファイル読み込み完了:', { 
+            textLength: newPdfText.length,
+            fileType: lessonData?.file_type,
+            s3Key: lessonData?.s3_key
+          });
+        }
       }
     } else {
       // 空のテキストの場合はエラーとして扱わない（まだ処理中の可能性がある）
-      console.log('PDFテキストが空です（処理中または未処理）');
+      console.log('テキストが空です（処理中または未処理）');
       // エラー状態に設定しない（処理中または未処理の可能性があるため）
     }
   };
@@ -1204,14 +1430,38 @@ const EnhancedLearningPageRefactored = () => {
         currentLessonData={currentLessonData}
         currentSectionText={getCurrentSectionText()}
         isAILoading={isAILoading}
-        isAIEnabled={
-          pdfProcessingStatus === 'completed' || 
-          (lessonData?.file_type === 'pdf' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type)) ||
-          (lessonData?.file_type === 'txt' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type)) ||
-          (lessonData?.file_type === 'md' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type)) ||
-          (lessonData?.file_type === 'application/rtf' && SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type)) ||
-          (lessonData?.file_type !== 'pdf' && lessonData?.textContent)
-        }
+        isAIEnabled={(() => {
+          // PDF判定関数（TextSectionと同じロジック）
+          const isPdfFile = (fileType, s3Key) => {
+            if (!fileType && !s3Key) return false;
+            const lowerFileType = fileType?.toLowerCase() || '';
+            const lowerS3Key = s3Key?.toLowerCase() || '';
+            
+            // MD、TXT、RTFファイルの場合はPDFではない
+            if (lowerFileType === 'text/markdown' || lowerFileType === 'md' || 
+                lowerFileType === 'text/plain' || lowerFileType === 'txt' ||
+                lowerFileType === 'application/rtf' || lowerFileType === 'rtf') {
+              return false;
+            }
+            
+            // PDF判定
+            return lowerFileType === 'pdf' || 
+                   lowerFileType === 'application/pdf' ||
+                   lowerS3Key.endsWith('.pdf');
+          };
+          
+          const isPdf = isPdfFile(lessonData?.file_type, lessonData?.s3_key);
+          
+          // PDFファイルの場合
+          if (isPdf) {
+            return pdfProcessingStatus === 'completed' || 
+                   SessionStorageManager.hasContext(lessonData?.id, lessonData?.s3_key, lessonData?.file_type);
+          }
+          
+          // テキストファイル（MD、TXT、RTF）の場合
+          return SessionStorageManager.hasContext(lessonData?.id, lessonData?.s3_key, lessonData?.file_type) ||
+                 !!textContent;
+        })()}
       />
     ) : null,
     assignment: (assignmentStatus.hasAssignment && widgetVisibility.assignment) ? (

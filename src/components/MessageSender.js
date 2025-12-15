@@ -36,6 +36,12 @@ const MessageSender = () => {
             const currentUser = getCurrentUser();
             const currentSatelliteId = getCurrentUserSatelliteId(currentUser);
             
+            console.log('メッセージ送信 - デバッグ情報:', {
+                currentUser,
+                currentSatelliteId,
+                selectedStudent: selectedStudent.id
+            });
+            
             const requestData = {
                 receiver_id: selectedStudent.id,
                 message: sanitizeInput(message.trim())
@@ -44,7 +50,12 @@ const MessageSender = () => {
             // 現在選択中の拠点IDがある場合は追加
             if (currentSatelliteId) {
                 requestData.satellite_id = currentSatelliteId;
+                console.log('メッセージ送信 - satellite_idを追加:', currentSatelliteId);
+            } else {
+                console.warn('メッセージ送信 - satellite_idが取得できませんでした');
             }
+            
+            console.log('メッセージ送信 - リクエストデータ:', requestData);
             
             const response = await apiPost('/api/messages/send', requestData);
 

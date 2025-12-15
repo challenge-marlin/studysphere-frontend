@@ -43,7 +43,68 @@ const LearningHeader = ({
           const data = await response.json();
           if (data.success && data.data) {
             console.log('セクションデータ取得成功:', data.data);
-            setLocalSectionData(data.data);
+            
+            // 重複を除去（ファイル名のみで比較、大文字小文字を区別せず）
+            // 単独登録（lesson_text_video_links）を優先し、複数登録（lesson_text_files）で重複する場合は除外
+            // text_file_keyはファイル名のみ、s3_keyは完全パスの可能性があるため、ファイル名のみを抽出
+            const extractFileName = (key) => {
+              if (!key) return '';
+              // スラッシュで分割して最後の部分（ファイル名）を取得
+              const parts = key.split('/');
+              return parts[parts.length - 1].trim().toLowerCase();
+            };
+            
+            const seenTextFileKeys = new Set();
+            const uniqueSections = data.data.filter(section => {
+              if (!section.text_file_key) return true; // text_file_keyがない場合は含める
+              const fileName = extractFileName(section.text_file_key);
+              if (seenTextFileKeys.has(fileName)) {
+                // 既に存在する場合、単独登録を優先（sourceがlesson_text_video_linksの場合は既に追加されている）
+                console.warn('重複セクションを除外:', {
+                  text_file_key: section.text_file_key,
+                  extractedFileName: fileName,
+                  video_title: section.video_title,
+                  section_title: section.section_title,
+                  source: section.source
+                });
+                return false;
+              }
+              seenTextFileKeys.add(fileName);
+              return true;
+            });
+            
+            // ソート: まずソース（単独登録を先）、次にlink_order、最後にcreated_at
+            const sortedSections = uniqueSections.sort((a, b) => {
+              // 1. ソースでソート（lesson_text_video_linksを先、lesson_text_filesを後）
+              const sourceOrder = { 'lesson_text_video_links': 0, 'lesson_text_files': 1 };
+              const sourceA = sourceOrder[a.source] ?? 1;
+              const sourceB = sourceOrder[b.source] ?? 1;
+              
+              if (sourceA !== sourceB) {
+                return sourceA - sourceB;
+              }
+              
+              // 2. link_orderでソート（link_orderがNULLの場合は最後に配置）
+              const orderA = a.link_order != null ? Number(a.link_order) : 999999;
+              const orderB = b.link_order != null ? Number(b.link_order) : 999999;
+              
+              if (orderA !== orderB) {
+                return orderA - orderB;
+              }
+              
+              // 3. link_orderが同じ場合はcreated_atでソート
+              const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
+              const dateB = b.created_at ? new Date(b.created_at) : new Date(0);
+              return dateA - dateB;
+            });
+            
+            console.log('LearningHeader - セクションデータ処理完了:', {
+              元の数: data.data.length,
+              重複除去後: uniqueSections.length,
+              ソート後: sortedSections.length
+            });
+            
+            setLocalSectionData(sortedSections);
           } else {
             console.warn('セクションデータの取得に失敗:', data.message);
             setSectionError(data.message || 'セクションデータの取得に失敗しました');
@@ -64,7 +125,60 @@ const LearningHeader = ({
   }, [currentLesson]);
 
   // 表示用のセクションデータを決定（propsから渡されたものがあればそれを使用、なければローカルで取得したもの）
-  const displaySectionData = sectionData && sectionData.length > 0 ? sectionData : localSectionData;
+  // 重複を除去し、ソート（単独登録を先、複数登録を後）
+  const getDisplaySectionData = () => {
+    const rawData = sectionData && sectionData.length > 0 ? sectionData : localSectionData;
+    if (!rawData || rawData.length === 0) return [];
+    
+    // 重複を除去（ファイル名のみで比較、大文字小文字を区別せず）
+    // 単独登録（lesson_text_video_links）を優先し、複数登録（lesson_text_files）で重複する場合は除外
+    // text_file_keyはファイル名のみ、s3_keyは完全パスの可能性があるため、ファイル名のみを抽出
+    const extractFileName = (key) => {
+      if (!key) return '';
+      // スラッシュで分割して最後の部分（ファイル名）を取得
+      const parts = key.split('/');
+      return parts[parts.length - 1].trim().toLowerCase();
+    };
+    
+    const seenTextFileKeys = new Set();
+    const uniqueSections = rawData.filter(section => {
+      if (!section.text_file_key) return true; // text_file_keyがない場合は含める
+      const fileName = extractFileName(section.text_file_key);
+      if (seenTextFileKeys.has(fileName)) {
+        // 既に存在する場合、単独登録を優先（sourceがlesson_text_video_linksの場合は既に追加されている）
+        return false;
+      }
+      seenTextFileKeys.add(fileName);
+      return true;
+    });
+    
+    // ソート: まずソース（単独登録を先）、次にlink_order、最後にcreated_at
+    return uniqueSections.sort((a, b) => {
+      // 1. ソースでソート（lesson_text_video_linksを先、lesson_text_filesを後）
+      const sourceOrder = { 'lesson_text_video_links': 0, 'lesson_text_files': 1 };
+      const sourceA = sourceOrder[a.source] ?? 1;
+      const sourceB = sourceOrder[b.source] ?? 1;
+      
+      if (sourceA !== sourceB) {
+        return sourceA - sourceB;
+      }
+      
+      // 2. link_orderでソート（link_orderがNULLの場合は最後に配置）
+      const orderA = a.link_order != null ? Number(a.link_order) : 999999;
+      const orderB = b.link_order != null ? Number(b.link_order) : 999999;
+      
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      
+      // 3. link_orderが同じ場合はcreated_atでソート
+      const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
+      const dateB = b.created_at ? new Date(b.created_at) : new Date(0);
+      return dateA - dateB;
+    });
+  };
+  
+  const displaySectionData = getDisplaySectionData();
 
   return (
     <div className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg">

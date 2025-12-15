@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import MultipleChoiceTest from '../components/learning/MultipleChoiceTest';
 import { SessionStorageManager } from '../utils/sessionStorage';
@@ -9,6 +9,7 @@ const SectionTestPage = () => {
   const [searchParams] = useSearchParams();
   const [currentLesson, setCurrentLesson] = useState(1);
   const [currentSection, setCurrentSection] = useState(0);
+  const previousSectionRef = useRef(null); // 前回のセクション番号を記録
   
   // 初期化時のURLパラメータ確認（デバッグ時のみ）
   console.log('SectionTestPage初期化:', {
@@ -81,12 +82,43 @@ const SectionTestPage = () => {
       return;
     }
     
-    // 既にテストデータが存在する場合は再生成しない
-    if (testData) {
-      console.log('既にテストデータが存在するため、再生成をスキップします');
-      setLoading(false);
-      return;
+    // セクションが変更された場合は、テストデータをクリアして再生成する
+    const testCacheKey = `test_data_${currentLesson}_${currentSection}`;
+    const cachedTestData = sessionStorage.getItem(testCacheKey);
+    
+    // セクションが変更された場合は、テストデータをクリア
+    const sectionChanged = previousSectionRef.current !== null && previousSectionRef.current !== currentSection;
+    if (sectionChanged) {
+      console.log('セクションが変更されたため、テストデータをクリアして再生成します:', {
+        previousSection: previousSectionRef.current,
+        currentSection: currentSection
+      });
+      setTestData(null);
     }
+    
+    // キャッシュされたテストデータが存在し、セクションが変更されていない場合はそれを使用
+    if (!sectionChanged && cachedTestData) {
+      try {
+        const parsedCachedData = JSON.parse(cachedTestData);
+        if (parsedCachedData.sectionIndex === currentSection) {
+          console.log('キャッシュされたテスト問題を使用:', {
+            key: testCacheKey,
+            sectionIndex: parsedCachedData.sectionIndex,
+            currentSection: currentSection
+          });
+          setTestData(parsedCachedData);
+          setLoading(false);
+          previousSectionRef.current = currentSection; // 前回のセクション番号を更新
+          return;
+        }
+      } catch (e) {
+        // パースエラーの場合は再生成する
+        console.warn('キャッシュデータのパースに失敗しました。再生成します:', e);
+      }
+    }
+    
+    // 前回のセクション番号を更新
+    previousSectionRef.current = currentSection;
     
     const fetchData = async () => {
       try {
@@ -126,20 +158,28 @@ const SectionTestPage = () => {
           }
         });
 
+        let fetchedSectionData = null;
         if (sectionResponse.ok) {
           const sectionResult = await sectionResponse.json();
-          if (sectionResult.success) {
-            setSectionData(sectionResult.data);
+          if (sectionResult.success && sectionResult.data) {
+            fetchedSectionData = sectionResult.data;
+            setSectionData(fetchedSectionData);
             
             // セクションが指定されていない場合は最初のセクションを使用
-            if (sectionResult.data.length > 0 && currentSection >= sectionResult.data.length) {
+            if (fetchedSectionData.length > 0 && currentSection >= fetchedSectionData.length) {
               setCurrentSection(0);
             }
           }
         }
         
         // セッションストレージから直接テストデータを生成
-        await generateTestDataFromSessionStorage();
+        // fetchedSectionDataを直接渡すことで、state更新を待たずにテスト生成を実行
+        if (fetchedSectionData) {
+          await generateTestDataFromSessionStorage(false, fetchedSectionData);
+        } else {
+          console.warn('セクションデータが取得できませんでした。stateのsectionDataを使用します。');
+          await generateTestDataFromSessionStorage(false, null);
+        }
         
       } catch (error) {
         console.error('データ取得エラー:', error);
@@ -154,12 +194,13 @@ const SectionTestPage = () => {
   }, [currentLesson, currentSection]);
 
   // セッションストレージから直接コンテキストを取得してテスト生成
-  const generateTestDataFromSessionStorage = async (forceRefresh = false) => {
+  const generateTestDataFromSessionStorage = async (forceRefresh = false, sectionDataOverride = null) => {
     try {
       console.log('セッションストレージから直接テスト生成開始:', {
         currentLesson,
         currentSection,
-        forceRefresh
+        forceRefresh,
+        sectionData: sectionData?.[currentSection]
       });
       
       // テスト問題のキャッシュキーを生成
@@ -186,192 +227,202 @@ const SectionTestPage = () => {
         sessionStorage.removeItem(testCacheKey);
       }
       
-      // セッションストレージの全コンテキストキーを確認（PDF/MD/TXTなどを含む）
-      const contextPrefixes = ['pdf_context_', 'md_context_', 'txt_context_', 'context_'];
-      const allKeys = Object.keys(sessionStorage).filter(key =>
-        contextPrefixes.some(prefix => key.startsWith(prefix))
-      );
-      console.log('利用可能なコンテキストキー:', allKeys);
+      // セクションデータを取得（引数で渡された場合はそれを使用、なければstateを使用）
+      const effectiveSectionData = sectionDataOverride || sectionData;
       
-      // 現在のレッスンに対応するコンテキストを探す（改善されたマッチング）
-      let currentLessonKey = null;
-      
-      // 1. 完全一致を試す（例: pdf_context_4_4_xxx.pdf）
-      currentLessonKey = allKeys.find(key => key.includes(`_${currentLesson}_${currentLesson}_`));
-      if (currentLessonKey) {
-        console.log(`完全一致でコンテキスト発見: ${currentLessonKey}`);
-      }
-      
-      // 2. 部分一致を試す（例: pdf_context_1_xxx.pdf）
-      if (!currentLessonKey) {
-        currentLessonKey = allKeys.find(key => key.includes(`_${currentLesson}_`));
-        if (currentLessonKey) {
-          console.log(`部分一致でコンテキスト発見: ${currentLessonKey}`);
-        }
-      }
-      
-      // 3. セッションストレージのメタデータから正確なレッスンIDを確認
-      if (!currentLessonKey) {
-        console.log('メタデータからレッスンIDを確認中...');
-        for (const key of allKeys) {
-          try {
-            const storedData = sessionStorage.getItem(key);
-            if (storedData) {
-              const contextData = JSON.parse(storedData);
-              console.log(`キー ${key} のメタデータ:`, {
-                lessonId: contextData.metadata?.lessonId,
-                lessonTitle: contextData.metadata?.lessonTitle,
-                fileType: contextData.metadata?.fileType
-              });
-              
-              if (contextData.metadata && contextData.metadata.lessonId === currentLesson) {
-                currentLessonKey = key;
-                console.log(`メタデータから正確なレッスンIDでマッチ: ${key} (lessonId: ${contextData.metadata.lessonId})`);
-                break;
-              }
-            }
-          } catch (error) {
-            console.warn(`キー ${key} のメタデータ解析に失敗:`, error);
-          }
-        }
-      }
-      
-      // 4. レッスン番号の部分文字列マッチを試す（最後の手段）
-      if (!currentLessonKey) {
-        console.log('キーの部分文字列からレッスン番号を抽出中...');
-        currentLessonKey = allKeys.find(key => {
-          // キーからレッスン番号を抽出して比較
-          const keyParts = key.split('_');
-          if (keyParts.length >= 3) {
-            const keyLessonId = parseInt(keyParts[2]);
-            console.log(`キー ${key} から抽出したレッスンID: ${keyLessonId}, 検索対象: ${currentLesson}`);
-            return keyLessonId === currentLesson;
-          }
-          return false;
+      // 現在のセクションのtext_file_keyを取得
+      // sectionDataはソートされているため、currentSectionはインデックスとして使用可能
+      // ただし、セクションデータが存在しない場合はエラーを出す
+      if (!effectiveSectionData || effectiveSectionData.length === 0) {
+        console.error('セクションデータが存在しません', {
+          sectionDataOverride: !!sectionDataOverride,
+          sectionData: !!sectionData,
+          effectiveSectionDataLength: effectiveSectionData?.length || 0
         });
-        if (currentLessonKey) {
-          console.log(`部分文字列マッチでコンテキスト発見: ${currentLessonKey}`);
+        handleTestGenerationFailure('セクションデータが存在しません');
+        return;
+      }
+      
+      if (currentSection < 0 || currentSection >= effectiveSectionData.length) {
+        console.error('無効なセクションインデックス:', {
+          currentSection,
+          sectionDataLength: effectiveSectionData.length,
+          effectiveSectionDataArray: effectiveSectionData.map((s, idx) => ({
+            index: idx,
+            text_file_key: s.text_file_key,
+            section_title: s.section_title || s.video_title
+          }))
+        });
+        handleTestGenerationFailure(`無効なセクションインデックス: ${currentSection}`);
+        return;
+      }
+      
+      const currentSectionData = effectiveSectionData[currentSection];
+      const sectionTextFileKey = currentSectionData?.text_file_key;
+      const sectionFileType = currentSectionData?.file_type;
+      
+      console.log('現在のセクション情報:', {
+        currentSection,
+        sectionDataLength: effectiveSectionData?.length || 0,
+        sectionDataArray: effectiveSectionData?.map((s, idx) => ({
+          index: idx,
+          text_file_key: s.text_file_key,
+          section_title: s.section_title || s.video_title,
+          link_order: s.link_order,
+          file_type: s.file_type
+        })),
+        currentSectionData: currentSectionData ? {
+          text_file_key: currentSectionData.text_file_key,
+          section_title: currentSectionData.section_title || currentSectionData.video_title,
+          link_order: currentSectionData.link_order,
+          file_type: currentSectionData.file_type
+        } : null,
+        sectionTextFileKey,
+        sectionFileType,
+        usingOverride: !!sectionDataOverride
+      });
+      
+      // セクションに応じたコンテキストを取得（SessionStorageManagerを使用）
+      let textContent = null;
+      let contextKey = null;
+      let currentLessonKey = null; // 関数スコープで定義
+      
+      if (sectionTextFileKey && currentLesson) {
+        // SessionStorageManagerを使用してセクションに応じたコンテキストを取得
+        const context = SessionStorageManager.getContext(currentLesson, sectionTextFileKey, sectionFileType);
+        if (context) {
+          textContent = context.context;
+          contextKey = SessionStorageManager.generateKey(currentLesson, sectionTextFileKey, sectionFileType);
+          console.log('セクションに応じたコンテキストを取得:', {
+            contextKey,
+            contextLength: textContent?.length || 0,
+            metadata: context.metadata
+          });
         }
       }
       
-      // 5. フォールバック: 利用可能なコンテキストの最初のものを使用（デバッグ用）
-      if (!currentLessonKey && allKeys.length > 0) {
-        console.warn(`レッスン${currentLesson}のコンテキストが見つからないため、利用可能な最初のコンテキストを使用します`);
-        currentLessonKey = allKeys[0];
-        console.log(`フォールバックコンテキスト: ${currentLessonKey}`);
-      }
-      
-      if (!currentLessonKey) {
-        // 利用可能なコンテキストの詳細情報を表示
-        const availableContexts = [];
-        for (const key of allKeys) {
-          try {
-            const storedData = sessionStorage.getItem(key);
-            if (storedData) {
-              const contextData = JSON.parse(storedData);
-              availableContexts.push({
-                key,
-                lessonId: contextData.metadata?.lessonId,
-                lessonTitle: contextData.metadata?.lessonTitle,
-                fileType: contextData.metadata?.fileType
-              });
-            }
-          } catch (error) {
-            console.warn(`キー ${key} の解析に失敗:`, error);
+      // セクションに応じたコンテキストが見つからない場合、レッスン全体のコンテキストを検索
+      if (!textContent) {
+        console.log('セクションに応じたコンテキストが見つからないため、レッスン全体のコンテキストを検索します');
+        
+        // セッションストレージの全コンテキストキーを確認（PDF/MD/TXTなどを含む）
+        const contextPrefixes = ['pdf_context_', 'md_context_', 'txt_context_', 'context_'];
+        const allKeys = Object.keys(sessionStorage).filter(key =>
+          contextPrefixes.some(prefix => key.startsWith(prefix))
+        );
+        console.log('利用可能なコンテキストキー:', allKeys);
+        
+        // 現在のレッスンに対応するコンテキストを探す（改善されたマッチング）
+        // currentLessonKeyは既に関数スコープで定義されている
+        
+        // 1. 完全一致を試す（例: pdf_context_4_4_xxx.pdf）
+        currentLessonKey = allKeys.find(key => key.includes(`_${currentLesson}_${currentLesson}_`));
+        if (currentLessonKey) {
+          console.log(`完全一致でコンテキスト発見: ${currentLessonKey}`);
+        }
+        
+        // 2. 部分一致を試す（例: pdf_context_1_xxx.pdf）
+        if (!currentLessonKey) {
+          currentLessonKey = allKeys.find(key => key.includes(`_${currentLesson}_`));
+          if (currentLessonKey) {
+            console.log(`部分一致でコンテキスト発見: ${currentLessonKey}`);
           }
         }
         
-        console.warn(`レッスン${currentLesson}に対応するコンテキストが見つかりません。利用可能なコンテキスト:`, availableContexts);
+        // 3. セッションストレージのメタデータから正確なレッスンIDを確認
+        if (!currentLessonKey) {
+          console.log('メタデータからレッスンIDを確認中...');
+          for (const key of allKeys) {
+            try {
+              const storedData = sessionStorage.getItem(key);
+              if (storedData) {
+                const contextData = JSON.parse(storedData);
+                console.log(`キー ${key} のメタデータ:`, {
+                  lessonId: contextData.metadata?.lessonId,
+                  lessonTitle: contextData.metadata?.lessonTitle,
+                  fileType: contextData.metadata?.fileType
+                });
+                
+                if (contextData.metadata && contextData.metadata.lessonId === currentLesson) {
+                  currentLessonKey = key;
+                  console.log(`メタデータから正確なレッスンIDでマッチ: ${key} (lessonId: ${contextData.metadata.lessonId})`);
+                  break;
+                }
+              }
+            } catch (error) {
+              console.warn(`キー ${key} のメタデータ解析に失敗:`, error);
+            }
+          }
+        }
         
-        // フォールバック: レッスンデータから直接テキストコンテンツを取得
-        if (lessonData && lessonData.textContent) {
-          console.log('セッションストレージにコンテキストがないため、レッスンデータから直接テキストコンテンツを取得します');
-          const textContent = lessonData.textContent;
+        // 4. レッスン番号の部分文字列マッチを試す（最後の手段）
+        if (!currentLessonKey) {
+          console.log('キーの部分文字列からレッスン番号を抽出中...');
+          currentLessonKey = allKeys.find(key => {
+            // キーからレッスン番号を抽出して比較
+            const keyParts = key.split('_');
+            if (keyParts.length >= 3) {
+              const keyLessonId = parseInt(keyParts[2]);
+              console.log(`キー ${key} から抽出したレッスンID: ${keyLessonId}, 検索対象: ${currentLesson}`);
+              return keyLessonId === currentLesson;
+            }
+            return false;
+          });
+          if (currentLessonKey) {
+            console.log(`部分文字列マッチでコンテキスト発見: ${currentLessonKey}`);
+          }
+        }
+        
+        // 5. フォールバック: 利用可能なコンテキストの最初のものを使用（デバッグ用）
+        if (!currentLessonKey && allKeys.length > 0) {
+          console.warn(`レッスン${currentLesson}のコンテキストが見つからないため、利用可能な最初のコンテキストを使用します`);
+          currentLessonKey = allKeys[0];
+          console.log(`フォールバックコンテキスト: ${currentLessonKey}`);
+        }
+        
+        if (!currentLessonKey) {
+          // 利用可能なコンテキストの詳細情報を表示
+          const availableContexts = [];
+          for (const key of allKeys) {
+            try {
+              const storedData = sessionStorage.getItem(key);
+              if (storedData) {
+                const contextData = JSON.parse(storedData);
+                availableContexts.push({
+                  key,
+                  lessonId: contextData.metadata?.lessonId,
+                  lessonTitle: contextData.metadata?.lessonTitle,
+                  fileType: contextData.metadata?.fileType
+                });
+              }
+            } catch (error) {
+              console.warn(`キー ${key} の解析に失敗:`, error);
+            }
+          }
+          
+          console.warn(`レッスン${currentLesson}に対応するコンテキストが見つかりません。利用可能なコンテキスト:`, availableContexts);
+          
+          // フォールバック: レッスンデータから直接テキストコンテンツを取得
+          if (lessonData && lessonData.textContent) {
+            console.log('セッションストレージにコンテキストがないため、レッスンデータから直接テキストコンテンツを取得します');
+            const fallbackTextContent = lessonData.textContent;
           
           const sectionTitle = sectionData?.[currentSection]?.section_title || `セクション${currentSection + 1}`;
           const sectionDescription = sectionData?.[currentSection]?.section_description || 'セクションの説明';
           
-          const requestBody = {
-            type: 'section',
-            lessonId: currentLesson,
-            sectionIndex: currentSection,
-            sectionTitle: sectionTitle,
-            sectionDescription: sectionDescription,
-            textContent: textContent,
-            fileType: lessonData.file_type || 'text/plain',
-            fileName: lessonData.s3_key || `lesson_${currentLesson}_section_${currentSection}`,
-            questionCount: 10
-          };
-          
-          console.log('レッスンデータから直接テスト生成APIリクエスト送信:', requestBody);
-          
-          const response = await fetch(`${API_BASE_URL}/api/test/learning/generate-test`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-          });
-
-          if (response.ok) {
-            const result = await response.json();
-            if (result.success) {
-              const testCacheKey = `test_data_${currentLesson}_${currentSection}`;
-              sessionStorage.setItem(testCacheKey, JSON.stringify(result.data));
-              console.log('レッスンデータから直接テスト問題をキャッシュに保存:', {
-                key: testCacheKey,
-                dataLength: JSON.stringify(result.data).length
-              });
-              
-              setTestData(result.data);
-              return;
-            }
-          } else {
-            const errorData = await response.json().catch(() => ({}));
-            console.error('テスト生成APIエラー:', {
-              status: response.status,
-              error: errorData.message
-            });
-            throw new Error(errorData.message || 'テストデータの生成に失敗しました');
-          }
-        }
-        
-        // フォールバック: レッスン1のコンテキストを動的に生成する
-        if (currentLesson === 1 && availableContexts.length > 0) {
-          console.log('レッスン1のコンテキストを動的に生成します...');
-          await generateLesson1ContextFromAvailableData(availableContexts);
-          return;
-        }
-        
-        // フォールバック: レッスン4のコンテキストが見つからない場合の処理
-        if (currentLesson === 4 && availableContexts.length > 0) {
-          console.log('レッスン4のコンテキストが見つからないため、利用可能なコンテキストを使用します...');
-          const fallbackContext = availableContexts[0];
-          console.log('フォールバックコンテキストを使用:', fallbackContext);
-          
-          // フォールバックコンテキストを使用してテストを生成
-          const storedData = sessionStorage.getItem(fallbackContext.key);
-          if (storedData) {
-            const contextData = JSON.parse(storedData);
-            const textContent = contextData.context;
-            
-            const sectionTitle = `セクション${currentSection + 1}`;
-            const sectionDescription = 'セクションの説明';
-            
             const requestBody = {
               type: 'section',
               lessonId: currentLesson,
               sectionIndex: currentSection,
               sectionTitle: sectionTitle,
               sectionDescription: sectionDescription,
-              textContent: textContent,
-              fileType: contextData.metadata?.fileType || 'text/plain',
-              fileName: `lesson_${currentLesson}_section_${currentSection}_fallback`,
+              textContent: fallbackTextContent,
+              fileType: lessonData.file_type || 'text/plain',
+              fileName: lessonData.s3_key || `lesson_${currentLesson}_section_${currentSection}`,
               questionCount: 10
             };
             
-            console.log('フォールバックコンテキストでAPIリクエスト送信:', requestBody);
+            console.log('レッスンデータから直接テスト生成APIリクエスト送信:', requestBody);
             
             const response = await fetch(`${API_BASE_URL}/api/test/learning/generate-test`, {
               method: 'POST',
@@ -387,7 +438,7 @@ const SectionTestPage = () => {
               if (result.success) {
                 const testCacheKey = `test_data_${currentLesson}_${currentSection}`;
                 sessionStorage.setItem(testCacheKey, JSON.stringify(result.data));
-                console.log('フォールバックコンテキストでテスト問題をキャッシュに保存:', {
+                console.log('レッスンデータから直接テスト問題をキャッシュに保存:', {
                   key: testCacheKey,
                   dataLength: JSON.stringify(result.data).length
                 });
@@ -395,49 +446,114 @@ const SectionTestPage = () => {
                 setTestData(result.data);
                 return;
               }
+            } else {
+              const errorData = await response.json().catch(() => ({}));
+              console.error('テスト生成APIエラー:', {
+                status: response.status,
+                error: errorData.message
+              });
+              throw new Error(errorData.message || 'テストデータの生成に失敗しました');
             }
           }
-        }
-        
-        console.warn('テスト生成に必要なデータが揃わないため、ユーザーに再試行を促します');
-        handleTestGenerationFailure('利用可能なコンテキストが見つかりません。レッスンデータにもテキストコンテンツがありません。');
-        return;
-      }
-      
-      // セッションストレージからコンテキストを取得
-      const storedData = sessionStorage.getItem(currentLessonKey);
-      let textContent = null;
-      
-      if (!storedData) {
-        console.warn('セッションストレージからコンテキストデータを取得できません。レッスンデータから直接取得を試みます。');
-        
-        // フォールバック: レッスンデータから直接テキストコンテンツを取得
-        if (lessonData && lessonData.textContent) {
-          textContent = lessonData.textContent;
-          console.log('レッスンデータから直接テキストコンテンツを取得:', {
-            textContentLength: textContent?.length || 0,
-            fileType: lessonData.file_type
-          });
-        } else {
-          handleTestGenerationFailure('コンテキストデータを取得できません。レッスンデータにもテキストコンテンツがありません。');
+          
+          // フォールバック: レッスン1のコンテキストを動的に生成する
+          if (currentLesson === 1 && availableContexts.length > 0) {
+            console.log('レッスン1のコンテキストを動的に生成します...');
+            await generateLesson1ContextFromAvailableData(availableContexts);
+            return;
+          }
+          
+          // フォールバック: レッスン4のコンテキストが見つからない場合の処理
+          if (currentLesson === 4 && availableContexts.length > 0) {
+            console.log('レッスン4のコンテキストが見つからないため、利用可能なコンテキストを使用します...');
+            const fallbackContext = availableContexts[0];
+            console.log('フォールバックコンテキストを使用:', fallbackContext);
+            
+            // フォールバックコンテキストを使用してテストを生成
+            const storedData = sessionStorage.getItem(fallbackContext.key);
+            if (storedData) {
+              const contextData = JSON.parse(storedData);
+              const fallbackTextContent = contextData.context;
+              
+              const sectionTitle = `セクション${currentSection + 1}`;
+              const sectionDescription = 'セクションの説明';
+              
+              const requestBody = {
+                type: 'section',
+                lessonId: currentLesson,
+                sectionIndex: currentSection,
+                sectionTitle: sectionTitle,
+                sectionDescription: sectionDescription,
+                textContent: fallbackTextContent,
+                fileType: contextData.metadata?.fileType || 'text/plain',
+                fileName: `lesson_${currentLesson}_section_${currentSection}_fallback`,
+                questionCount: 10
+              };
+              
+              console.log('フォールバックコンテキストでAPIリクエスト送信:', requestBody);
+              
+              const response = await fetch(`${API_BASE_URL}/api/test/learning/generate-test`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+              });
+
+              if (response.ok) {
+                const result = await response.json();
+                if (result.success) {
+                  const testCacheKey = `test_data_${currentLesson}_${currentSection}`;
+                  sessionStorage.setItem(testCacheKey, JSON.stringify(result.data));
+                  console.log('フォールバックコンテキストでテスト問題をキャッシュに保存:', {
+                    key: testCacheKey,
+                    dataLength: JSON.stringify(result.data).length
+                  });
+                  
+                  setTestData(result.data);
+                  return;
+                }
+              }
+            }
+          }
+          
+          console.warn('テスト生成に必要なデータが揃わないため、ユーザーに再試行を促します');
+          handleTestGenerationFailure('利用可能なコンテキストが見つかりません。レッスンデータにもテキストコンテンツがありません。');
           return;
         }
-      } else {
-        const contextData = JSON.parse(storedData);
-        textContent = contextData.context;
         
-        console.log('セッションストレージからコンテキスト取得:', {
-          key: currentLessonKey,
-          contextLength: textContent?.length || 0,
-          metadata: contextData.metadata,
-          searchLesson: currentLesson,
-          foundLesson: contextData.metadata?.lessonId
-        });
+        // currentLessonKeyが見つかった場合、そのコンテキストを取得
+        if (currentLessonKey) {
+          const storedData = sessionStorage.getItem(currentLessonKey);
+          if (storedData) {
+            const contextData = JSON.parse(storedData);
+            textContent = contextData.context;
+            
+            console.log('セッションストレージからコンテキスト取得:', {
+              key: currentLessonKey,
+              contextLength: textContent?.length || 0,
+              metadata: contextData.metadata,
+              searchLesson: currentLesson,
+              foundLesson: contextData.metadata?.lessonId
+            });
+          }
+        }
       }
       
       // セクションデータが空の場合でも動作するように、デフォルト値を設定
-      const sectionTitle = sectionData?.[currentSection]?.section_title || `セクション${currentSection + 1}`;
-      const sectionDescription = sectionData?.[currentSection]?.section_description || 'セクションの説明';
+      // currentSectionDataは既に取得されているので、それを使用
+      const sectionTitle = currentSectionData?.section_title || 
+                           currentSectionData?.video_title || 
+                           `セクション${currentSection + 1}`;
+      const sectionDescription = currentSectionData?.section_description || 
+                                 currentSectionData?.video_description || 
+                                 'セクションの説明';
+      
+      // セクションに応じたfile_typeを取得（既に取得されているsectionFileTypeを使用）
+      const fileType = sectionFileType || 
+                       lessonData?.file_type || 
+                       'text/plain';
       
       console.log('テスト生成用データ:', {
         sectionTitle,
@@ -446,9 +562,11 @@ const SectionTestPage = () => {
         textContentPreview: textContent?.substring(0, 200) + '...',
         currentLesson,
         currentSection,
-        sessionStorageKey: currentLessonKey,
-        hasSectionData: !!sectionData,
-        sectionDataLength: sectionData?.length || 0
+        sessionStorageKey: contextKey || currentLessonKey,
+        sectionTextFileKey: sectionTextFileKey,
+        fileType: fileType,
+        hasSectionData: !!effectiveSectionData,
+        sectionDataLength: effectiveSectionData?.length || 0
       });
       
       // テキストコンテンツが空の場合は警告
@@ -465,8 +583,8 @@ const SectionTestPage = () => {
         sectionTitle: sectionTitle,
         sectionDescription: sectionDescription,
         textContent: textContent,
-        fileType: lessonData?.file_type || 'text/plain',
-        fileName: lessonData?.s3_key || `lesson_${currentLesson}_section_${currentSection}`,
+        fileType: fileType,
+        fileName: sectionTextFileKey || lessonData?.s3_key || `lesson_${currentLesson}_section_${currentSection}`,
         questionCount: 10
       };
       

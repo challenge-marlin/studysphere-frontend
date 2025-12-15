@@ -198,6 +198,8 @@ const LessonManagement = () => {
       const uploadPromises = additionalTextFiles.map(async (file, index) => {
         const formData = new FormData();
         formData.append('file', file);
+        // ファイル名を明示的に送信（文字化け対策）
+        formData.append('fileName', file.name);
         formData.append('lessonId', selectedLessonForMultiText.id);
         formData.append('order', index);
 
@@ -210,7 +212,21 @@ const LessonManagement = () => {
         });
 
         if (!response.ok) {
-          throw new Error(`ファイル ${file.name} のアップロードに失敗しました`);
+          // エラーレスポンスの詳細を取得
+          let errorMessage = `ファイル ${file.name} のアップロードに失敗しました`;
+          try {
+            const errorData = await response.json();
+            if (errorData.message) {
+              errorMessage = `${errorMessage}: ${errorData.message}`;
+            }
+            if (errorData.error && process.env.NODE_ENV === 'development') {
+              errorMessage += ` (詳細: ${errorData.error})`;
+            }
+          } catch (e) {
+            // JSONの解析に失敗した場合はデフォルトメッセージを使用
+            errorMessage += ` (ステータス: ${response.status})`;
+          }
+          throw new Error(errorMessage);
         }
 
         return await response.json();
@@ -2511,12 +2527,12 @@ const LessonManagement = () => {
                     <input
                       type="file"
                       multiple
-                      accept=".pdf,.txt,.md,.docx,.pptx"
+                      accept=".pdf,.txt,.md,.rtf"
                       onChange={handleMultiTextFileChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      PDF、テキスト、Markdown、Word、PowerPointファイルを選択できます
+                      PDF、テキスト、Markdown、RTFファイルを選択できます
                     </p>
                   </div>
 

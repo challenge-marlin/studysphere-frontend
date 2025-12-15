@@ -23,6 +23,37 @@ const TextSection = ({
   // 処理済みのS3キーを記録（無限ループ防止）
   const processedS3KeyRef = useRef(null);
 
+  // file_typeがPDFかどうかを判定する関数
+  const isPdfFile = (fileType, s3Key) => {
+    if (!fileType && !s3Key) return false;
+    const lowerFileType = fileType?.toLowerCase() || '';
+    const lowerS3Key = s3Key?.toLowerCase() || '';
+    
+    // MD、TXT、RTFファイルの場合はPDFではない
+    if (lowerFileType === 'text/markdown' || lowerFileType === 'md' || 
+        lowerFileType === 'text/plain' || lowerFileType === 'txt' ||
+        lowerFileType === 'application/rtf' || lowerFileType === 'rtf') {
+      console.log('isPdfFile: テキストファイルとして判定（PDFではない）', {
+        fileType: lowerFileType,
+        s3Key: lowerS3Key
+      });
+      return false;
+    }
+    
+    // PDF判定
+    const isPdf = lowerFileType === 'pdf' || 
+                  lowerFileType === 'application/pdf' ||
+                  lowerS3Key.endsWith('.pdf');
+    
+    console.log('isPdfFile: PDF判定結果', {
+      fileType: lowerFileType,
+      s3Key: lowerS3Key,
+      isPdf: isPdf
+    });
+    
+    return isPdf;
+  };
+
   // テキストファイルの処理（PDF、TXT、MD、RTFすべてに対応）
   useEffect(() => {
     console.log('TextSection useEffect - 実行開始');
@@ -37,6 +68,23 @@ const TextSection = ({
       console.log('レッスンデータまたはS3キーが存在しません');
       return;
     }
+    
+    // PDF判定
+    const isPdf = isPdfFile(lessonData.file_type, lessonData.s3_key);
+    console.log('TextSection - PDF判定結果:', {
+      fileType: lessonData.file_type,
+      fileTypeType: typeof lessonData.file_type,
+      s3Key: lessonData.s3_key,
+      s3KeyEndsWithMd: lessonData.s3_key?.toLowerCase().endsWith('.md'),
+      s3KeyEndsWithPdf: lessonData.s3_key?.toLowerCase().endsWith('.pdf'),
+      isPdf: isPdf,
+      lessonData: {
+        id: lessonData.id,
+        title: lessonData.title,
+        file_type: lessonData.file_type,
+        s3_key: lessonData.s3_key
+      }
+    });
     
     // S3キーの詳細なデバッグ情報
     console.log('S3キーの詳細:', {
@@ -72,56 +120,81 @@ const TextSection = ({
       return; // 既存のコンテキストがある場合は処理をスキップ
     }
     
-    console.log('TextSection useEffect - 条件チェック:', {
-      fileType: lessonData?.file_type,
-      s3Key: lessonData?.s3_key,
-      pdfTextContent: pdfTextContent,
-      textContent: textContent,
-      hasS3Key: !!lessonData?.s3_key,
-      shouldExtractPdf: lessonData?.file_type === 'pdf' && lessonData?.s3_key && !pdfTextContent,
-      shouldSaveText: (lessonData?.file_type === 'txt' || lessonData?.file_type === 'md' || lessonData?.file_type === 'application/rtf') && textContent
-    });
-    
     // PDFファイルの場合はテキスト抽出を実行
-    if (lessonData?.file_type === 'pdf' && lessonData?.s3_key && !pdfTextContent) {
-      console.log('PDFテキスト抽出を開始します:', lessonData.s3_key);
-      extractPdfText(lessonData.s3_key);
-    }
-    // TXT、MD、RTFファイルの場合は既存のtextContentをセッションストレージに保存
-    else if ((lessonData?.file_type === 'txt' || lessonData?.file_type === 'md' || lessonData?.file_type === 'text/markdown' || lessonData?.file_type === 'application/rtf') && textContent) {
-      console.log('テキストファイルのコンテキストをセッションストレージに保存:', {
+    // ただし、既に処理済みのS3キーの場合は再実行しない
+    if (isPdf && lessonData?.s3_key && !pdfTextContent && processedS3KeyRef.current !== lessonData.s3_key) {
+      console.log('PDFテキスト抽出を開始します:', {
+        s3Key: lessonData.s3_key,
         fileType: lessonData.file_type,
-        textLength: textContent.length,
-        s3Key: lessonData.s3_key
+        isPdf: isPdf,
+        processedS3Key: processedS3KeyRef.current
       });
-      
-      // セッションストレージにコンテキストを保存
-      const saveSuccess = SessionStorageManager.saveContext(
-        lessonData.id,
-        lessonData.s3_key,
-        textContent,
-        {
+      extractPdfText(lessonData.s3_key);
+    } else if (isPdf && lessonData?.s3_key && processedS3KeyRef.current === lessonData.s3_key) {
+      console.log('PDF処理は既に完了しています。再実行しません:', {
+        s3Key: lessonData.s3_key,
+        processedS3Key: processedS3KeyRef.current
+      });
+    } else if (isPdf && lessonData?.s3_key && pdfTextContent) {
+      console.log('PDFテキストは既に取得済みです。再取得しません:', {
+        s3Key: lessonData.s3_key,
+        pdfTextContentLength: pdfTextContent.length
+      });
+    }
+    // TXT、MD、RTFファイルの場合（PDF以外のテキストファイル）
+    else if (!isPdf && (lessonData?.file_type === 'txt' || lessonData?.file_type === 'md' || lessonData?.file_type === 'text/markdown' || lessonData?.file_type === 'text/plain' || lessonData?.file_type === 'application/rtf')) {
+      // textContentが存在する場合はセッションストレージに保存
+      if (textContent) {
+        console.log('テキストファイルのコンテキストをセッションストレージに保存:', {
           fileType: lessonData.file_type,
-          lessonTitle: lessonData.title,
-          processingTime: 0 // テキストファイルは即座に利用可能
+          textLength: textContent.length,
+          s3Key: lessonData.s3_key
+        });
+        
+        // セッションストレージにコンテキストを保存
+        const saveSuccess = SessionStorageManager.saveContext(
+          lessonData.id,
+          lessonData.s3_key,
+          textContent,
+          {
+            fileType: lessonData.file_type,
+            lessonTitle: lessonData.title,
+            processingTime: 0 // テキストファイルは即座に利用可能
+          }
+        );
+        
+        if (saveSuccess) {
+          console.log('テキストファイルのコンテキストをセッションストレージに保存完了');
+          // 親コンポーネントにテキスト内容を通知
+          if (onTextContentUpdate) {
+            onTextContentUpdate(textContent);
+          }
+          // 処理済みのS3キーを記録
+          processedS3KeyRef.current = lessonData.s3_key;
+        } else {
+          console.error('テキストファイルのコンテキスト保存に失敗');
         }
-      );
-      
-      if (saveSuccess) {
-        console.log('テキストファイルのコンテキストをセッションストレージに保存完了');
-        // 親コンポーネントにテキスト内容を通知
-        if (onTextContentUpdate) {
-          onTextContentUpdate(textContent);
-        }
-        // 処理済みのS3キーを記録
-        processedS3KeyRef.current = lessonData.s3_key;
-      } else {
-        console.error('テキストファイルのコンテキスト保存に失敗');
+      } 
+      // textContentが空で、s3_keyが変更された場合は、APIからテキストファイルを読み込む
+      else if (lessonData?.s3_key && processedS3KeyRef.current !== lessonData.s3_key) {
+        console.log('テキストファイルをAPIから読み込みます:', {
+          s3Key: lessonData.s3_key,
+          fileType: lessonData.file_type
+        });
+        
+        // テキストファイルを読み込む
+        fetchTextFile(lessonData.s3_key, lessonData.file_type);
       }
     } else {
-      console.log('テキスト処理の条件が満たされていません');
+      console.log('テキスト処理の条件が満たされていません:', {
+        isPdf: isPdf,
+        fileType: lessonData?.file_type,
+        s3Key: lessonData?.s3_key,
+        hasTextContent: !!textContent,
+        hasPdfTextContent: !!pdfTextContent
+      });
     }
-   }, [lessonData, textContent]); // textContentを依存配列に追加
+   }, [lessonData, textContent, pdfTextContent]); // textContentとpdfTextContentを依存配列に追加
 
   // コンポーネントのアンマウント時に処理をクリーンアップ
   useEffect(() => {
@@ -136,6 +209,86 @@ const TextSection = ({
       }
     };
   }, []);
+
+  // テキストファイルを読み込む
+  const fetchTextFile = async (s3Key, fileType) => {
+    if (!s3Key) {
+      console.error('fetchTextFile: s3Keyが提供されていません');
+      return;
+    }
+    
+    console.log('fetchTextFile: 開始', {
+      s3Key,
+      fileType,
+      lessonId: lessonData?.id
+    });
+    
+    try {
+      // テキスト抽出APIを使用してテキストファイルを読み込む
+      const response = await fetch(`${API_BASE_URL}/api/test/learning/extract-text/${encodeURIComponent(s3Key)}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data && data.data.text) {
+          const fileContent = data.data.text;
+          
+          console.log('テキストファイル読み込み成功:', {
+            s3Key,
+            fileType,
+            contentLength: fileContent.length
+          });
+          
+          // セッションストレージにコンテキストを保存
+          const saveSuccess = SessionStorageManager.saveContext(
+            lessonData?.id,
+            s3Key,
+            fileContent,
+            {
+              fileType: fileType,
+              lessonTitle: lessonData?.title,
+              processingTime: 0
+            }
+          );
+          
+          if (saveSuccess) {
+            console.log('テキストファイルのコンテキストをセッションストレージに保存完了');
+          }
+          
+          // 親コンポーネントにテキスト内容を通知（これによりtextLoadingがfalseになる）
+          if (onTextContentUpdate) {
+            onTextContentUpdate(fileContent);
+          }
+          
+          // 処理済みのS3キーを記録
+          processedS3KeyRef.current = s3Key;
+        } else {
+          console.error('テキストファイル読み込み失敗:', data.message);
+          // エラー時も親コンポーネントに通知（textLoadingをfalseにするため）
+          if (onTextContentUpdate) {
+            onTextContentUpdate(`エラー: テキストファイルの読み込みに失敗しました: ${data.message || '不明なエラー'}`);
+          }
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('テキストファイル読み込みAPIエラー:', response.status, errorData);
+        // エラー時も親コンポーネントに通知（textLoadingをfalseにするため）
+        if (onTextContentUpdate) {
+          onTextContentUpdate(`エラー: テキストファイルの読み込みに失敗しました (HTTP ${response.status})`);
+        }
+      }
+    } catch (error) {
+      console.error('テキストファイル読み込みエラー:', error);
+      // エラー時も親コンポーネントに通知（textLoadingをfalseにするため）
+      if (onTextContentUpdate) {
+        onTextContentUpdate(`エラー: テキストファイルの読み込み中にエラーが発生しました: ${error.message}`);
+      }
+    }
+  };
 
   // PDFからテキストを抽出
   const extractPdfText = async (s3Key, retryCount = 0) => {
@@ -380,7 +533,8 @@ const TextSection = ({
 
   // 表示するテキスト内容を決定
   const displayTextContent = () => {
-    if (lessonData?.file_type === 'pdf') {
+    const isPdf = isPdfFile(lessonData?.file_type, lessonData?.s3_key);
+    if (isPdf) {
       if (pdfProcessingError) {
         return `エラー: ${pdfProcessingError}`;
       }
@@ -426,13 +580,13 @@ const TextSection = ({
       <div className="flex items-center gap-3 mb-4 workspace-widget-handle cursor-move select-none">
         <span className="text-2xl">📄</span>
         <h3 className="text-xl font-bold text-gray-800">テキスト内容</h3>
-        {lessonData?.file_type === 'pdf' && (
+        {isPdfFile(lessonData?.file_type, lessonData?.s3_key) && (
           <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
             PDF
           </span>
         )}
                  {/* PDF処理中のキャンセルボタン */}
-         {lessonData?.file_type === 'pdf' && isPdfProcessing && (
+         {isPdfFile(lessonData?.file_type, lessonData?.s3_key) && isPdfProcessing && (
            <button
              onClick={cancelPdfProcessing}
              className="px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-colors"
@@ -471,7 +625,7 @@ const TextSection = ({
         ref={textContainerRef}
         className="flex-1 overflow-y-auto custom-scrollbar border border-gray-200 rounded-lg p-2 bg-gray-50 max-h-[1000px]"
       >
-        {lessonData?.file_type === 'pdf' ? (
+        {isPdfFile(lessonData?.file_type, lessonData?.s3_key) ? (
           <div className="h-full">
             {/* PDFをiframeで表示 */}
             <div className="w-full h-full border border-gray-300 rounded-lg overflow-hidden relative">
@@ -534,7 +688,7 @@ const TextSection = ({
       </div>
 
       {/* テキスト情報 */}
-      {(lessonData?.file_type === 'pdf' && pdfTextContent) || 
+      {(isPdfFile(lessonData?.file_type, lessonData?.s3_key) && pdfTextContent) || 
        (lessonData?.file_type === 'txt' && textContent) ||
        (lessonData?.file_type === 'md' && textContent) ||
        (lessonData?.file_type === 'text/markdown' && textContent) ||

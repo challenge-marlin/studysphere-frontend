@@ -744,11 +744,27 @@ const EnhancedLearningPageRefactored = () => {
            });
            
            // テキストファイルの更新（text_file_keyとfile_typeを更新）
+           // セクションのtext_file_keyとlessonS3Keyのファイル名を比較
+           const extractFileName = (key) => {
+             if (!key) return '';
+             const parts = key.split('/');
+             return parts[parts.length - 1].trim().toLowerCase();
+           };
+           
+           const sectionFileName = extractFileName(sectionTextFileKey);
+           const lessonFileName = extractFileName(lessonS3Key);
+           
+           // ファイル名が一致する場合は、textContentをリセットしない
+           const fileNamesMatch = sectionFileName === lessonFileName;
+           
            if (sectionTextFileKey && sectionTextFileKey !== lessonS3Key) {
              console.log('最初のセクションのテキストファイルを更新します:', {
                sectionTextFileKey,
                lessonS3Key,
-               sectionFileType: firstSection?.file_type
+               sectionFileType: firstSection?.file_type,
+               sectionFileName,
+               lessonFileName,
+               fileNamesMatch
              });
              
              // ファイルタイプを判定（firstSection.file_typeが存在する場合はそれを使用）
@@ -786,17 +802,22 @@ const EnhancedLearningPageRefactored = () => {
                return {
                  ...baseData,
                  s3_key: sectionTextFileKey,
-                 file_type: fileType,
-                 textContent: '' // テキストコンテンツをリセット
+                 file_type: fileType
+                 // ファイル名が一致する場合は、textContentをリセットしない
                };
              });
              
-             // テキストコンテンツをリセット
-             setTextContent('');
-             setPdfTextContent('');
-             setTextLoading(true);
-             setPdfTextExtracted(false);
-             setPdfProcessingStatus('idle');
+             // ファイル名が一致しない場合のみ、テキストコンテンツをリセット
+             if (!fileNamesMatch) {
+               console.log('⚠️ ファイル名が一致しないため、テキストコンテンツをリセットします');
+               setTextContent('');
+               setPdfTextContent('');
+               setTextLoading(true);
+               setPdfTextExtracted(false);
+               setPdfProcessingStatus('idle');
+             } else {
+               console.log('✅ ファイル名が一致するため、既存のtextContentを保持します');
+             }
            }
            
            // 動画がある場合のみ更新（既存の動画をクリアしてから新しい動画を設定）
@@ -866,9 +887,10 @@ const EnhancedLearningPageRefactored = () => {
              existingVideos: currentLessonData?.videos || lessonData?.videos,
              existingVideoCount: (currentLessonData?.videos || lessonData?.videos || []).length
            });
+           // セクションデータが空の場合、空配列を設定（複数のテキストを持たない学習画面であることを示す）
+           setSectionData([]);
            setCurrentSection(0);
-           // セクションデータが空でも、既存の動画がある場合は保持するため、lessonDataを更新しない
-           // 動画がない場合のみ空配列に設定（既存の動画がない場合のみ）
+           // セクションデータが空の場合、lessonDataのs3_keyをクリア（テキストファイルが存在しないことを示す）
            setLessonData(prev => {
              const baseData = currentLessonData || prev;
              if (!baseData) {
@@ -877,15 +899,19 @@ const EnhancedLearningPageRefactored = () => {
              }
              // 既存の動画がある場合は保持、ない場合のみ空配列に設定
              const existingVideos = baseData.videos || [];
+             const updatedData = {
+               ...baseData,
+               s3_key: null, // セクションデータが空の場合、s3_keyをクリア
+               file_type: null, // file_typeもクリア
+               videos: existingVideos.length > 0 ? existingVideos : [] // 既存の動画がある場合は保持、ない場合のみ空配列
+             };
              if (existingVideos.length > 0) {
                console.log('🎬 既存の動画を保持します:', existingVideos);
-               return baseData; // 既存のデータをそのまま返す
+             } else {
+               console.log('🎬 既存の動画がないため、空配列に設定します');
              }
-             console.log('🎬 既存の動画がないため、空配列に設定します');
-             return {
-               ...baseData,
-               videos: [] // 既存の動画がない場合のみ空配列
-             };
+             console.log('⚠️ セクションデータが空のため、s3_keyとfile_typeをクリアしました');
+             return updatedData;
            });
            // PDFの処理はTextSectionコンポーネントで自動的に開始されるため、ここでは何もしない
          }
@@ -1236,7 +1262,15 @@ const EnhancedLearningPageRefactored = () => {
       }
     } else {
       // 空のテキストの場合はエラーとして扱わない（まだ処理中の可能性がある）
-      console.log('テキストが空です（処理中または未処理）');
+      // ただし、既存のtextContentがある場合は保持する（空で上書きしない）
+      if (textContent && textContent.length > 0) {
+        console.log('テキストが空です（処理中または未処理）。既存のtextContentを保持します:', {
+          existingTextLength: textContent.length
+        });
+        // 既存のtextContentを保持するため、何もしない
+      } else {
+        console.log('テキストが空です（処理中または未処理）');
+      }
       // エラー状態に設定しない（処理中または未処理の可能性があるため）
     }
   };
@@ -1419,6 +1453,8 @@ const EnhancedLearningPageRefactored = () => {
         textLoading={textLoading}
         textContainerRef={textContainerRef}
         onTextContentUpdate={handlePdfTextUpdate}
+        sectionData={sectionData}
+        currentSection={currentSection}
       />
     ) : null,
     chat: widgetVisibility.chat ? (

@@ -10,7 +10,9 @@ const TextSection = ({
   textContent,
   textLoading,
   textContainerRef,
-  onTextContentUpdate // テキスト内容更新のコールバック
+  onTextContentUpdate, // テキスト内容更新のコールバック
+  sectionData, // セクションデータ
+  currentSection // 現在のセクションインデックス
 }) => {
   const [pdfTextContent, setPdfTextContent] = useState('');
   const [isPdfProcessing, setIsPdfProcessing] = useState(false);
@@ -62,10 +64,111 @@ const TextSection = ({
     console.log('TextSection - lessonData.s3_key:', lessonData?.s3_key);
     console.log('TextSection - pdfTextContent:', pdfTextContent);
     console.log('TextSection - textContent:', textContent);
+    console.log('TextSection - sectionData:', sectionData);
+    console.log('TextSection - sectionData type:', typeof sectionData);
+    console.log('TextSection - sectionData isArray:', Array.isArray(sectionData));
+    console.log('TextSection - sectionData length:', Array.isArray(sectionData) ? sectionData.length : 'N/A');
+    console.log('TextSection - currentSection:', currentSection);
+    
+    // セクションデータの確認を最初に行う
+    // 複数のテキストを持たない学習画面では、セクションにtext_file_keyが存在しない場合がある
+    
+    // セクションデータがnullの場合（まだ読み込まれていない）は、セクションデータが読み込まれるまで待つ
+    if (sectionData === null || sectionData === undefined) {
+      console.log('⚠️ セクションデータがまだ読み込まれていません。セクションデータの読み込みを待ちます');
+      return;
+    }
+    
+    // セクションデータが空配列の場合（複数のテキストを持たない学習画面）
+    // この場合、lessonData.s3_keyがあっても処理をスキップする
+    if (Array.isArray(sectionData) && sectionData.length === 0) {
+      console.log('⚠️ セクションデータが空です。テキストファイルの読み込みをスキップします（複数のテキストを持たない学習画面）', {
+        sectionDataLength: sectionData.length,
+        lessonDataS3Key: lessonData?.s3_key,
+        lessonDataFileType: lessonData?.file_type
+      });
+      // テキストファイルが存在しない場合は、親コンポーネントに空のコンテンツを通知
+      if (onTextContentUpdate) {
+        onTextContentUpdate('');
+      }
+      return;
+    }
+    
+    // セクションデータが存在する場合、現在のセクションにtext_file_keyが存在するか確認
+    if (Array.isArray(sectionData) && sectionData.length > 0) {
+      const currentSectionData = sectionData[currentSection];
+      if (currentSectionData && !currentSectionData.text_file_key) {
+        console.log('⚠️ 現在のセクションにtext_file_keyが存在しません。テキストファイルの読み込みをスキップします:', {
+          currentSection,
+          sectionTitle: currentSectionData.section_title,
+          hasTextFileKey: !!currentSectionData.text_file_key
+        });
+        // テキストファイルが存在しない場合は、既存のtextContentを保持（空で上書きしない）
+        // レッスンデータから取得したtextContentがある場合は保持する
+        if (!textContent && onTextContentUpdate) {
+          onTextContentUpdate('');
+        }
+        return;
+      }
+      
+      // セクションデータが存在する場合、セクションのtext_file_keyとlessonData.s3_keyが一致するか確認
+      // セクションのtext_file_keyはファイル名のみ、lessonData.s3_keyは完全パスの可能性がある
+      if (currentSectionData && currentSectionData.text_file_key && lessonData?.s3_key) {
+        const sectionTextFileKey = currentSectionData.text_file_key;
+        const lessonS3Key = lessonData.s3_key;
+        
+        // ファイル名を抽出して比較
+        const extractFileName = (key) => {
+          if (!key) return '';
+          const parts = key.split('/');
+          return parts[parts.length - 1].trim().toLowerCase();
+        };
+        
+        const sectionFileName = extractFileName(sectionTextFileKey);
+        const lessonFileName = extractFileName(lessonS3Key);
+        
+        // ファイル名が一致しない場合、テキストファイルの読み込みをスキップ
+        if (sectionFileName !== lessonFileName) {
+          console.log('⚠️ セクションのtext_file_keyとlessonData.s3_keyが一致しません。テキストファイルの読み込みをスキップします:', {
+            sectionTextFileKey,
+            lessonS3Key,
+            sectionFileName,
+            lessonFileName,
+            currentSection
+          });
+          // 既存のtextContentを保持（空で上書きしない）
+          if (!textContent && onTextContentUpdate) {
+            onTextContentUpdate('');
+          }
+          return;
+        }
+      }
+      
+      // すべてのセクションにtext_file_keyがない場合もスキップ
+      const hasAnyTextFileKey = sectionData.some(section => section.text_file_key);
+      if (!hasAnyTextFileKey) {
+        console.log('⚠️ すべてのセクションにtext_file_keyが存在しません。テキストファイルの読み込みをスキップします');
+        // 既存のtextContentを保持（空で上書きしない）
+        if (!textContent && onTextContentUpdate) {
+          onTextContentUpdate('');
+        }
+        return;
+      }
+    }
     
     // レッスンデータが存在しない場合は処理をスキップ
     if (!lessonData || !lessonData.s3_key) {
-      console.log('レッスンデータまたはS3キーが存在しません');
+      console.log('⚠️ レッスンデータまたはS3キーが存在しません');
+      return;
+    }
+    
+    // セクションデータが空配列の場合、lessonData.s3_keyがあっても処理をスキップ（二重チェック）
+    // これは、セクションデータが空配列に設定される前に処理が実行される可能性があるため
+    if (Array.isArray(sectionData) && sectionData.length === 0) {
+      console.log('⚠️ セクションデータが空です（二重チェック）。テキストファイルの読み込みをスキップします');
+      if (onTextContentUpdate) {
+        onTextContentUpdate('');
+      }
       return;
     }
     
@@ -144,7 +247,7 @@ const TextSection = ({
     // TXT、MD、RTFファイルの場合（PDF以外のテキストファイル）
     else if (!isPdf && (lessonData?.file_type === 'txt' || lessonData?.file_type === 'md' || lessonData?.file_type === 'text/markdown' || lessonData?.file_type === 'text/plain' || lessonData?.file_type === 'application/rtf')) {
       // textContentが存在する場合はセッションストレージに保存
-      if (textContent) {
+      if (textContent && textContent.length > 0) {
         console.log('テキストファイルのコンテキストをセッションストレージに保存:', {
           fileType: lessonData.file_type,
           textLength: textContent.length,
@@ -174,12 +277,62 @@ const TextSection = ({
         } else {
           console.error('テキストファイルのコンテキスト保存に失敗');
         }
+        // textContentが存在する場合は、テキストファイルの読み込みをスキップ
+        return;
       } 
       // textContentが空で、s3_keyが変更された場合は、APIからテキストファイルを読み込む
       else if (lessonData?.s3_key && processedS3KeyRef.current !== lessonData.s3_key) {
+        // セクションデータが空配列の場合、テキストファイルの読み込みをスキップ（最終チェック）
+        if (Array.isArray(sectionData) && sectionData.length === 0) {
+          console.log('⚠️ セクションデータが空です（最終チェック）。テキストファイルの読み込みをスキップします');
+          if (onTextContentUpdate) {
+            onTextContentUpdate('');
+          }
+          return;
+        }
+        
+        // セクションデータが存在する場合、セクションのtext_file_keyとlessonData.s3_keyが一致するか確認
+        if (Array.isArray(sectionData) && sectionData.length > 0) {
+          const currentSectionData = sectionData[currentSection];
+          if (currentSectionData && currentSectionData.text_file_key && lessonData?.s3_key) {
+            const sectionTextFileKey = currentSectionData.text_file_key;
+            const lessonS3Key = lessonData.s3_key;
+            
+            // ファイル名を抽出して比較
+            const extractFileName = (key) => {
+              if (!key) return '';
+              const parts = key.split('/');
+              return parts[parts.length - 1].trim().toLowerCase();
+            };
+            
+            const sectionFileName = extractFileName(sectionTextFileKey);
+            const lessonFileName = extractFileName(lessonS3Key);
+            
+            // ファイル名が一致しない場合、テキストファイルの読み込みをスキップ
+            if (sectionFileName !== lessonFileName) {
+              console.log('⚠️ セクションのtext_file_keyとlessonData.s3_keyが一致しません（最終チェック）。テキストファイルの読み込みをスキップします:', {
+                sectionTextFileKey,
+                lessonS3Key,
+                sectionFileName,
+                lessonFileName,
+                currentSection
+              });
+              // 既存のtextContentを保持（空で上書きしない）
+              if (!textContent && onTextContentUpdate) {
+                onTextContentUpdate('');
+              }
+              return;
+            }
+          }
+        }
+        
         console.log('テキストファイルをAPIから読み込みます:', {
           s3Key: lessonData.s3_key,
-          fileType: lessonData.file_type
+          fileType: lessonData.file_type,
+          sectionDataLength: sectionData?.length,
+          hasSectionData: !!sectionData,
+          hasTextContent: !!textContent,
+          textContentLength: textContent?.length || 0
         });
         
         // テキストファイルを読み込む
@@ -194,7 +347,7 @@ const TextSection = ({
         hasPdfTextContent: !!pdfTextContent
       });
     }
-   }, [lessonData, textContent, pdfTextContent]); // textContentとpdfTextContentを依存配列に追加
+   }, [lessonData, textContent, pdfTextContent, sectionData, currentSection]); // textContent、pdfTextContent、sectionData、currentSectionを依存配列に追加
 
   // コンポーネントのアンマウント時に処理をクリーンアップ
   useEffect(() => {
@@ -217,10 +370,21 @@ const TextSection = ({
       return;
     }
     
+    // セクションデータが空配列の場合、テキストファイルの読み込みをスキップ（関数内チェック）
+    if (Array.isArray(sectionData) && sectionData.length === 0) {
+      console.log('⚠️ fetchTextFile: セクションデータが空です。テキストファイルの読み込みをスキップします');
+      if (onTextContentUpdate) {
+        onTextContentUpdate('');
+      }
+      return;
+    }
+    
     console.log('fetchTextFile: 開始', {
       s3Key,
       fileType,
-      lessonId: lessonData?.id
+      lessonId: lessonData?.id,
+      sectionDataLength: sectionData?.length,
+      hasSectionData: !!sectionData
     });
     
     try {
@@ -276,16 +440,45 @@ const TextSection = ({
       } else {
         const errorData = await response.json().catch(() => ({}));
         console.error('テキストファイル読み込みAPIエラー:', response.status, errorData);
-        // エラー時も親コンポーネントに通知（textLoadingをfalseにするため）
-        if (onTextContentUpdate) {
-          onTextContentUpdate(`エラー: テキストファイルの読み込みに失敗しました (HTTP ${response.status})`);
+        
+        // 404エラー（ファイルが見つからない）の場合は、空のコンテンツを通知
+        // 複数のテキストを持たない学習画面では、テキストファイルが存在しないことが正常な状態である可能性がある
+        if (response.status === 404) {
+          console.log('テキストファイルが見つかりませんでした（404）。これは正常な状態である可能性があります:', {
+            s3Key,
+            fileType,
+            lessonId: lessonData?.id
+          });
+          // エラー時も親コンポーネントに通知（textLoadingをfalseにするため）
+          if (onTextContentUpdate) {
+            onTextContentUpdate(''); // 空のコンテンツを通知
+          }
+        } else {
+          // その他のエラーの場合はエラーメッセージを表示
+          if (onTextContentUpdate) {
+            onTextContentUpdate(`エラー: テキストファイルの読み込みに失敗しました (HTTP ${response.status})`);
+          }
         }
       }
     } catch (error) {
       console.error('テキストファイル読み込みエラー:', error);
-      // エラー時も親コンポーネントに通知（textLoadingをfalseにするため）
-      if (onTextContentUpdate) {
-        onTextContentUpdate(`エラー: テキストファイルの読み込み中にエラーが発生しました: ${error.message}`);
+      
+      // ネットワークエラーやCORSエラーの場合も適切に処理
+      if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+        console.warn('テキストファイルの読み込みに失敗しました（ネットワークエラーまたはCORSエラー）:', {
+          s3Key,
+          fileType,
+          error: error.message
+        });
+        // エラー時も親コンポーネントに通知（textLoadingをfalseにするため）
+        if (onTextContentUpdate) {
+          onTextContentUpdate(''); // 空のコンテンツを通知（エラーメッセージを表示しない）
+        }
+      } else {
+        // その他のエラーの場合はエラーメッセージを表示
+        if (onTextContentUpdate) {
+          onTextContentUpdate(`エラー: テキストファイルの読み込み中にエラーが発生しました: ${error.message}`);
+        }
       }
     }
   };

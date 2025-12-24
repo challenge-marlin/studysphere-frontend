@@ -25,6 +25,27 @@ const TextSection = ({
   // 処理済みのS3キーを記録（無限ループ防止）
   const processedS3KeyRef = useRef(null);
 
+  // 複数テキストが存在するかどうかを判定する関数
+  const hasMultipleTexts = (sections) => {
+    if (!sections || !Array.isArray(sections) || sections.length === 0) {
+      return false;
+    }
+    
+    // text_file_keyを持つセクションを抽出
+    const sectionsWithText = sections.filter(section => section.text_file_key);
+    
+    // text_file_keyを持つセクションが2つ以上ある場合、複数テキストと判定
+    if (sectionsWithText.length >= 2) {
+      // 異なるtext_file_keyが存在するか確認
+      const uniqueTextFileKeys = new Set(
+        sectionsWithText.map(section => section.text_file_key)
+      );
+      return uniqueTextFileKeys.size > 1;
+    }
+    
+    return false;
+  };
+
   // file_typeがPDFかどうかを判定する関数
   const isPdfFile = (fileType, s3Key) => {
     if (!fileType && !s3Key) return false;
@@ -111,9 +132,13 @@ const TextSection = ({
         return;
       }
       
+      // 複数テキストが存在するかどうかを判定
+      const multipleTexts = hasMultipleTexts(sectionData);
+      
       // セクションデータが存在する場合、セクションのtext_file_keyとlessonData.s3_keyが一致するか確認
+      // ただし、複数テキストが存在する場合は、このチェックをスキップ（セクション切り替え時に常に読み込む）
       // セクションのtext_file_keyはファイル名のみ、lessonData.s3_keyは完全パスの可能性がある
-      if (currentSectionData && currentSectionData.text_file_key && lessonData?.s3_key) {
+      if (!multipleTexts && currentSectionData && currentSectionData.text_file_key && lessonData?.s3_key) {
         const sectionTextFileKey = currentSectionData.text_file_key;
         const lessonS3Key = lessonData.s3_key;
         
@@ -142,6 +167,15 @@ const TextSection = ({
           }
           return;
         }
+      }
+      
+      // 複数テキストが存在する場合のログ
+      if (multipleTexts) {
+        console.log('複数テキストが存在するため、ファイル名一致チェックをスキップします:', {
+          currentSection,
+          sectionTextFileKey: currentSectionData?.text_file_key,
+          lessonS3Key: lessonData?.s3_key
+        });
       }
       
       // すべてのセクションにtext_file_keyがない場合もスキップ
@@ -291,8 +325,12 @@ const TextSection = ({
           return;
         }
         
+        // 複数テキストが存在するかどうかを判定
+        const multipleTexts = hasMultipleTexts(sectionData);
+        
         // セクションデータが存在する場合、セクションのtext_file_keyとlessonData.s3_keyが一致するか確認
-        if (Array.isArray(sectionData) && sectionData.length > 0) {
+        // ただし、複数テキストが存在する場合は、このチェックをスキップ（セクション切り替え時に常に読み込む）
+        if (!multipleTexts && Array.isArray(sectionData) && sectionData.length > 0) {
           const currentSectionData = sectionData[currentSection];
           if (currentSectionData && currentSectionData.text_file_key && lessonData?.s3_key) {
             const sectionTextFileKey = currentSectionData.text_file_key;
@@ -324,6 +362,15 @@ const TextSection = ({
               return;
             }
           }
+        }
+        
+        // 複数テキストが存在する場合のログ（最終チェック）
+        if (multipleTexts) {
+          console.log('複数テキストが存在するため、ファイル名一致チェックをスキップします（最終チェック）:', {
+            currentSection,
+            sectionTextFileKey: sectionData?.[currentSection]?.text_file_key,
+            lessonS3Key: lessonData?.s3_key
+          });
         }
         
         console.log('テキストファイルをAPIから読み込みます:', {
@@ -389,7 +436,8 @@ const TextSection = ({
     
     try {
       // テキスト抽出APIを使用してテキストファイルを読み込む
-      const response = await fetch(`${API_BASE_URL}/api/test/learning/extract-text/${encodeURIComponent(s3Key)}`, {
+      // クエリパラメータとして送信することで、CORSエラーを回避（日本語を含む長いパスの問題を解決）
+      const response = await fetch(`${API_BASE_URL}/api/test/learning/extract-text?s3Key=${encodeURIComponent(s3Key)}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'Content-Type': 'application/json'

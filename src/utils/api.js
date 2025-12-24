@@ -57,7 +57,9 @@ export const apiCall = async (endpoint, options = {}, retryCount = 0) => {
     '/api/messages/unread-count',
     '/api/remote-support/login',
     '/api/remote-support/check-temp-password',
-    '/api/remote-support/auto-login'
+    '/api/remote-support/auto-login',
+    '/api/sso/ticket/verify',
+    '/api/sso/login'
   ];
   
   const isAuthRequired = authRequiredEndpoints.some(authEndpoint => endpoint.includes(authEndpoint));

@@ -9,6 +9,8 @@ import InstructorDashboard from './pages/InstructorDashboard';
 import StudentLogin from './pages/StudentLogin';
 import StudentDashboard from './pages/StudentDashboard';
 import AutoLoginPage from './pages/AutoLoginPage';
+import SSOLoginPage from './pages/SSOLoginPage';
+import SSODispatcherPage from './pages/SSODispatcherPage';
 import { EnhancedLearningPageRefactored } from './components/learning';
 import TestPage from './pages/TestPage';
 import SectionTestPage from './pages/SectionTestPage';
@@ -83,6 +85,10 @@ function App() {
             <Route path="/student/login" element={<StudentLogin />} />
             {/* 自動ログインページ（アプリからの自動ログイン用） */}
             <Route path="/auto-login/" element={<AutoLoginPage />} />
+            {/* SSOログインページ（他のサイトからStudySphereへの自動ログイン用） */}
+            <Route path="/sso-login" element={<SSOLoginPage />} />
+            {/* SSOディスパッチャーページ（StudySphere経由で他システムへ遷移する用） */}
+            <Route path="/sso-dispatch" element={<SSODispatcherPage />} />
             {/* 利用者用ダッシュボード */}
             <Route path="/student/dashboard" element={<StudentDashboard />} />
             {/* 学習画面（リファクタリング版を使用） */}

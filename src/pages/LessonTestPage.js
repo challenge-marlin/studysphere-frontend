@@ -575,7 +575,8 @@ const LessonTestPage = () => {
                     fileType: textFile.file_type
                   });
                   
-                  const extractResponse = await fetch(`${API_BASE_URL}/api/test/learning/extract-text/${encodeURIComponent(textFile.s3_key)}`, {
+                  // クエリパラメータとして送信することで、CORSエラーを回避（日本語を含む長いパスの問題を解決）
+                  const extractResponse = await fetch(`${API_BASE_URL}/api/test/learning/extract-text?s3Key=${encodeURIComponent(textFile.s3_key)}`, {
                     headers: {
                       'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
                       'Content-Type': 'application/json'

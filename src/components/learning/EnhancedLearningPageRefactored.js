@@ -524,8 +524,29 @@ const EnhancedLearningPageRefactored = () => {
     console.log(`✅ レッスン変更処理完了: ${lessonId}`);
   };
 
-     // セクション変更処理
-   const changeSection = (sectionIndex) => {
+  // 複数テキストが存在するかどうかを判定する関数
+  const hasMultipleTexts = (sections) => {
+    if (!sections || !Array.isArray(sections) || sections.length === 0) {
+      return false;
+    }
+    
+    // text_file_keyを持つセクションを抽出
+    const sectionsWithText = sections.filter(section => section.text_file_key);
+    
+    // text_file_keyを持つセクションが2つ以上ある場合、複数テキストと判定
+    if (sectionsWithText.length >= 2) {
+      // 異なるtext_file_keyが存在するか確認
+      const uniqueTextFileKeys = new Set(
+        sectionsWithText.map(section => section.text_file_key)
+      );
+      return uniqueTextFileKeys.size > 1;
+    }
+    
+    return false;
+  };
+
+  // セクション変更処理
+  const changeSection = (sectionIndex) => {
      if (!sectionData || !Array.isArray(sectionData)) return;
      
      const newSection = sectionData[sectionIndex];
@@ -540,17 +561,38 @@ const EnhancedLearningPageRefactored = () => {
        sectionTextFileKey: newSection?.text_file_key
      });
      
-     // セクションのtext_file_keyが存在し、現在のlessonData.s3_keyと異なる場合はテキストファイルを更新
+     // 複数テキストが存在するかどうかを判定
+     const multipleTexts = hasMultipleTexts(sectionData);
+     
      const sectionTextFileKey = newSection?.text_file_key;
      const currentS3Key = lessonData?.s3_key;
      
-     if (sectionTextFileKey && sectionTextFileKey !== currentS3Key) {
-       console.log('セクションのテキストファイルを更新します:', {
-         sectionTextFileKey,
-         currentS3Key,
-         newSection
-       });
-       
+     // 複数テキストが存在する場合と単一テキストの場合で処理を分ける
+     let shouldUpdateText = false;
+     
+     if (multipleTexts) {
+       // 複数テキストが存在する場合：セクションにtext_file_keyがあれば常に更新
+       if (sectionTextFileKey) {
+         shouldUpdateText = true;
+         console.log('複数テキストが存在します。セクションのテキストファイルを更新します:', {
+           sectionTextFileKey,
+           currentS3Key,
+           newSection
+         });
+       }
+     } else {
+       // 単一テキストの場合：従来の処理（text_file_keyが存在し、現在のs3_keyと異なる場合のみ更新）
+       if (sectionTextFileKey && sectionTextFileKey !== currentS3Key) {
+         shouldUpdateText = true;
+         console.log('単一テキストの場合。セクションのテキストファイルを更新します:', {
+           sectionTextFileKey,
+           currentS3Key,
+           newSection
+         });
+       }
+     }
+     
+     if (shouldUpdateText) {
        // バックエンドから完全パスとfile_typeが返されているので、それを使用
        const finalS3Key = sectionTextFileKey; // バックエンドで既に完全パスに変換されている
        

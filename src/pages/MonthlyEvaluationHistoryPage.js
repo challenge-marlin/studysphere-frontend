@@ -63,6 +63,30 @@ const MonthlyEvaluationHistoryPage = () => {
     return `${parts.year}年${parts.month}月${parts.day}日 ${parts.hour}:${parts.minute}`;
   };
 
+  // 実施時間をHH:MM形式で表示
+  const formatTimeForDisplay = (value) => {
+    if (!value) return '';
+    if (timeOnlyPattern.test(value)) {
+      return value.slice(0, 5);
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return '';
+    }
+
+    const parts = tokyoTimeFormatter.formatToParts(date).reduce((acc, part) => {
+      acc[part.type] = part.value;
+      return acc;
+    }, {});
+
+    if (!parts.hour || !parts.minute) {
+      return tokyoTimeFormatter.format(date);
+    }
+
+    return `${parts.hour}:${parts.minute}`;
+  };
+
   const normalizeTimeForInput = (value) => {
     if (!value) return '';
     if (timeOnlyPattern.test(value)) {
@@ -192,10 +216,52 @@ const MonthlyEvaluationHistoryPage = () => {
 
   // フロントエンドデータをバックエンド形式に変換
   const convertFrontendToBackend = (data) => {
-    return {
+    // 時間と日付を組み合わせてYYYY-MM-DD HH:MM:SS形式に変換
+    const combineDateAndTime = (dateStr, timeStr) => {
+      if (!dateStr || !timeStr || timeStr.trim() === '') {
+        return null;
+      }
+      // 日付をYYYY-MM-DD形式に正規化
+      let normalizedDate = dateStr;
+      if (dateStr instanceof Date) {
+        const year = dateStr.getFullYear();
+        const month = String(dateStr.getMonth() + 1).padStart(2, '0');
+        const day = String(dateStr.getDate()).padStart(2, '0');
+        normalizedDate = `${year}-${month}-${day}`;
+      } else if (typeof dateStr === 'string' && !dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        // 日付文字列を正規化
+        const date = new Date(dateStr);
+        if (!Number.isNaN(date.getTime())) {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          normalizedDate = `${year}-${month}-${day}`;
+        } else {
+          return null;
+        }
+      }
+      
+      // 時間をHH:MM形式に正規化
+      let normalizedTime = timeStr;
+      if (timeStr.match(/^\d{2}:\d{2}$/)) {
+        // 既にHH:MM形式
+        normalizedTime = timeStr;
+      } else {
+        // その他の形式から時間部分を抽出
+        const timeMatch = timeStr.match(/(\d{2}):(\d{2})/);
+        if (timeMatch) {
+          normalizedTime = `${timeMatch[1]}:${timeMatch[2]}`;
+        } else {
+          return null;
+        }
+      }
+      
+      // YYYY-MM-DD HH:MM:SS形式に結合
+      return `${normalizedDate} ${normalizedTime}:00`;
+    };
+
+    const result = {
       date: data.date,
-      mark_start: data.startTime || null,
-      mark_end: data.endTime || null,
       evaluation_method: data.method === 'その他' ? 'その他' : data.method,
       method_other: data.method === 'その他' ? data.methodOther : null,
       goal: data.trainingGoal || null,
@@ -213,6 +279,19 @@ const MonthlyEvaluationHistoryPage = () => {
       period_start: data.startDate || null,
       period_end: data.endDate || null
     };
+    
+    // 時間が設定されている場合のみmark_startとmark_endを追加
+    const markStart = combineDateAndTime(data.date, data.startTime);
+    if (markStart) {
+      result.mark_start = markStart;
+    }
+    
+    const markEnd = combineDateAndTime(data.date, data.endTime);
+    if (markEnd) {
+      result.mark_end = markEnd;
+    }
+    
+    return result;
   };
 
   // 利用者情報を取得
@@ -398,6 +477,13 @@ const MonthlyEvaluationHistoryPage = () => {
     setIsSaving(true);
     try {
       const backendData = convertFrontendToBackend(editingEvaluation);
+      console.log('保存するデータ:', {
+        editingEvaluation,
+        backendData,
+        mark_start: backendData.mark_start,
+        mark_end: backendData.mark_end,
+        date: backendData.date
+      });
       const response = await apiCall(`/api/monthly-evaluations/${selectedEvaluation.id}`, {
         method: 'PUT',
         body: JSON.stringify(backendData)
@@ -563,20 +649,43 @@ const MonthlyEvaluationHistoryPage = () => {
 
       const formatTime = (timeStr) => {
         if (!timeStr) return '';
-        // 時間文字列から時間部分を抽出（HH:MM形式）
-        if (typeof timeStr === 'string') {
-          const match = timeStr.match(/(\d{2}):(\d{2})/);
-          if (match) {
-            return `${match[1]}:${match[2]}`;
-          }
+        
+        // 既にHH:MM形式の場合はそのまま返す
+        if (typeof timeStr === 'string' && timeStr.match(/^\d{2}:\d{2}$/)) {
+          return timeStr;
         }
-        // Dateオブジェクトの場合
+        
+        // UTC時刻の文字列またはDateオブジェクトを日本時間に変換
+        let date;
         if (timeStr instanceof Date) {
-          const hours = String(timeStr.getHours()).padStart(2, '0');
-          const minutes = String(timeStr.getMinutes()).padStart(2, '0');
-          return `${hours}:${minutes}`;
+          date = timeStr;
+        } else if (typeof timeStr === 'string') {
+          // UTC時刻の文字列として解釈（YYYY-MM-DD HH:MM:SS形式またはISO形式）
+          date = new Date(timeStr);
+          if (Number.isNaN(date.getTime())) {
+            // 日時文字列として解釈できない場合は、時間部分のみを抽出
+            const match = timeStr.match(/(\d{2}):(\d{2})/);
+            if (match) {
+              return `${match[1]}:${match[2]}`;
+            }
+            return '';
+          }
+        } else {
+          return '';
         }
-        return timeStr;
+        
+        // 日本時間に変換してHH:MM形式で返す
+        const parts = tokyoTimeFormatter.formatToParts(date).reduce((acc, part) => {
+          acc[part.type] = part.value;
+          return acc;
+        }, {});
+        
+        if (parts.hour && parts.minute) {
+          return `${parts.hour}:${parts.minute}`;
+        }
+        
+        // フォールバック: 直接フォーマット
+        return tokyoTimeFormatter.format(date);
       };
 
       const updateCell = (cellAddress, value) => {
@@ -967,11 +1076,11 @@ const MonthlyEvaluationHistoryPage = () => {
                   <div className="grid grid-cols-2 gap-4 bg-gray-50 rounded-lg p-4">
                     <div>
                       <div className="text-sm text-gray-600 mb-1">開始時間</div>
-                      <div className="text-xl font-bold text-blue-600">{formatDateTimeForDisplay(selectedEvaluation.startTime) || '未設定'}</div>
+                      <div className="text-xl font-bold text-blue-600">{formatTimeForDisplay(selectedEvaluation.startTime) || '未設定'}</div>
                     </div>
                     <div>
                       <div className="text-sm text-gray-600 mb-1">終了時間</div>
-                      <div className="text-xl font-bold text-blue-600">{formatDateTimeForDisplay(selectedEvaluation.endTime) || '未設定'}</div>
+                      <div className="text-xl font-bold text-blue-600">{formatTimeForDisplay(selectedEvaluation.endTime) || '未設定'}</div>
                     </div>
                   </div>
                 )}

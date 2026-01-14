@@ -628,23 +628,23 @@ const WeeklyEvaluationPage = () => {
                       <div className="p-4 bg-white space-y-3 text-sm">
                         <div>
                           <span className="font-semibold text-gray-700">作業内容:</span>
-                          <p className="mt-1 text-gray-600">{record.workContent}</p>
+                          <p className="mt-1 text-gray-600 whitespace-pre-wrap">{record.workContent}</p>
                         </div>
                         <div>
                           <span className="font-semibold text-gray-700">作業実績:</span>
-                          <p className="mt-1 text-gray-600">{record.workResult}</p>
+                          <p className="mt-1 text-gray-600 whitespace-pre-wrap">{record.workResult}</p>
                         </div>
                         <div>
                           <span className="font-semibold text-gray-700">日報:</span>
-                          <p className="mt-1 text-gray-600">{record.dailyReport}</p>
+                          <p className="mt-1 text-gray-600 whitespace-pre-wrap">{record.dailyReport}</p>
                         </div>
                         <div>
                           <span className="font-semibold text-gray-700">支援内容:</span>
-                          <p className="mt-1 text-gray-600">{record.supportContent}</p>
+                          <p className="mt-1 text-gray-600 whitespace-pre-wrap">{record.supportContent}</p>
                         </div>
                         <div>
                           <span className="font-semibold text-gray-700">心身状況・助言内容:</span>
-                          <p className="mt-1 text-gray-600">{record.advice}</p>
+                          <p className="mt-1 text-gray-600 whitespace-pre-wrap">{record.advice}</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-gray-700">体調:</span>

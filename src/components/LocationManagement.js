@@ -1275,17 +1275,50 @@ const LocationManagement = () => {
     !facility.manager_ids || facility.manager_ids.length === 0
   ).length;
   
-  // 30日以内に期限切れになる事業所数
+  // 14日以内に期限切れになる事業所数
   const expiringSoonFacilities = facilities.filter(facility => {
     if (!facility.token_expiry_at) return false;
-    // バックエンドから返されるtoken_expiry_atは日本時間の文字列
-    // データベースから返される値は日本時間なので、UTCとして扱ってから日本時間に変換
-    const utcDate = new Date(facility.token_expiry_at + 'Z'); // UTCとして解釈
-    const japanExpiryDate = new Date(utcDate.getTime() + (9 * 60 * 60 * 1000)); // 日本時間に変換
-    const now = getCurrentJapanTime();
-    const diffTime = japanExpiryDate - now;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays <= 30 && diffDays > 0;
+    
+    // 無効な日付値のチェック
+    if (facility.token_expiry_at === '0000-00-00 00:00:00' || 
+        facility.token_expiry_at === '0000-00-00' || 
+        facility.token_expiry_at === 'null' || 
+        facility.token_expiry_at === 'undefined' ||
+        facility.token_expiry_at === null ||
+        facility.token_expiry_at === undefined ||
+        facility.token_expiry_at === '' ||
+        facility.token_expiry_at === 'NULL' ||
+        facility.token_expiry_at === 'None') {
+      return false;
+    }
+    
+    try {
+      // 文字列でない場合は文字列に変換
+      const expiryString = String(facility.token_expiry_at).trim();
+      
+      // 空文字列のチェック
+      if (expiryString === '') {
+        return false;
+      }
+      
+      // 日本時間として直接解釈（UTC変換なし）- テーブル表示と同じロジック
+      const japanDate = new Date(expiryString);
+      
+      // 無効な日付かチェック
+      if (isNaN(japanDate.getTime())) {
+        return false;
+      }
+      
+      const now = getCurrentJapanTime();
+      const diffTime = japanDate - now;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      // 14日以内かつまだ有効（0日より大きい）の場合にカウント
+      return diffDays <= 14 && diffDays > 0;
+    } catch (error) {
+      console.error('有効期限間近カウントエラー:', error, 'token_expiry_at:', facility.token_expiry_at);
+      return false;
+    }
   }).length;
 
   const filteredFacilities = getFilteredAndSortedFacilities();

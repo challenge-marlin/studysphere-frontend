@@ -56,6 +56,24 @@ const SSOLoginPage = () => {
           return { success: false, redirecting: true };
         }
 
+        // NO_TEMP_PASSWORDエラーの場合、アラートを表示して元システムにリダイレクト
+        if (result.error === 'NO_TEMP_PASSWORD' && result.source_system) {
+          const sourceSystem = result.source_system;
+          const redirectUrl = `${sourceSystem.base_url}${sourceSystem.landing_path}`;
+          const errorMessage = result.message || '一時パスワードが発行されていません。担当者に一時パスワードの発行を依頼してください';
+          
+          console.log('SSOLoginPage: 一時パスワード未発行のため元システムにリダイレクト', {
+            sourceSystem: sourceSystem.system_key,
+            redirectUrl,
+            errorMessage
+          });
+          
+          // アラートを表示してから元システムにリダイレクト
+          alert(errorMessage);
+          window.location.href = redirectUrl;
+          return { success: false, redirecting: true };
+        }
+
         return {
           success: false,
           error: result.error || 'UNKNOWN_ERROR',
@@ -201,9 +219,9 @@ const SSOLoginPage = () => {
         navigate('/student/dashboard');
         break;
       case 4: // 指導員
+      case 5: // 管理者
         navigate('/instructor/dashboard');
         break;
-      case 5: // 管理者
       case 9: // アドミン
       case 10: // マスターユーザー
         navigate('/admin/dashboard');
@@ -272,6 +290,10 @@ const SSOLoginPage = () => {
 };
 
 export default SSOLoginPage;
+
+
+
+
 
 
 

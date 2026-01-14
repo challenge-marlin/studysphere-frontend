@@ -313,17 +313,18 @@ const CompanySatelliteSwitchModal = ({
                 )}
                 {/* 単一拠点所属の場合は拠点リストを非表示 */}
                 {!(userRole < 9 && userSatellites && userSatellites.length === 1) && (
-                  <div className="grid grid-cols-1 gap-3">
-                    {(() => {
-                      const satelliteList = satellites || [];
-                      console.log('拠点リスト表示:', {
-                        userRole,
-                        satellites,
-                        userSatellites,
-                        satelliteList,
-                        satelliteListLength: satelliteList.length
-                      });
-                      return satelliteList.map((satellite) => (
+                  <div className="max-h-96 overflow-y-auto pr-2">
+                    <div className="grid grid-cols-1 gap-3">
+                      {(() => {
+                        const satelliteList = satellites || [];
+                        console.log('拠点リスト表示:', {
+                          userRole,
+                          satellites,
+                          userSatellites,
+                          satelliteList,
+                          satelliteListLength: satelliteList.length
+                        });
+                        return satelliteList.map((satellite) => (
                         <button
                           key={satellite.id}
                           onClick={() => setSelectedSatellite(satellite)}
@@ -359,6 +360,7 @@ const CompanySatelliteSwitchModal = ({
                         </button>
                       ));
                     })()}
+                    </div>
                   </div>
                 )}
               </div>
@@ -368,8 +370,9 @@ const CompanySatelliteSwitchModal = ({
             {activeTab === 'company' && canSwitchCompany && companySelectionStep === 'selectCompany' && (
               <div className="space-y-4">
                 <h3 className="font-medium text-gray-700">企業から選択</h3>
-                <div className="grid grid-cols-1 gap-3">
-                  {(companies || []).map((company) => (
+                <div className="max-h-96 overflow-y-auto pr-2">
+                  <div className="grid grid-cols-1 gap-3">
+                    {(companies || []).map((company) => (
                     <button
                       key={company.id}
                       onClick={() => handleCompanySelect(company)}
@@ -399,6 +402,7 @@ const CompanySatelliteSwitchModal = ({
                       </div>
                     </button>
                   ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -426,8 +430,9 @@ const CompanySatelliteSwitchModal = ({
                   </p>
                 </div>
                 <h3 className="font-medium text-gray-700">拠点を選択してください</h3>
-                <div className="grid grid-cols-1 gap-3">
-                  {(satellites || []).map((satellite) => (
+                <div className="max-h-96 overflow-y-auto pr-2">
+                  <div className="grid grid-cols-1 gap-3">
+                    {(satellites || []).map((satellite) => (
                     <button
                       key={satellite.id}
                       onClick={() => setSelectedSatellite(satellite)}
@@ -462,6 +467,7 @@ const CompanySatelliteSwitchModal = ({
                       </div>
                     </button>
                   ))}
+                  </div>
                 </div>
               </div>
             )}

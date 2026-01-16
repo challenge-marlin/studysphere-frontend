@@ -183,7 +183,18 @@ const SSODispatcherPage = () => {
         if (!isAuthenticated || !currentUser) {
           console.log('SSODispatcherPage: 未ログインのためログインページへリダイレクト');
           const returnUrl = encodeURIComponent(`/sso-dispatch?target=${target}${ticket ? `&ticket=${ticket}` : ''}${source ? `&source=${source}` : ''}`);
-          navigate(`/admin-instructor-login?return_url=${returnUrl}`);
+          
+          // referrerやURLから利用者ダッシュボード経由かどうかを判定
+          const referrer = document.referrer;
+          const isFromStudentDashboard = referrer.includes('/student/dashboard') || 
+                                         window.location.href.includes('/student/');
+          
+          // 利用者ダッシュボードから来た場合は利用者ログインページへ
+          if (isFromStudentDashboard) {
+            navigate(`/student-login?return_url=${returnUrl}`);
+          } else {
+            navigate(`/admin-instructor-login?return_url=${returnUrl}`);
+          }
           return;
         }
 
@@ -279,7 +290,33 @@ const SSODispatcherPage = () => {
       }
     };
 
-    handleDispatch();
+    // 認証状態の初期化を待つ（別タブで開いた場合の対応）
+    const checkAuthAndDispatch = async () => {
+      // 少し待ってから認証状態を再確認（AuthContextの初期化を待つ）
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // localStorageから認証情報を確認
+      const accessToken = localStorage.getItem('accessToken');
+      const currentUserStr = localStorage.getItem('currentUser');
+      
+      console.log('SSODispatcherPage: 認証状態確認', {
+        hasAccessToken: !!accessToken,
+        hasCurrentUser: !!currentUserStr,
+        isAuthenticated,
+        currentUser: currentUser ? '存在' : 'なし'
+      });
+      
+      // 認証情報がlocalStorageにあるが、AuthContextがまだ初期化されていない場合
+      // 少し待ってから再確認
+      if ((accessToken || currentUserStr) && (!isAuthenticated || !currentUser)) {
+        console.log('SSODispatcherPage: 認証情報は存在するが、AuthContextが未初期化の可能性。少し待機...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+      handleDispatch();
+    };
+
+    checkAuthAndDispatch();
   }, [searchParams, isAuthenticated, currentUser, navigate]);
 
   // ロールに応じてダッシュボードへリダイレクト

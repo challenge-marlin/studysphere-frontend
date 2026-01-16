@@ -526,6 +526,9 @@ const LessonManagement = () => {
         if (key === 'videos') {
           // 動画データはJSON文字列として送信
           formDataToSend.append(key, JSON.stringify(value));
+        } else if (key === 'has_assignment') {
+          // has_assignmentはbooleanを明示的に文字列として送信
+          formDataToSend.append(key, Boolean(value) ? 'true' : 'false');
         } else {
           formDataToSend.append(key, value === undefined ? null : value);
         }
@@ -1054,7 +1057,7 @@ const LessonManagement = () => {
         description: lesson.description || '',
         duration: lesson.duration || '120分',
         order_index: lesson.order_index || 0,
-        has_assignment: lesson.has_assignment || false,
+        has_assignment: Boolean(lesson.has_assignment),
         course_id: lesson.course_id,
         videos: videos
       });

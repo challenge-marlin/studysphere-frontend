@@ -24,6 +24,9 @@ const TextSection = ({
   const timeoutRef = useRef(null);
   // 処理済みのS3キーを記録（無限ループ防止）
   const processedS3KeyRef = useRef(null);
+  // ファイルタイプとS3キーを保持（再レンダリング時に失われないようにする）
+  const fileTypeRef = useRef(null);
+  const s3KeyRef = useRef(null);
 
   // 複数テキストが存在するかどうかを判定する関数
   const hasMultipleTexts = (sections) => {
@@ -91,6 +94,16 @@ const TextSection = ({
     console.log('TextSection - sectionData length:', Array.isArray(sectionData) ? sectionData.length : 'N/A');
     console.log('TextSection - currentSection:', currentSection);
     
+    // file_typeとs3_keyをrefに保存（再レンダリング時に失われないようにする）
+    if (lessonData?.file_type) {
+      fileTypeRef.current = lessonData.file_type;
+      console.log('✅ file_typeをrefに保存:', lessonData.file_type);
+    }
+    if (lessonData?.s3_key) {
+      s3KeyRef.current = lessonData.s3_key;
+      console.log('✅ s3_keyをrefに保存:', lessonData.s3_key);
+    }
+    
     // セクションデータの確認を最初に行う
     // 複数のテキストを持たない学習画面では、セクションにtext_file_keyが存在しない場合がある
     
@@ -102,14 +115,42 @@ const TextSection = ({
     
     // セクションデータが空配列の場合（複数のテキストを持たない学習画面）
     // この場合、lessonData.s3_keyがあっても処理をスキップする
+    // ただし、既存のtextContentが存在する場合は上書きしない
     if (Array.isArray(sectionData) && sectionData.length === 0) {
       console.log('⚠️ セクションデータが空です。テキストファイルの読み込みをスキップします（複数のテキストを持たない学習画面）', {
         sectionDataLength: sectionData.length,
         lessonDataS3Key: lessonData?.s3_key,
-        lessonDataFileType: lessonData?.file_type
+        lessonDataFileType: lessonData?.file_type,
+        hasExistingTextContent: !!(textContent && textContent.length > 0),
+        hasStoredContext: lessonData?.s3_key ? SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type) : false
       });
-      // テキストファイルが存在しない場合は、親コンポーネントに空のコンテンツを通知
+      
+      // 既存のtextContentが存在するか、セッションストレージにコンテキストが存在する場合は、空で上書きしない
+      if (textContent && textContent.length > 0) {
+        console.log('✅ 既存のtextContentが存在するため、空で上書きしません:', {
+          textContentLength: textContent.length
+        });
+        return; // 既存のtextContentを保持するため、何もしない
+      }
+      
+      // セッションストレージにコンテキストが存在する場合は、それを使用
+      if (lessonData?.s3_key && lessonData?.id) {
+        const hasStoredContext = SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type);
+        if (hasStoredContext) {
+          const storedContext = SessionStorageManager.getContext(lessonData.id, lessonData.s3_key, lessonData.file_type);
+          console.log('✅ セッションストレージから既存のコンテキストを使用します:', {
+            contextLength: storedContext.context.length
+          });
+          if (onTextContentUpdate) {
+            onTextContentUpdate(storedContext.context);
+          }
+          return; // セッションストレージから取得したコンテキストを使用
+        }
+      }
+      
+      // 既存のtextContentもセッションストレージのコンテキストも存在しない場合のみ、空を通知
       if (onTextContentUpdate) {
+        console.log('⚠️ 既存のtextContentもセッションストレージのコンテキストも存在しないため、空を通知します');
         onTextContentUpdate('');
       }
       return;
@@ -191,16 +232,73 @@ const TextSection = ({
     }
     
     // レッスンデータが存在しない場合は処理をスキップ
-    if (!lessonData || !lessonData.s3_key) {
-      console.log('⚠️ レッスンデータまたはS3キーが存在しません');
+    // ただし、既存のtextContentが存在する場合は、それを保持するため処理を続行
+    if (!lessonData) {
+      console.log('⚠️ レッスンデータが存在しません');
+      return;
+    }
+    
+    // lessonData.s3_keyが存在しない場合でも、既存のtextContentが存在する場合は保持する
+    if (!lessonData.s3_key) {
+      console.log('⚠️ レッスンデータのS3キーが存在しません', {
+        hasExistingTextContent: !!(textContent && textContent.length > 0),
+        lessonId: lessonData.id
+      });
+      
+      // 既存のtextContentが存在する場合は、それを保持するため処理を続行しない
+      if (textContent && textContent.length > 0) {
+        console.log('✅ 既存のtextContentが存在するため、それを保持します:', {
+          textContentLength: textContent.length
+        });
+        return; // 既存のtextContentを保持するため、何もしない
+      }
+      
+      // セッションストレージからコンテキストを確認（lessonIdのみで検索）
+      // 注意: これは最後の手段であり、s3_keyがない場合は正確に一致しない可能性がある
+      if (lessonData.id) {
+        // セッションストレージから、このレッスンIDに関連するコンテキストを検索
+        // ただし、s3_keyがない場合は正確に一致しない可能性があるため、慎重に処理
+        console.log('⚠️ S3キーがないため、セッションストレージからのコンテキスト取得はスキップします');
+      }
+      
       return;
     }
     
     // セクションデータが空配列の場合、lessonData.s3_keyがあっても処理をスキップ（二重チェック）
     // これは、セクションデータが空配列に設定される前に処理が実行される可能性があるため
+    // ただし、既存のtextContentが存在する場合は上書きしない
     if (Array.isArray(sectionData) && sectionData.length === 0) {
-      console.log('⚠️ セクションデータが空です（二重チェック）。テキストファイルの読み込みをスキップします');
+      console.log('⚠️ セクションデータが空です（二重チェック）。テキストファイルの読み込みをスキップします', {
+        hasExistingTextContent: !!(textContent && textContent.length > 0),
+        hasStoredContext: lessonData?.s3_key ? SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type) : false
+      });
+      
+      // 既存のtextContentが存在する場合は、空で上書きしない
+      if (textContent && textContent.length > 0) {
+        console.log('✅ 既存のtextContentが存在するため、空で上書きしません（二重チェック）:', {
+          textContentLength: textContent.length
+        });
+        return; // 既存のtextContentを保持するため、何もしない
+      }
+      
+      // セッションストレージにコンテキストが存在する場合は、それを使用
+      if (lessonData?.s3_key && lessonData?.id) {
+        const hasStoredContext = SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type);
+        if (hasStoredContext) {
+          const storedContext = SessionStorageManager.getContext(lessonData.id, lessonData.s3_key, lessonData.file_type);
+          console.log('✅ セッションストレージから既存のコンテキストを使用します（二重チェック）:', {
+            contextLength: storedContext.context.length
+          });
+          if (onTextContentUpdate) {
+            onTextContentUpdate(storedContext.context);
+          }
+          return; // セッションストレージから取得したコンテキストを使用
+        }
+      }
+      
+      // 既存のtextContentもセッションストレージのコンテキストも存在しない場合のみ、空を通知
       if (onTextContentUpdate) {
+        console.log('⚠️ 既存のtextContentもセッションストレージのコンテキストも存在しないため、空を通知します（二重チェック）');
         onTextContentUpdate('');
       }
       return;
@@ -317,9 +415,39 @@ const TextSection = ({
       // textContentが空で、s3_keyが変更された場合は、APIからテキストファイルを読み込む
       else if (lessonData?.s3_key && processedS3KeyRef.current !== lessonData.s3_key) {
         // セクションデータが空配列の場合、テキストファイルの読み込みをスキップ（最終チェック）
+        // ただし、既存のtextContentが存在する場合は上書きしない
         if (Array.isArray(sectionData) && sectionData.length === 0) {
-          console.log('⚠️ セクションデータが空です（最終チェック）。テキストファイルの読み込みをスキップします');
+          console.log('⚠️ セクションデータが空です（最終チェック）。テキストファイルの読み込みをスキップします', {
+            hasExistingTextContent: !!(textContent && textContent.length > 0),
+            hasStoredContext: lessonData?.s3_key ? SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type) : false
+          });
+          
+          // 既存のtextContentが存在する場合は、空で上書きしない
+          if (textContent && textContent.length > 0) {
+            console.log('✅ 既存のtextContentが存在するため、空で上書きしません（最終チェック）:', {
+              textContentLength: textContent.length
+            });
+            return; // 既存のtextContentを保持するため、何もしない
+          }
+          
+          // セッションストレージにコンテキストが存在する場合は、それを使用
+          if (lessonData?.s3_key && lessonData?.id) {
+            const hasStoredContext = SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type);
+            if (hasStoredContext) {
+              const storedContext = SessionStorageManager.getContext(lessonData.id, lessonData.s3_key, lessonData.file_type);
+              console.log('✅ セッションストレージから既存のコンテキストを使用します（最終チェック）:', {
+                contextLength: storedContext.context.length
+              });
+              if (onTextContentUpdate) {
+                onTextContentUpdate(storedContext.context);
+              }
+              return; // セッションストレージから取得したコンテキストを使用
+            }
+          }
+          
+          // 既存のtextContentもセッションストレージのコンテキストも存在しない場合のみ、空を通知
           if (onTextContentUpdate) {
+            console.log('⚠️ 既存のtextContentもセッションストレージのコンテキストも存在しないため、空を通知します（最終チェック）');
             onTextContentUpdate('');
           }
           return;
@@ -418,9 +546,39 @@ const TextSection = ({
     }
     
     // セクションデータが空配列の場合、テキストファイルの読み込みをスキップ（関数内チェック）
+    // ただし、既存のtextContentが存在する場合は上書きしない
     if (Array.isArray(sectionData) && sectionData.length === 0) {
-      console.log('⚠️ fetchTextFile: セクションデータが空です。テキストファイルの読み込みをスキップします');
+      console.log('⚠️ fetchTextFile: セクションデータが空です。テキストファイルの読み込みをスキップします', {
+        hasExistingTextContent: !!(textContent && textContent.length > 0),
+        hasStoredContext: lessonData?.s3_key ? SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type) : false
+      });
+      
+      // 既存のtextContentが存在する場合は、空で上書きしない
+      if (textContent && textContent.length > 0) {
+        console.log('✅ fetchTextFile: 既存のtextContentが存在するため、空で上書きしません:', {
+          textContentLength: textContent.length
+        });
+        return; // 既存のtextContentを保持するため、何もしない
+      }
+      
+      // セッションストレージにコンテキストが存在する場合は、それを使用
+      if (lessonData?.s3_key && lessonData?.id) {
+        const hasStoredContext = SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type);
+        if (hasStoredContext) {
+          const storedContext = SessionStorageManager.getContext(lessonData.id, lessonData.s3_key, lessonData.file_type);
+          console.log('✅ fetchTextFile: セッションストレージから既存のコンテキストを使用します:', {
+            contextLength: storedContext.context.length
+          });
+          if (onTextContentUpdate) {
+            onTextContentUpdate(storedContext.context);
+          }
+          return; // セッションストレージから取得したコンテキストを使用
+        }
+      }
+      
+      // 既存のtextContentもセッションストレージのコンテキストも存在しない場合のみ、空を通知
       if (onTextContentUpdate) {
+        console.log('⚠️ fetchTextFile: 既存のtextContentもセッションストレージのコンテキストも存在しないため、空を通知します');
         onTextContentUpdate('');
       }
       return;
@@ -774,7 +932,11 @@ const TextSection = ({
 
   // 表示するテキスト内容を決定
   const displayTextContent = () => {
-    const isPdf = isPdfFile(lessonData?.file_type, lessonData?.s3_key);
+    // 再レンダリング時にlessonDataがnullになる可能性があるため、refからも取得
+    const currentFileType = lessonData?.file_type || fileTypeRef.current;
+    const currentS3Key = lessonData?.s3_key || s3KeyRef.current;
+    
+    const isPdf = isPdfFile(currentFileType, currentS3Key);
     if (isPdf) {
       if (pdfProcessingError) {
         return `エラー: ${pdfProcessingError}`;
@@ -786,8 +948,21 @@ const TextSection = ({
     }
     
     // RTFファイルの場合はタグを除去
-    if (lessonData?.file_type === 'application/rtf' || lessonData?.s3_key?.toLowerCase().endsWith('.rtf')) {
+    if (currentFileType === 'application/rtf' || (currentS3Key && currentS3Key.toLowerCase().endsWith('.rtf'))) {
       return stripRtfTags(textContent) || 'テキスト内容がありません';
+    }
+    
+    // textContentが空の場合、セッションストレージから取得を試みる
+    if (!textContent || textContent.length === 0) {
+      if (lessonData?.id && currentS3Key && currentFileType) {
+        const storedContext = SessionStorageManager.getContext(lessonData.id, currentS3Key, currentFileType);
+        if (storedContext && storedContext.context) {
+          console.log('✅ displayTextContent: セッションストレージからコンテンツを取得:', {
+            contextLength: storedContext.context.length
+          });
+          return storedContext.context;
+        }
+      }
     }
     
     return textContent || 'テキスト内容がありません';
@@ -913,17 +1088,40 @@ const TextSection = ({
         ) : (
           <div className="prose prose-sm max-w-none">
             {/* MDファイルの場合はMarkdownとしてレンダリング */}
-            {lessonData?.file_type === 'md' || lessonData?.file_type === 'text/markdown' || lessonData?.s3_key?.toLowerCase().endsWith('.md') ? (
-              <MarkdownRenderer 
-                content={displayTextContent()}
-                showToc={false}
-              />
-            ) : (
-              /* RTFファイルやその他のテキストファイルはプレーンテキストとして表示 */
-              <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
-                {displayTextContent()}
-              </div>
-            )}
+            {/* 再レンダリング時にlessonData.file_typeやlessonData.s3_keyがnullになる可能性があるため、refからも判定 */}
+            {(() => {
+              // 現在のfile_typeとs3_keyを取得（lessonDataから、またはrefから）
+              const currentFileType = lessonData?.file_type || fileTypeRef.current;
+              const currentS3Key = lessonData?.s3_key || s3KeyRef.current;
+              
+              // Markdown判定
+              const isMarkdown = 
+                currentFileType === 'md' || 
+                currentFileType === 'text/markdown' || 
+                (currentS3Key && currentS3Key.toLowerCase().endsWith('.md'));
+              
+              console.log('Markdown判定:', {
+                currentFileType,
+                currentS3Key,
+                isMarkdown,
+                lessonDataFileType: lessonData?.file_type,
+                lessonDataS3Key: lessonData?.s3_key,
+                refFileType: fileTypeRef.current,
+                refS3Key: s3KeyRef.current
+              });
+              
+              return isMarkdown ? (
+                <MarkdownRenderer 
+                  content={displayTextContent()}
+                  showToc={false}
+                />
+              ) : (
+                /* RTFファイルやその他のテキストファイルはプレーンテキストとして表示 */
+                <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
+                  {displayTextContent()}
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>

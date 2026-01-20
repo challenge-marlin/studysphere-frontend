@@ -932,7 +932,8 @@ const EnhancedLearningPageRefactored = () => {
            // セクションデータが空の場合、空配列を設定（複数のテキストを持たない学習画面であることを示す）
            setSectionData([]);
            setCurrentSection(0);
-           // セクションデータが空の場合、lessonDataのs3_keyをクリア（テキストファイルが存在しないことを示す）
+           // セクションデータが空の場合でも、currentLessonDataにs3_keyとfile_typeが存在する場合は保持する
+           // これは単一テキスト、動画なしのレッスンで、既に読み込まれたテキストコンテンツを保持するため
            setLessonData(prev => {
              const baseData = currentLessonData || prev;
              if (!baseData) {
@@ -941,18 +942,35 @@ const EnhancedLearningPageRefactored = () => {
              }
              // 既存の動画がある場合は保持、ない場合のみ空配列に設定
              const existingVideos = baseData.videos || [];
+             
+             // currentLessonDataにs3_keyとfile_typeが存在する場合は保持する
+             // これにより、単一テキスト、動画なしのレッスンでも、既に読み込まれたテキストコンテンツが保持される
+             const shouldKeepS3Key = !!(currentLessonData?.s3_key);
+             const shouldKeepFileType = !!(currentLessonData?.file_type);
+             
              const updatedData = {
                ...baseData,
-               s3_key: null, // セクションデータが空の場合、s3_keyをクリア
-               file_type: null, // file_typeもクリア
+               // セクションデータが空で、かつcurrentLessonDataにs3_keyがない場合のみ、s3_keyをクリア
+               s3_key: shouldKeepS3Key ? baseData.s3_key : null,
+               // セクションデータが空で、かつcurrentLessonDataにfile_typeがない場合のみ、file_typeをクリア
+               file_type: shouldKeepFileType ? baseData.file_type : null,
                videos: existingVideos.length > 0 ? existingVideos : [] // 既存の動画がある場合は保持、ない場合のみ空配列
              };
+             
              if (existingVideos.length > 0) {
                console.log('🎬 既存の動画を保持します:', existingVideos);
              } else {
                console.log('🎬 既存の動画がないため、空配列に設定します');
              }
-             console.log('⚠️ セクションデータが空のため、s3_keyとfile_typeをクリアしました');
+             
+             if (shouldKeepS3Key || shouldKeepFileType) {
+               console.log('✅ セクションデータが空ですが、currentLessonDataにs3_key/file_typeが存在するため、それらを保持します:', {
+                 s3_key: updatedData.s3_key,
+                 file_type: updatedData.file_type
+               });
+             } else {
+               console.log('⚠️ セクションデータが空で、currentLessonDataにもs3_key/file_typeがないため、クリアしました');
+             }
              return updatedData;
            });
            // PDFの処理はTextSectionコンポーネントで自動的に開始されるため、ここでは何もしない

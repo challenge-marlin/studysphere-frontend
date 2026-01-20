@@ -693,14 +693,19 @@ const StudentDashboard = () => {
               🎯 適職診断
             </button>
             <button 
-              className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+              className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 ${
                 activeTab === 'toybox'
                   ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-lg'
                   : 'text-gray-600 hover:bg-blue-50 hover:text-blue-700'
               }`}
               onClick={() => handleTabChange('toybox')}
             >
-              ⚙ TOYBOX
+              <img 
+                src="/images/toybox/TOYBOX.png" 
+                alt="TOYBOX" 
+                className="h-5 w-auto object-contain"
+              />
+              <span>TOYBOX</span>
             </button>
           </div>
         </div>

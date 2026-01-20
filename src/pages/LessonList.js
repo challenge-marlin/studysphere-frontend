@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/contexts/AuthContext';
 import { fetchStudentCourses, fetchStudentLessons } from '../utils/studentApi';
@@ -8,6 +8,7 @@ import CourseSelector from '../components/student/CourseSelector';
 import LessonTable from '../components/student/LessonTable';
 import ExamResultListModal from '../components/student/ExamResultListModal';
 import ExamResultDetailModal from '../components/student/ExamResultDetailModal';
+import UploadModal from '../components/learning/UploadModal';
 
 const LessonList = ({ selectedCourseId }) => {
   const navigate = useNavigate();
@@ -25,6 +26,18 @@ const LessonList = ({ selectedCourseId }) => {
   const [examResultDetailModalOpen, setExamResultDetailModalOpen] = useState(false);
   const [selectedLessonForExam, setSelectedLessonForExam] = useState(null);
   const [selectedExamResultKey, setSelectedExamResultKey] = useState(null);
+  
+  // 課題提出モーダル関連の状態
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [selectedLessonForAssignment, setSelectedLessonForAssignment] = useState(null);
+  
+  // リクエストの競合を防ぐためのref
+  const loadingRef = useRef({
+    lessons: false,
+    currentLesson: false,
+    testResults: false
+  });
+  const currentCourseIdRef = useRef(null);
 
   // コース一覧を取得
   const loadCourses = async () => {
@@ -76,31 +89,29 @@ const LessonList = ({ selectedCourseId }) => {
   };
 
   // レッスン一覧から現在受講中のレッスンIDを取得する関数
+  // バックエンドのgetCurrentLessonと同じロジックを使用（in_progressのみを対象）
   const getCurrentLessonIdFromList = (lessonList) => {
-    // 未学習以外のステータス（in_progress、completed）のレッスンを対象とする
-    const activeLessons = lessonList.filter(lesson => lesson.progress_status !== 'not_started');
-    
-    // 未学習以外のレッスンがない場合はnullを返す（全てのレッスンが未受講の場合）
-    if (activeLessons.length === 0) {
-      console.log('🎯 未学習以外のレッスンが見つかりません - 現在受講中タグは表示されません');
-      return null;
-    }
-    
     // 進行中（in_progress）のレッスンのみを対象とする
-    const inProgressLessons = activeLessons.filter(lesson => lesson.progress_status === 'in_progress');
+    const inProgressLessons = lessonList.filter(lesson => lesson.progress_status === 'in_progress');
     
-    // 進行中のレッスンがない場合はnullを返す（完了済みのレッスンのみの場合）
+    // 進行中のレッスンがない場合はnullを返す
     if (inProgressLessons.length === 0) {
       console.log('🎯 進行中のレッスンが見つかりません - 現在受講中タグは表示されません');
       return null;
     }
     
     // updated_atでソートして最新のものを取得
+    // 同じupdated_atの場合は、order_indexが小さい方（先に学ぶべきレッスン）を優先
     const sortedLessons = [...inProgressLessons].sort((a, b) => {
       const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
       const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
       if (dateB !== dateA) return dateB - dateA; // updated_atが新しい順
-      return b.id - a.id; // 同じ時刻の場合はIDが大きい方を優先
+      // 同じ時刻の場合はorder_indexが小さい方（先に学ぶべきレッスン）を優先
+      const orderA = a.order_index || 0;
+      const orderB = b.order_index || 0;
+      if (orderA !== orderB) return orderA - orderB;
+      // order_indexも同じ場合はIDが小さい方を優先（作成順）
+      return a.id - b.id;
     });
     
     const mostRecentLesson = sortedLessons[0];
@@ -118,8 +129,10 @@ const LessonList = ({ selectedCourseId }) => {
       
       if (response.success) {
         setLessons(response.data);
+        return response.data; // Promiseを返すためにデータを返す
       } else {
         setError('レッスン一覧の取得に失敗しました: ' + (response.message || ''));
+        return null;
       }
     } catch (err) {
       console.error('レッスン一覧取得エラー:', err);
@@ -128,10 +141,11 @@ const LessonList = ({ selectedCourseId }) => {
       if (err.message.includes('認証') || err.message.includes('Authentication') || err.message.includes('401')) {
         console.log('認証エラーのため、ログインページにリダイレクトします');
         navigate('/student/login');
-        return;
+        return null;
       }
       
       setError('レッスン一覧の取得中にエラーが発生しました: ' + err.message);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -139,7 +153,14 @@ const LessonList = ({ selectedCourseId }) => {
 
   // 現在受講中レッスンを取得
   const loadCurrentLesson = async (courseId) => {
+    // 既に同じコースの読み込みが進行中の場合はスキップ
+    if (loadingRef.current.currentLesson && currentCourseIdRef.current === courseId) {
+      console.log('⚠️ 現在受講中レッスンの読み込みは既に進行中です。スキップします。');
+      return;
+    }
+    
     try {
+      loadingRef.current.currentLesson = true;
       console.log(`🔍 現在受講中レッスン取得開始: コースID ${courseId}`);
       
       const response = await fetch(`${API_BASE_URL}/api/learning/current-lesson?courseId=${courseId}`, {
@@ -149,9 +170,21 @@ const LessonList = ({ selectedCourseId }) => {
         }
       });
 
+      // コースIDが変更されている場合は、古いリクエストの結果を無視
+      if (currentCourseIdRef.current !== courseId) {
+        console.log('⚠️ コースIDが変更されたため、古いリクエストの結果を無視します');
+        return;
+      }
+
       if (response.ok) {
         const data = await response.json();
         console.log(`📊 現在受講中レッスンデータ:`, data);
+        
+        // 再度コースIDを確認（非同期処理のため）
+        if (currentCourseIdRef.current !== courseId) {
+          console.log('⚠️ コースIDが変更されたため、結果を無視します');
+          return;
+        }
         
         if (data.success && data.data.length > 0) {
           setCurrentLesson(data.data[0]);
@@ -162,11 +195,22 @@ const LessonList = ({ selectedCourseId }) => {
         }
       } else {
         console.error(`❌ 現在受講中レッスン取得失敗: ${response.status}`);
-        setCurrentLesson(null);
+        // コースIDが変更されていない場合のみnullを設定
+        if (currentCourseIdRef.current === courseId) {
+          setCurrentLesson(null);
+        }
       }
     } catch (error) {
+      // コースIDが変更されている場合は、エラーを無視
+      if (currentCourseIdRef.current !== courseId) {
+        console.log('⚠️ コースIDが変更されたため、エラーを無視します');
+        return;
+      }
+      
       console.error('現在受講中レッスン取得エラー:', error);
       setCurrentLesson(null);
+    } finally {
+      loadingRef.current.currentLesson = false;
     }
   };
 
@@ -236,10 +280,17 @@ const LessonList = ({ selectedCourseId }) => {
     }
   };
   // コース選択時の処理
-  const handleCourseSelect = (course) => {
+  const handleCourseSelect = async (course) => {
     setSelectedCourse(course);
-    loadLessons(course.id);
-    loadCurrentLesson(course.id);
+    // レッスン一覧を先に取得し、完了後に現在受講中レッスンを取得（順次実行）
+    try {
+      await loadLessons(course.id);
+      // レッスン一覧の取得が完了してから現在受講中レッスンを取得
+      await loadCurrentLesson(course.id);
+    } catch (error) {
+      console.error('コースデータ読み込みエラー:', error);
+    }
+    // テスト結果は独立して実行可能
     loadTestResults();
   };
 
@@ -299,11 +350,9 @@ const LessonList = ({ selectedCourseId }) => {
       if (response.ok) {
         console.log(`✅ 進捗更新成功: レッスンID ${lesson.id}, 新ステータス: ${targetStatus}`);
         
-        // 進捗更新成功後、レッスン一覧と現在受講中レッスンを再読み込み
-        await Promise.all([
-          loadLessons(lesson.course_id),
-          loadCurrentLesson(lesson.course_id)
-        ]);
+        // 進捗更新成功後、レッスン一覧と現在受講中レッスンを再読み込み（順次実行）
+        await loadLessons(lesson.course_id);
+        await loadCurrentLesson(lesson.course_id);
         
         console.log(`✅ レッスン一覧と現在受講中レッスンを再読み込み完了`);
         
@@ -345,9 +394,68 @@ const LessonList = ({ selectedCourseId }) => {
     setExamResultListModalOpen(true);
   };
 
-  // 課題提出へのリンク
+  // 課題提出モーダルを開く
   const handleSubmitAssignment = (lesson) => {
-    alert(`${lesson.title}の課題提出機能は開発中です。`);
+    setSelectedLessonForAssignment(lesson);
+    setShowUploadModal(true);
+  };
+
+  // 成果物アップロード処理
+  const handleFileUpload = async (event) => {
+    if (!selectedLessonForAssignment) {
+      alert('レッスンが選択されていません');
+      return;
+    }
+
+    const files = Array.from(event.target.files);
+    
+    // ZIPファイルのみ許可
+    const zipFiles = files.filter(file => 
+      file.type.includes('zip') || file.name.toLowerCase().endsWith('.zip')
+    );
+    
+    if (zipFiles.length === 0) {
+      alert('ZIPファイルのみアップロード可能です');
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('file', zipFiles[0]);
+      formData.append('lessonId', selectedLessonForAssignment.id);
+
+      const response = await fetch(`${API_BASE_URL}/api/learning/upload-assignment`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: formData
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // アップロード成功
+          setShowUploadModal(false);
+          setSelectedLessonForAssignment(null);
+          
+          alert('成果物のアップロードが完了しました！');
+          
+          // レッスン一覧を再読み込みして提出済みステータスを更新
+          if (selectedCourse) {
+            await loadLessons(selectedCourse.id);
+          }
+        } else {
+          alert('アップロードに失敗しました: ' + (data.message || ''));
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        alert('アップロードに失敗しました: ' + (errorData.message || 'エラーが発生しました'));
+      }
+    } catch (error) {
+      console.error('ファイルアップロードエラー:', error);
+      alert('ファイルのアップロード中にエラーが発生しました');
+    }
   };
 
   // 初期データ読み込み
@@ -390,19 +498,36 @@ const LessonList = ({ selectedCourseId }) => {
     }
   }, [selectedCourse]);
 
-  // ページが表示された時に現在受講中レッスンを再読み込み
+  // ページが表示された時にデータを再読み込み（レッスン受講後の画面戻りに対応）
   useEffect(() => {
-    const handleVisibilityChange = () => {
+    const handleVisibilityChange = async () => {
       if (!document.hidden && selectedCourse) {
-        console.log('📱 ページが表示されました - 現在受講中レッスンを再読み込み');
-        loadCurrentLesson(selectedCourse.id);
+        console.log('📱 ページが表示されました - レッスン一覧と現在受講中レッスンを再読み込み');
+        // レッスン一覧と現在受講中レッスンを再読み込み（順次実行）
+        await loadLessons(selectedCourse.id);
+        await loadCurrentLesson(selectedCourse.id);
+        // テスト結果も再読み込み
+        loadTestResults();
+      }
+    };
+
+    const handleFocus = async () => {
+      if (selectedCourse) {
+        console.log('📱 ウィンドウがフォーカスされました - レッスン一覧と現在受講中レッスンを再読み込み');
+        // レッスン一覧と現在受講中レッスンを再読み込み（順次実行）
+        await loadLessons(selectedCourse.id);
+        await loadCurrentLesson(selectedCourse.id);
+        // テスト結果も再読み込み
+        loadTestResults();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
     
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
     };
   }, [selectedCourse]);
 
@@ -468,22 +593,13 @@ const LessonList = ({ selectedCourseId }) => {
 
              {/* 現在受講中レッスン */}
        {selectedCourse && (() => {
-         // レッスン一覧から現在受講中のレッスンを取得
+         // レッスン一覧から現在受講中のレッスンを取得（in_progressのみ）
          const currentLessonId = getCurrentLessonIdFromList(lessons);
          const currentLessonData = currentLessonId ? lessons.find(l => l.id === currentLessonId) : null;
          
-         // レッスン一覧から取得した現在受講中レッスンがない場合
-         if (!currentLessonData) {
-           // APIから取得したcurrentLessonも確認するが、in_progressステータスでない場合は表示しない
-           if (currentLesson && currentLesson.status !== 'in_progress') {
-             console.log('🎯 APIから取得したレッスンはin_progressステータスではありません - 現在受講中セクションは表示されません');
-             return null;
-           }
-           if (!currentLesson) return null;
-         }
-         
-         // currentLessonDataまたはcurrentLessonのどちらかが存在する場合に表示
-         const displayLesson = currentLessonData || currentLesson;
+         // APIから取得したcurrentLessonも確認（バックエンドもin_progressのみを返すようになったため、整合性が取れている）
+         // ただし、レッスン一覧から取得したデータを優先（最新の状態を反映）
+         const displayLesson = currentLessonData || (currentLesson && currentLesson.lesson_id ? lessons.find(l => l.id === currentLesson.lesson_id) : null);
          
          if (!displayLesson) return null;
          
@@ -494,13 +610,13 @@ const LessonList = ({ selectedCourseId }) => {
                <div className="flex items-center justify-between">
                  <div>
                    <h4 className="text-lg font-semibold text-gray-800 mb-2">
-                     {currentLessonData ? currentLessonData.title : displayLesson.lesson_title}
+                     {displayLesson.title}
                    </h4>
                    <p className="text-sm text-blue-600 font-medium mb-2">
-                     {currentLessonData ? currentLessonData.course_title : displayLesson.course_title}
+                     {selectedCourse.title}
                    </p>
                    <p className="text-sm text-gray-600">最終更新: {(() => {
-                     const dateStr = currentLessonData ? currentLessonData.updated_at : displayLesson.updated_at;
+                     const dateStr = displayLesson.updated_at;
                      if (!dateStr) return '';
                      // データベースから取得した日本時間の値をそのまま表示
                      return dateStr
@@ -513,13 +629,7 @@ const LessonList = ({ selectedCourseId }) => {
                  <div className="flex gap-2">
                    <button
                      className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
-                     onClick={() => {
-                       if (currentLessonData) {
-                         handleStartLesson(currentLessonData);
-                       } else {
-                         handleStartLesson(displayLesson);
-                       }
-                     }}
+                     onClick={() => handleStartLesson(displayLesson)}
                    >
                      🎓 続きから学習
                    </button>
@@ -537,10 +647,7 @@ const LessonList = ({ selectedCourseId }) => {
           onStartLesson={handleStartLesson}
           onViewExamResults={handleViewExamResults}
           onSubmitAssignment={handleSubmitAssignment}
-          currentLessonId={
-            // レッスン一覧から計算したIDを優先、なければAPIから取得した値を使用
-            getCurrentLessonIdFromList(lessons) || currentLesson?.lesson_id || currentLesson?.id
-          }
+          currentLessonId={getCurrentLessonIdFromList(lessons)}
           testResults={testResults}
         />
       )}
@@ -559,6 +666,18 @@ const LessonList = ({ selectedCourseId }) => {
         onClose={handleCloseExamResultDetail}
         resultKey={selectedExamResultKey}
       />
+
+      {/* 課題提出モーダル */}
+      {selectedLessonForAssignment && (
+        <UploadModal
+          isOpen={showUploadModal}
+          onClose={() => {
+            setShowUploadModal(false);
+            setSelectedLessonForAssignment(null);
+          }}
+          onFileUpload={handleFileUpload}
+        />
+      )}
 
       {/* コースが存在しない場合 */}
       {courses.length === 0 && !loading && (

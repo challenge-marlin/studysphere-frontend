@@ -30,9 +30,13 @@ const ToyBox = () => {
     <div className="max-w-4xl mx-auto p-6">
       <div className="text-center">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-4">
-            ⚙ TOYBOX
-          </h1>
+          <div className="flex justify-center mb-4">
+            <img 
+              src="/images/toybox/TOYBOX.png" 
+              alt="TOYBOX" 
+              className="h-16 object-contain"
+            />
+          </div>
           <p className="text-lg text-gray-600 mb-6">
             便利なツールや機能を提供するTOYBOXへアクセスできます
           </p>
@@ -97,7 +101,14 @@ const ToyBox = () => {
                 読み込み中...
               </div>
             ) : (
-              '⚙ TOYBOXを開く'
+              <div className="flex items-center justify-center gap-2">
+                <img 
+                  src="/images/toybox/TOYBOX.png" 
+                  alt="TOYBOX" 
+                  className="h-5 w-auto object-contain"
+                />
+                <span>TOYBOXを開く</span>
+              </div>
             )}
           </button>
 

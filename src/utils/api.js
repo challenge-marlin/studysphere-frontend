@@ -922,6 +922,10 @@ export const getPendingSubmissionCount = async (satelliteId) => {
   return apiGet(`/api/submissions/instructor/pending-count/${satelliteId}`);
 };
 
+export const resubmitSubmission = async (submissionId) => {
+  return apiDelete(`/api/submissions/instructor/resubmit/${submissionId}`);
+};
+
 /**
  * 通所記録を作成
  */

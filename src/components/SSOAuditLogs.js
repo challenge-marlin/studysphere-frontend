@@ -23,31 +23,38 @@ const SSOAuditLogs = () => {
   });
 
   // 監査ログを取得
-  const fetchLogs = async (page = 1) => {
+  const fetchLogs = async (page = 1, opts = {}) => {
+    const { limit = pagination.limit, filterOverrides = null } = opts;
+    const f = filterOverrides != null ? filterOverrides : filters;
     try {
       setLoading(true);
       setError('');
       
       const params = new URLSearchParams();
-      params.append('page', page);
-      params.append('limit', pagination.limit);
+      params.append('page', String(page));
+      params.append('limit', String(limit));
       
-      if (filters.user_id) params.append('user_id', filters.user_id);
-      if (filters.source_system) params.append('source_system', filters.source_system);
-      if (filters.target_system) params.append('target_system', filters.target_system);
-      if (filters.action) params.append('action', filters.action);
-      if (filters.start_date) params.append('start_date', filters.start_date);
-      if (filters.end_date) params.append('end_date', filters.end_date);
+      if (f.user_id) params.append('user_id', f.user_id);
+      if (f.source_system) params.append('source_system', f.source_system);
+      if (f.target_system) params.append('target_system', f.target_system);
+      if (f.action) params.append('action', f.action);
+      if (f.start_date) params.append('start_date', f.start_date);
+      if (f.end_date) params.append('end_date', f.end_date);
 
       const response = await apiGet(`/api/sso/audit-logs?${params.toString()}`);
-      if (response.success) {
-        setLogs(response.data);
-        setPagination({
-          ...pagination,
-          page: response.pagination.page,
-          total: response.pagination.total,
-          totalPages: response.pagination.totalPages
-        });
+      if (response.success && response.data) {
+        setLogs(Array.isArray(response.data) ? response.data : []);
+        const p = response.pagination || {};
+        const total = Number(p.total) || 0;
+        const limitNum = Number(p.limit) || limit || 50;
+        const totalPages = Math.max(1, Math.ceil(total / limitNum));
+        setPagination(prev => ({
+          ...prev,
+          page: Math.max(1, Number(p.page) || page),
+          limit: limitNum,
+          total,
+          totalPages
+        }));
       } else {
         setError('監査ログの取得に失敗しました');
       }
@@ -63,27 +70,35 @@ const SSOAuditLogs = () => {
     fetchLogs(pagination.page);
   }, [pagination.page]);
 
+  // ページ切り替え（前へ・次へ）
+  const handlePageChange = (nextPage) => {
+    const p = Math.max(1, Number(nextPage));
+    if (p === pagination.page) return;
+    setPagination(prev => ({ ...prev, page: p }));
+  };
+
   // フィルタ適用
   const handleFilterChange = (field, value) => {
-    setFilters({ ...filters, [field]: value });
+    setFilters(prev => ({ ...prev, [field]: value }));
   };
 
   const handleApplyFilters = () => {
-    setPagination({ ...pagination, page: 1 });
-    fetchLogs(1);
+    setPagination(prev => ({ ...prev, page: 1 }));
+    fetchLogs(1, { filterOverrides: filters });
   };
 
   const handleResetFilters = () => {
-    setFilters({
+    const cleared = {
       user_id: '',
       source_system: '',
       target_system: '',
       action: '',
       start_date: '',
       end_date: ''
-    });
-    setPagination({ ...pagination, page: 1 });
-    setTimeout(() => fetchLogs(1), 100);
+    };
+    setFilters(cleared);
+    setPagination(prev => ({ ...prev, page: 1 }));
+    fetchLogs(1, { filterOverrides: cleared });
   };
 
   // 日付フォーマット
@@ -309,35 +324,38 @@ const SSOAuditLogs = () => {
                 </tbody>
               </table>
             </div>
+            {/* ページネーション */}
+            {!loading && (pagination.total > 0 || logs.length > 0) && (
+              <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <div className="flex justify-between items-center">
+                  <div className="text-sm text-gray-600">
+                    全{pagination.total}件中 {((pagination.page - 1) * pagination.limit) + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)}件を表示
+                  </div>
+                  {pagination.totalPages > 1 && (
+                    <div className="flex gap-2 items-center">
+                      <button
+                        onClick={() => handlePageChange(pagination.page - 1)}
+                        disabled={pagination.page === 1}
+                        className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-300"
+                      >
+                        前へ
+                      </button>
+                      <span className="px-4 py-2 text-gray-700">
+                        {pagination.page} / {pagination.totalPages}
+                      </span>
+                      <button
+                        onClick={() => handlePageChange(pagination.page + 1)}
+                        disabled={pagination.page >= pagination.totalPages}
+                        className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-300"
+                      >
+                        次へ
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-
-          {/* ページネーション */}
-          {pagination.totalPages > 1 && (
-            <div className="flex justify-between items-center">
-              <div className="text-sm text-gray-600">
-                全 {pagination.total} 件中 {((pagination.page - 1) * pagination.limit) + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} 件を表示
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
-                  disabled={pagination.page === 1}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  前へ
-                </button>
-                <span className="px-4 py-2 text-gray-700">
-                  {pagination.page} / {pagination.totalPages}
-                </span>
-                <button
-                  onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
-                  disabled={pagination.page === pagination.totalPages}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  次へ
-                </button>
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>

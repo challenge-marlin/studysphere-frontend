@@ -1,7 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './components/contexts/AuthContext';
-import TokenCountdown from './components/TokenCountdown';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
@@ -123,7 +122,6 @@ function App() {
             {/* 在宅支援管理：利用者詳細画面 */}
             <Route path="/instructor/student-detail/:studentId" element={<HomeSupportUserDetailPage />} />
           </Routes>
-          <TokenCountdown />
         </div>
       </AuthProvider>
     </Router>

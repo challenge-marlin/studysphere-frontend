@@ -8,7 +8,7 @@ const SSOAuditLogs = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filters, setFilters] = useState({
-    user_id: '',
+    user_name: '',
     source_system: '',
     target_system: '',
     action: '',
@@ -34,7 +34,7 @@ const SSOAuditLogs = () => {
       params.append('page', String(page));
       params.append('limit', String(limit));
       
-      if (f.user_id) params.append('user_id', f.user_id);
+      if (f.user_name) params.append('user_name', f.user_name);
       if (f.source_system) params.append('source_system', f.source_system);
       if (f.target_system) params.append('target_system', f.target_system);
       if (f.action) params.append('action', f.action);
@@ -142,14 +142,14 @@ const SSOAuditLogs = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              ユーザーID
+              ユーザー名
             </label>
             <input
-              type="number"
-              value={filters.user_id}
-              onChange={(e) => handleFilterChange('user_id', e.target.value)}
+              type="text"
+              value={filters.user_name}
+              onChange={(e) => handleFilterChange('user_name', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="例: 101"
+              placeholder="例: 末吉 元気"
             />
           </div>
 

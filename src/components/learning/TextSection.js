@@ -12,7 +12,10 @@ const TextSection = ({
   textContainerRef,
   onTextContentUpdate, // テキスト内容更新のコールバック
   sectionData, // セクションデータ
-  currentSection // 現在のセクションインデックス
+  currentSection, // 現在のセクションインデックス
+  isLastSection, // 最後のセクションか（最後なら「次のセクションへ」→「レッスン総合テスト」に表示変更）
+  onSectionTestClick, // 10問テストに挑戦のナビゲーション
+  onNextSectionClick // 次のセクション／レッスン総合テストのナビゲーション
 }) => {
   const [pdfTextContent, setPdfTextContent] = useState('');
   const [isPdfProcessing, setIsPdfProcessing] = useState(false);
@@ -1125,6 +1128,26 @@ const TextSection = ({
           </div>
         )}
       </div>
+
+      {/* テキスト末尾ボタン（10問テストに挑戦・次のセクションへ／レッスン総合テスト） */}
+      {onSectionTestClick && onNextSectionClick && (
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={onSectionTestClick}
+            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors shadow-sm"
+          >
+            10問テストに挑戦
+          </button>
+          <button
+            type="button"
+            onClick={onNextSectionClick}
+            className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg font-medium transition-colors shadow-sm"
+          >
+            {isLastSection ? 'レッスン総合テスト' : '次のセクションへ'}
+          </button>
+        </div>
+      )}
 
       {/* テキスト情報 */}
       {(isPdfFile(lessonData?.file_type, lessonData?.s3_key) && pdfTextContent) || 

@@ -9,6 +9,8 @@ const TestResultPage = () => {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [nextLesson, setNextLesson] = useState(null);
+  const [nextSection, setNextSection] = useState(null);
 
   // サンプル模範解答（実際のシステムでは、DBから取得する）
   const sampleAnswers = {
@@ -325,6 +327,65 @@ const TestResultPage = () => {
     processTestResults();
   }, [location.state, navigate]);
 
+  // レッスンまとめテスト（30問）合格時のみ「次のレッスン」を取得
+  useEffect(() => {
+    if (!resultData || resultData.testType !== 'lesson' || !resultData.passed) {
+      setNextLesson(null);
+      return;
+    }
+    const lessonId = resultData.lessonId || resultData.lessonNumber;
+    if (!lessonId) return;
+    const abort = new AbortController();
+    const fetchNext = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/learning/next-lesson/${lessonId}`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+          signal: abort.signal
+        });
+        if (res.ok) {
+          const json = await res.json();
+          setNextLesson(json.success && json.data ? json.data : null);
+        } else {
+          setNextLesson(null);
+        }
+      } catch (e) {
+        if (e.name !== 'AbortError') setNextLesson(null);
+      }
+    };
+    fetchNext();
+    return () => abort.abort();
+  }, [resultData]);
+
+  // セクションまとめテスト（10問）合格時のみ「次のセクション」を取得
+  useEffect(() => {
+    if (!resultData || resultData.testType !== 'section' || !resultData.passed) {
+      setNextSection(null);
+      return;
+    }
+    const lessonId = resultData.lessonId || resultData.lessonNumber;
+    const sectionIndex = resultData.sectionIndex ?? 0;
+    if (!lessonId) return;
+    const abort = new AbortController();
+    const fetchNext = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/learning/next-section/${lessonId}/${sectionIndex}`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+          signal: abort.signal
+        });
+        if (res.ok) {
+          const json = await res.json();
+          setNextSection(json.success && json.data ? json.data : null);
+        } else {
+          setNextSection(null);
+        }
+      } catch (e) {
+        if (e.name !== 'AbortError') setNextSection(null);
+      }
+    };
+    fetchNext();
+    return () => abort.abort();
+  }, [resultData]);
+
   // テスト結果をDBに保存（必要に応じて）
   useEffect(() => {
     if (resultData) {
@@ -429,6 +490,29 @@ const TestResultPage = () => {
 
   const handleBackToDashboard = () => {
     navigate('/student/dashboard');
+  };
+
+  const handleGoToNextLesson = () => {
+    if (!nextLesson || nextLesson.courseId == null || nextLesson.id == null) return;
+    const hasAssignment = nextLesson.hasAssignment === true;
+    const assignmentSubmitted = nextLesson.assignmentSubmitted === true;
+    if (hasAssignment && !assignmentSubmitted) {
+      alert('提出物が未提出です');
+      const currentLessonId = resultData?.lessonId ?? resultData?.lessonNumber;
+      if (currentLessonId != null) {
+        navigate(`/student/enhanced-learning?course=${nextLesson.courseId}&lesson=${currentLessonId}`);
+      }
+      return;
+    }
+    navigate(`/student/enhanced-learning?course=${nextLesson.courseId}&lesson=${nextLesson.id}`);
+  };
+
+  const handleGoToNextSection = () => {
+    if (!nextSection || nextSection.courseId == null) return;
+    const lessonId = resultData?.lessonId ?? resultData?.lessonNumber;
+    const nextIdx = nextSection.nextSectionIndex;
+    if (lessonId == null || nextIdx == null) return;
+    navigate(`/student/enhanced-learning?course=${nextSection.courseId}&lesson=${lessonId}&section=${nextIdx}`);
   };
 
   if (loading) {
@@ -609,7 +693,7 @@ const TestResultPage = () => {
         </div>
 
         {/* アクションボタン */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+        <div className="flex flex-col sm:flex-row gap-4 justify-center flex-wrap">
           {!resultData.passed && (
             <button
               className="px-8 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
@@ -618,13 +702,31 @@ const TestResultPage = () => {
               🔄 再受験する
             </button>
           )}
-          {resultData.passed && resultData.testType === 'lesson' && (
+          {resultData.passed && resultData.testType === 'section' && nextSection && (
             <button
-              className="px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
-              onClick={handleGoToCertificate}
+              className="px-8 py-4 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
+              onClick={handleGoToNextSection}
             >
-              🏆 修了証を確認
+              次のセクションへ →
             </button>
+          )}
+          {resultData.passed && resultData.testType === 'lesson' && (
+            <>
+              {nextLesson && (
+                <button
+                  className="px-8 py-4 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
+                  onClick={handleGoToNextLesson}
+                >
+                  次のレッスンへ →
+                </button>
+              )}
+              <button
+                className="px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
+                onClick={handleGoToCertificate}
+              >
+                🏆 修了証を確認
+              </button>
+            </>
           )}
           <button
             className="px-8 py-4 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-xl font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"

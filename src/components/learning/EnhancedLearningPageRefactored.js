@@ -43,6 +43,7 @@ const EnhancedLearningPageRefactored = () => {
   // ウィジェットの表示/非表示を管理
   const [widgetVisibility, setWidgetVisibility] = useState({ video: true, text: true, chat: true, assignment: true });
   const textContainerRef = useRef(null);
+  const textSectionContainerRef = useRef(null); // セクション変更時に「テキスト内容」へスクロールする用
   const latestFetchId = useRef(0); // レースコンディション防止用
   const abortControllerRef = useRef(null); // リクエストキャンセル用
   const layoutStorageKeyRef = useRef(null);
@@ -115,6 +116,16 @@ const EnhancedLearningPageRefactored = () => {
     console.log(`🔄 currentLesson状態変化: ${currentLesson}`);
   }, [currentLesson]);
 
+  // セクション変更時、「テキスト内容」パネル位置へスクロールして表示を移動
+  useEffect(() => {
+    if (textSectionContainerRef.current) {
+      const el = textSectionContainerRef.current;
+      requestAnimationFrame(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  }, [currentSection]);
+
   // URLパラメータからコースIDとレッスンIDを取得
   useEffect(() => {
     const courseParam = searchParams.get('course');
@@ -137,6 +148,18 @@ const EnhancedLearningPageRefactored = () => {
       }
     }
   }, [searchParams]); // searchParamsのみに依存
+
+  // URLの section パラメータで開くセクションを指定（例: テスト結果の「次のセクションへ」から遷移時）
+  useEffect(() => {
+    const lessonParam = searchParams.get('lesson');
+    const sectionParam = searchParams.get('section');
+    const lessonMatch = lessonParam != null && String(currentLesson) === String(lessonParam);
+    if (!lessonMatch || sectionParam == null || !sectionData || !Array.isArray(sectionData) || sectionData.length === 0) return;
+    const idx = parseInt(sectionParam, 10);
+    if (!isNaN(idx) && idx >= 0 && idx < sectionData.length) {
+      setCurrentSection(idx);
+    }
+  }, [searchParams, sectionData, currentLesson]);
 
   // 学習開始時の進捗更新は削除（LessonList.jsのhandleStartLessonで実行されるため）
 
@@ -1515,6 +1538,20 @@ const EnhancedLearningPageRefactored = () => {
         onTextContentUpdate={handlePdfTextUpdate}
         sectionData={sectionData}
         currentSection={currentSection}
+        isLastSection={!sectionData || sectionData.length === 0 || currentSection === sectionData.length - 1}
+        onSectionTestClick={() => {
+          sessionStorage.removeItem(`test_data_${currentLesson}_${currentSection}`);
+          navigate(`/student/section-test?lesson=${currentLesson}&section=${currentSection}`);
+        }}
+        onNextSectionClick={() => {
+          const lastSection = !sectionData || sectionData.length === 0 || currentSection === sectionData.length - 1;
+          if (lastSection) {
+            sessionStorage.removeItem(`test_data_lesson_${currentLesson}`);
+            navigate(`/student/lesson-test?lesson=${currentLesson}`);
+          } else {
+            changeSection(currentSection + 1);
+          }
+        }}
       />
     ) : null,
     chat: widgetVisibility.chat ? (
@@ -1610,26 +1647,27 @@ const EnhancedLearningPageRefactored = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50">
-      {/* ヘッダー */}
-      <LearningHeader
-        lessonData={lessonData}
-        courseData={courseData}
-        currentLesson={currentLesson}
-        currentSection={currentSection}
-        sectionData={sectionData}
-        onSectionChange={changeSection}
-        onUploadModalOpen={() => setShowUploadModal(true)}
-        onTestNavigate={(lessonId) => navigate(`/student/test?lesson=${lessonId}`)}
-        isTestEnabled={
-          pdfProcessingStatus === 'completed' || // PDF処理完了時
-          (lessonData?.file_type !== 'pdf' && lessonData?.textContent) // テキストファイルの場合
-        }
-        hasAssignment={assignmentStatus.hasAssignment}
-        assignmentSubmitted={assignmentStatus.assignmentSubmitted}
-      />
+      {/* ヘッダー＋ステータスバー（スクロール時も固定表示） */}
+      <div className="sticky top-0 z-50 bg-gradient-to-br from-blue-50 to-cyan-50 shadow-md">
+        <LearningHeader
+          lessonData={lessonData}
+          courseData={courseData}
+          currentLesson={currentLesson}
+          currentSection={currentSection}
+          sectionData={sectionData}
+          onSectionChange={changeSection}
+          onUploadModalOpen={() => setShowUploadModal(true)}
+          onTestNavigate={(lessonId) => navigate(`/student/test?lesson=${lessonId}`)}
+          isTestEnabled={
+            pdfProcessingStatus === 'completed' || // PDF処理完了時
+            (lessonData?.file_type !== 'pdf' && lessonData?.textContent) // テキストファイルの場合
+          }
+          hasAssignment={assignmentStatus.hasAssignment}
+          assignmentSubmitted={assignmentStatus.assignmentSubmitted}
+        />
 
-      {/* PDF処理状態表示 - PDFファイルの場合のみ表示 */}
-      {pdfProcessingStatus === 'processing' && lessonData?.file_type === 'pdf' && (
+        {/* PDF処理状態表示 - PDFファイルの場合のみ表示 */}
+        {pdfProcessingStatus === 'processing' && lessonData?.file_type === 'pdf' && (
         <div className="w-full bg-blue-50 border-b border-blue-200 px-4 py-2">
           <div className="flex items-center justify-center text-blue-600 text-sm">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
@@ -1681,6 +1719,7 @@ const EnhancedLearningPageRefactored = () => {
           </div>
         </div>
       )}
+      </div>
 
       {/* ウィジェット表示切り替えバー - 一時的に無効化（将来的には戻す予定） */}
       {/* TODO: 表示切替機能を再度有効化する場合は、以下のコメントを解除してください */}
@@ -1746,9 +1785,9 @@ const EnhancedLearningPageRefactored = () => {
               {workspaceWidgets.video}
             </div>
           )}
-          {/* 中央列：テキスト教材 */}
+          {/* 中央列：テキスト教材（セクション変更時にここへスクロール） */}
           {workspaceWidgets.text && (
-            <div className="lg:col-span-1 min-h-[800px]">
+            <div ref={textSectionContainerRef} className="lg:col-span-1 min-h-[800px]">
               {workspaceWidgets.text}
             </div>
           )}

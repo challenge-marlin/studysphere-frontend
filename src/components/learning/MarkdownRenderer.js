@@ -1,6 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+
+/** コードがHTMLとして解釈できそうか簡易判定（言語未指定ブロック用） */
+const looksLikeHtml = (s) => {
+  const t = String(s).trim();
+  if (!t) return false;
+  return (
+    /<!DOCTYPE\s+html/i.test(t) ||
+    /^<html[\s>]/i.test(t) ||
+    (/<\w+[\s/>]/.test(t) && /<\/\w+>/.test(t)) ||
+    /<!--[\s\S]*-->/.test(t)
+  );
+};
+
+const codeBlockStyle = {
+  margin: 0,
+  padding: '1rem',
+  borderRadius: '0.5rem',
+  overflow: 'auto',
+  marginBottom: '1rem',
+  fontSize: '0.875rem'
+};
 
 const MarkdownRenderer = ({ content, showToc = true }) => {
   const [headings, setHeadings] = useState([]);
@@ -282,16 +305,37 @@ const MarkdownRenderer = ({ content, showToc = true }) => {
             {children}
           </blockquote>
         ),
-        code: ({ children, className, ...props }) => {
-          if (className && className.startsWith('language-')) {
+        code: ({ inline, className, children, ...props }) => {
+          const match = /language-([\w-]+)/.exec(className ?? '');
+          const codeString = String(children).replace(/\n$/, '');
+          const lang = match ? match[1] : (looksLikeHtml(codeString) ? 'html' : null);
+
+          // フェンス付きコードブロック（```html など）または言語未指定でHTMLと判定→ シンタックスハイライト
+          if (!inline && lang) {
+            return (
+              <SyntaxHighlighter
+                language={lang}
+                style={oneLight}
+                PreTag="div"
+                customStyle={codeBlockStyle}
+                codeTagProps={{ style: { fontFamily: 'ui-monospace, monospace' } }}
+                showLineNumbers={false}
+              >
+                {codeString}
+              </SyntaxHighlighter>
+            );
+          }
+          // 言語未指定のブロック（HTMLでない）→ グレー枠のプレーン表示
+          if (!inline) {
             return (
               <pre className="bg-gray-100 p-4 rounded-lg overflow-x-auto mb-4">
-                <code className={`${className} text-sm`} {...props}>
+                <code className="text-sm font-mono text-gray-800" {...props}>
                   {children}
                 </code>
               </pre>
             );
           }
+          // インラインコード
           return (
             <code className="bg-gray-200 px-2 py-1 rounded text-sm font-mono" {...props}>
               {children}

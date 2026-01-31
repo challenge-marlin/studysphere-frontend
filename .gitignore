@@ -30,10 +30,11 @@ yarn-error.log*
 Thumbs.db 
 /conohawing-deploy
 conohawing-deploy-_.zip
-public/support-app/StudySphereApp Setup 1.0.3.exe
-
 # backups directory and all its contents
 backups/
 /backups/
 **/backups/
-public/support-app/StudySphereApp Setup 1.2.2.exe
+# support-app installers (versioned)
+public/support-app/StudySphereApp Setup *.exe
+public/support-app/StudySphereApp-*-mac.dmg
+public/support-app/StudySphereApp-*-mac.zip

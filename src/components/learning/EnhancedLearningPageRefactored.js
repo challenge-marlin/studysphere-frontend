@@ -21,6 +21,8 @@ const EnhancedLearningPageRefactored = () => {
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [textContent, setTextContent] = useState('');
+  // `textContent` がどの S3 キー由来か（セクション切替/復帰時の誤表示・誤キャッシュ防止）
+  const [textContentS3Key, setTextContentS3Key] = useState(null);
   const [pdfTextContent, setPdfTextContent] = useState('');
   const [textLoading, setTextLoading] = useState(true);
   const [textScrollPosition, setTextScrollPosition] = useState(0);
@@ -30,6 +32,8 @@ const EnhancedLearningPageRefactored = () => {
   const [courseData, setCourseData] = useState(null);
   const [sectionData, setSectionData] = useState(null);
   const [currentSection, setCurrentSection] = useState(0);
+  const [resumeSectionIndex, setResumeSectionIndex] = useState(null);
+  const [resumeSectionTextKey, setResumeSectionTextKey] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isAILoading, setIsAILoading] = useState(false);
@@ -48,6 +52,9 @@ const EnhancedLearningPageRefactored = () => {
   const abortControllerRef = useRef(null); // リクエストキャンセル用
   const layoutStorageKeyRef = useRef(null);
   const layoutInitializedRef = useRef(false);
+  const sectionProgressUpdateTimeoutRef = useRef(null);
+  const resumeSectionIndexRef = useRef(null);
+  const resumeSectionTextKeyRef = useRef(null);
 
   const getUserId = useCallback(() => {
     // 1. 認証コンテキストから取得
@@ -347,6 +354,24 @@ const EnhancedLearningPageRefactored = () => {
           ...data.data,
           videos: [] // セクションデータで動画を設定するため、ここでは空配列に設定
         };
+        
+        // DB保存の「最後に閲覧したセクション(0始まり)」を保持
+        // ※URLに section 指定がある場合は後段でそちらを優先する
+        if (typeof data.data?.last_viewed_section_index === 'number' && !Number.isNaN(data.data.last_viewed_section_index)) {
+          resumeSectionIndexRef.current = data.data.last_viewed_section_index;
+          setResumeSectionIndex(data.data.last_viewed_section_index);
+        } else {
+          resumeSectionIndexRef.current = null;
+          setResumeSectionIndex(null);
+        }
+        // DB保存の「最後に閲覧したセクションのテキストキー（S3キー）」を保持（indexより優先）
+        if (typeof data.data?.last_viewed_section_text_key === 'string' && data.data.last_viewed_section_text_key.trim().length > 0) {
+          resumeSectionTextKeyRef.current = data.data.last_viewed_section_text_key.trim();
+          setResumeSectionTextKey(data.data.last_viewed_section_text_key.trim());
+        } else {
+          resumeSectionTextKeyRef.current = null;
+          setResumeSectionTextKey(null);
+        }
         setLessonData(lessonDataWithoutVideos);
         setTextLoading(false);
         
@@ -358,6 +383,7 @@ const EnhancedLearningPageRefactored = () => {
             s3Key: data.data.s3_key
           });
           setTextContent(data.data.textContent);
+          setTextContentS3Key(data.data.s3_key || null);
         } else {
           console.log('レッスンデータにtextContentが含まれていません:', {
             hasTextContent: !!data.data.textContent,
@@ -421,9 +447,18 @@ const EnhancedLearningPageRefactored = () => {
         console.log(`🗑️ 前のレッスン${lessonData.id}の状態をクリア中...`);
         setLessonData(null);
         setTextContent('');
+        setTextContentS3Key(null);
         setPdfTextContent('');
         setChatMessages([]);
         setCurrentSection(0);
+        setResumeSectionIndex(null);
+        resumeSectionIndexRef.current = null;
+        setResumeSectionTextKey(null);
+        resumeSectionTextKeyRef.current = null;
+        if (sectionProgressUpdateTimeoutRef.current) {
+          clearTimeout(sectionProgressUpdateTimeoutRef.current);
+          sectionProgressUpdateTimeoutRef.current = null;
+        }
         setPdfTextExtracted(false);
         setPdfProcessingStatus('idle');
         setAssignmentStatus({ hasAssignment: false, assignmentSubmitted: false }); // 課題状況もクリア
@@ -537,6 +572,8 @@ const EnhancedLearningPageRefactored = () => {
     setPdfProcessingStatus('idle'); // PDF処理状態をリセット
     setLessonData(null); // レッスンデータをクリア
     setError(null); // エラー状態をクリア
+    setTextContent('');
+    setTextContentS3Key(null);
     setAssignmentStatus({ hasAssignment: false, assignmentSubmitted: false }); // 課題状況をクリア
     
     if (courseData) {
@@ -576,6 +613,32 @@ const EnhancedLearningPageRefactored = () => {
      if (!newSection) return;
      
      setCurrentSection(sectionIndex);
+
+     // 最後に閲覧したセクションを保存（DB）
+     try {
+       if (sectionProgressUpdateTimeoutRef.current) {
+         clearTimeout(sectionProgressUpdateTimeoutRef.current);
+       }
+       sectionProgressUpdateTimeoutRef.current = setTimeout(async () => {
+         const userId = getUserId();
+         await fetch(`${API_BASE_URL}/api/learning/progress/lesson`, {
+           method: 'PUT',
+           headers: {
+             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+             'Content-Type': 'application/json'
+           },
+           body: JSON.stringify({
+             userId: parseInt(userId),
+             lessonId: parseInt(currentLesson),
+             status: 'in_progress',
+             lastViewedSectionIndex: sectionIndex,
+             lastViewedSectionTextKey: newSection?.text_file_key || null
+           })
+         });
+       }, 600);
+     } catch (e) {
+       console.warn('最後に閲覧したセクションの保存に失敗しました:', e);
+     }
      
      console.log('セクション変更:', {
        sectionIndex,
@@ -661,6 +724,7 @@ const EnhancedLearningPageRefactored = () => {
        
        // テキストコンテンツをリセット
        setTextContent('');
+       setTextContentS3Key(null);
        setPdfTextContent('');
        setTextLoading(true);
        setPdfTextExtracted(false);
@@ -788,16 +852,88 @@ const EnhancedLearningPageRefactored = () => {
           
          // セクションデータが空の場合（動画がない場合）でも処理を続行
          if (sortedSections.length > 0) {
-           setCurrentSection(0);
+          // 初期表示セクション（優先順位: URLのsection → DB保存のテキストキー → DB保存のindex → 0）
+           const sectionParam = searchParams.get('section');
+           let initialSectionIndex = 0;
+           if (sectionParam != null) {
+             const idx = parseInt(sectionParam, 10);
+             if (!isNaN(idx) && idx >= 0 && idx < sortedSections.length) {
+               initialSectionIndex = idx;
+             }
+          } else if (typeof resumeSectionTextKeyRef.current === 'string' && resumeSectionTextKeyRef.current.trim().length > 0) {
+            const targetKey = resumeSectionTextKeyRef.current.trim();
+            const normalize = (key) => String(key || '').trim();
+            const extractFileName = (key) => {
+              const parts = String(key || '').split('/');
+              return (parts[parts.length - 1] || '').trim().toLowerCase();
+            };
+            const exactIdx = sortedSections.findIndex(s => normalize(s.text_file_key) === targetKey);
+            if (exactIdx >= 0) {
+              initialSectionIndex = exactIdx;
+            } else {
+              // フォールバック: ファイル名一致（旧データ/不整合に強くする）
+              const targetFile = extractFileName(targetKey);
+              const byNameIdx = sortedSections.findIndex(s => extractFileName(s.text_file_key) === targetFile);
+              if (byNameIdx >= 0) {
+                initialSectionIndex = byNameIdx;
+              }
+            }
+           } else if (typeof resumeSectionIndexRef.current === 'number' && resumeSectionIndexRef.current >= 0 && resumeSectionIndexRef.current < sortedSections.length) {
+             initialSectionIndex = resumeSectionIndexRef.current;
+           }
+
+           setCurrentSection(initialSectionIndex);
            
-           // 修正: ソート済みの最初のセクションを使用
-           const firstSection = sortedSections[0];
+           // 修正: 初期表示セクションを使用
+           const firstSection = sortedSections[initialSectionIndex];
            const lessonS3Key = currentLessonData?.s3_key || lessonData?.s3_key;
            const sectionTextFileKey = firstSection?.text_file_key;
+
+           // 旧データ救済:
+           // 以前は last_viewed_section_index しか保存していなかったため、混在ソートで復帰先がズレやすい。
+           // text_key が未保存のユーザーは、初回ロード時に “現在の並びで解決したセクションの text_key” をDBへ補完保存する。
+           if (
+             sectionParam == null &&
+             (!resumeSectionTextKeyRef.current || String(resumeSectionTextKeyRef.current).trim().length === 0) &&
+             sectionTextFileKey &&
+             typeof sectionTextFileKey === 'string' &&
+             sectionTextFileKey.trim().length > 0
+           ) {
+             try {
+               const userId = getUserId();
+               console.log('🧩 last_viewed_section_text_key を補完保存します（旧データ救済）:', {
+                 userId,
+                 lessonId,
+                 initialSectionIndex,
+                 sectionTextFileKey
+               });
+               // ref/state も更新して以降のロジックで優先されるようにする
+               resumeSectionTextKeyRef.current = sectionTextFileKey.trim();
+               setResumeSectionTextKey(sectionTextFileKey.trim());
+
+               await fetch(`${API_BASE_URL}/api/learning/progress/lesson`, {
+                 method: 'PUT',
+                 headers: {
+                   'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+                   'Content-Type': 'application/json'
+                 },
+                 body: JSON.stringify({
+                   userId: parseInt(userId, 10),
+                   lessonId: parseInt(lessonId, 10),
+                   status: 'in_progress',
+                   lastViewedSectionIndex: initialSectionIndex,
+                   lastViewedSectionTextKey: sectionTextFileKey.trim()
+                 })
+               });
+             } catch (e) {
+               console.warn('last_viewed_section_text_key の補完保存に失敗しました:', e);
+             }
+           }
            
            console.log('セクションデータ取得成功:', {
              sectionCount: data.data.length,
              firstSection: firstSection,
+             initialSectionIndex,
              lessonS3Key: lessonS3Key,
              sectionTextFileKey: sectionTextFileKey,
              sectionFileType: firstSection?.file_type,
@@ -858,6 +994,9 @@ const EnhancedLearningPageRefactored = () => {
              });
              
              // lessonDataを更新（s3_keyとfile_typeを更新）
+             // 重要: 復帰/初期ロード時に old textContent が残ると、
+             // TextSection が「新しい s3_key に旧コンテンツを保存」してしまい表示がズレるため、
+             // s3_key を切り替える際は必ず textContent をクリアして再取得させる。
              setLessonData(prev => {
                const baseData = currentLessonData || prev;
                if (!baseData) {
@@ -867,22 +1006,20 @@ const EnhancedLearningPageRefactored = () => {
                return {
                  ...baseData,
                  s3_key: sectionTextFileKey,
-                 file_type: fileType
-                 // ファイル名が一致する場合は、textContentをリセットしない
+                 file_type: fileType,
+                 textContent: '' // TextSectionに再読み込みさせるため必ずクリア
                };
              });
              
-             // ファイル名が一致しない場合のみ、テキストコンテンツをリセット
-             if (!fileNamesMatch) {
-               console.log('⚠️ ファイル名が一致しないため、テキストコンテンツをリセットします');
-               setTextContent('');
-               setPdfTextContent('');
-               setTextLoading(true);
-               setPdfTextExtracted(false);
-               setPdfProcessingStatus('idle');
-             } else {
-               console.log('✅ ファイル名が一致するため、既存のtextContentを保持します');
-             }
+             // s3_key を切り替える場合は常にテキストをリセットして再読み込み
+             // （同名ファイルでもパス違い等で内容が異なるケースがあり、保持すると誤表示の原因になる）
+             console.log('🔄 テキストコンテンツをリセットして再読み込みします（初期セクション適用）');
+             setTextContent('');
+             setTextContentS3Key(null);
+             setPdfTextContent('');
+             setTextLoading(true);
+             setPdfTextExtracted(false);
+             setPdfProcessingStatus('idle');
            }
            
            // 動画がある場合のみ更新（既存の動画をクリアしてから新しい動画を設定）
@@ -1274,13 +1411,14 @@ const EnhancedLearningPageRefactored = () => {
   };
 
   // PDFテキスト更新ハンドラー（テキストファイルも含む）
-  const handlePdfTextUpdate = (newPdfText) => {
+  const handlePdfTextUpdate = (newPdfText, meta = null) => {
     console.log('handlePdfTextUpdate 呼び出し:', { 
       textLength: newPdfText?.length,
       isError: newPdfText?.startsWith('エラー:'),
       isCancel: newPdfText?.includes('キャンセル'),
       textPreview: newPdfText?.substring(0, 100),
-      fileType: lessonData?.file_type
+      fileType: meta?.fileType || lessonData?.file_type,
+      s3Key: meta?.s3Key || lessonData?.s3_key
     });
     
     // textLoadingをfalseに設定（読み込み完了）
@@ -1330,12 +1468,14 @@ const EnhancedLearningPageRefactored = () => {
           setPdfTextExtracted(true);
           setPdfProcessingStatus('completed');
           setPdfTextContent(newPdfText);
+          setTextContentS3Key(meta?.s3Key || lessonData?.s3_key || null);
           console.log('PDFテキスト抽出完了:', { textLength: newPdfText.length });
         } else {
           // テキストファイル（MD、TXT、RTF）の場合
           // pdfProcessingStatusを'completed'に設定して、AIアシスタントを有効化
           setPdfProcessingStatus('completed');
           setTextContent(newPdfText);
+          setTextContentS3Key(meta?.s3Key || lessonData?.s3_key || null);
           console.log('テキストファイル読み込み完了:', { 
             textLength: newPdfText.length,
             fileType: lessonData?.file_type,
@@ -1533,6 +1673,7 @@ const EnhancedLearningPageRefactored = () => {
       <TextSection
         lessonData={lessonData}
         textContent={textContent}
+        textContentS3Key={textContentS3Key}
         textLoading={textLoading}
         textContainerRef={textContainerRef}
         onTextContentUpdate={handlePdfTextUpdate}

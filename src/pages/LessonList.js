@@ -21,6 +21,32 @@ const LessonList = ({ selectedCourseId }) => {
   const [error, setError] = useState(null);
   const [testResults, setTestResults] = useState({});
   
+  // JSTで日時を表示（APIがUTCのISO文字列を返してもJSTに変換して出す）
+  const formatJstDateTime = (value) => {
+    if (!value) return '';
+    const raw = String(value);
+    let date = new Date(raw);
+    
+    // MySQL DATETIME形式 "YYYY-MM-DD HH:mm:ss" の場合のフォールバック
+    if (Number.isNaN(date.getTime())) {
+      const normalized = raw.replace(' ', 'T');
+      date = new Date(normalized);
+    }
+    
+    if (Number.isNaN(date.getTime())) return raw;
+    
+    return new Intl.DateTimeFormat('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).format(date);
+  };
+  
   // 試験結果モーダル関連の状態
   const [examResultListModalOpen, setExamResultListModalOpen] = useState(false);
   const [examResultDetailModalOpen, setExamResultDetailModalOpen] = useState(false);
@@ -100,18 +126,18 @@ const LessonList = ({ selectedCourseId }) => {
       return null;
     }
     
-    // updated_atでソートして最新のものを取得
-    // 同じupdated_atの場合は、order_indexが小さい方（先に学ぶべきレッスン）を優先
+    // 最終アクセス日時（last_accessed_at）でソートして最新のものを取得
+    // 既存データでlast_accessed_atが無い場合は updated_at をフォールバック
     const sortedLessons = [...inProgressLessons].sort((a, b) => {
-      const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-      const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
-      if (dateB !== dateA) return dateB - dateA; // updated_atが新しい順
-      // 同じ時刻の場合はorder_indexが小さい方（先に学ぶべきレッスン）を優先
-      const orderA = a.order_index || 0;
-      const orderB = b.order_index || 0;
-      if (orderA !== orderB) return orderA - orderB;
-      // order_indexも同じ場合はIDが小さい方を優先（作成順）
-      return a.id - b.id;
+      const timeA = (a.last_accessed_at || a.updated_at) ? new Date(a.last_accessed_at || a.updated_at).getTime() : 0;
+      const timeB = (b.last_accessed_at || b.updated_at) ? new Date(b.last_accessed_at || b.updated_at).getTime() : 0;
+      if (timeB !== timeA) return timeB - timeA;
+      // なお同時刻の場合は、updated_atで再比較してブレを減らす
+      const updatedA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+      const updatedB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+      if (updatedB !== updatedA) return updatedB - updatedA;
+      // 最後にID（念のため）
+      return (b.id || 0) - (a.id || 0);
     });
     
     const mostRecentLesson = sortedLessons[0];
@@ -615,16 +641,9 @@ const LessonList = ({ selectedCourseId }) => {
                    <p className="text-sm text-blue-600 font-medium mb-2">
                      {selectedCourse.title}
                    </p>
-                   <p className="text-sm text-gray-600">最終更新: {(() => {
-                     const dateStr = displayLesson.updated_at;
-                     if (!dateStr) return '';
-                     // データベースから取得した日本時間の値をそのまま表示
-                     return dateStr
-                       .replace(/-/g, '/')           // ハイフンをスラッシュに変換
-                       .replace('T', ' ')            // Tをスペースに変換
-                       .replace(/\.\d{3}Z?$/, '')    // .000Z または .000 を削除
-                       .replace(/\s+/g, ' ');        // 複数のスペースを1つに統一
-                   })()}</p>
+                   <p className="text-sm text-gray-600">
+                     最終更新: {formatJstDateTime(displayLesson.last_accessed_at || displayLesson.updated_at)}
+                   </p>
                  </div>
                  <div className="flex gap-2">
                    <button

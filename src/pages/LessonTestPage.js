@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import MultipleChoiceTest from '../components/learning/MultipleChoiceTest';
 import { SessionStorageManager } from '../utils/sessionStorage';
@@ -14,7 +14,13 @@ const LessonTestPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lessonData, setLessonData] = useState(null);
   const [sectionData, setSectionData] = useState(null);
+  const abortControllerRef = useRef(null);
+  const currentLessonRef = useRef(currentLesson);
   const GENERATION_FAILURE_MESSAGE = '問題の作成に失敗しました。再読み込みをしてください。';
+
+  useEffect(() => {
+    currentLessonRef.current = currentLesson;
+  }, [currentLesson]);
 
   const handleTestGenerationFailure = (detail) => {
     if (detail) {
@@ -37,18 +43,35 @@ const LessonTestPage = () => {
   }, [searchParams]);
 
   // レッスンデータとセクションデータを取得
+  // 注意: URLの?lesson=とcurrentLessonのずれによる二重fetch・後勝ち上書きを防ぐため、
+  // AbortControllerでキャンセルし、リクエスト一致時のみstateを更新する
   useEffect(() => {
+    const lessonParam = searchParams.get('lesson');
+    const urlLesson = lessonParam ? parseInt(lessonParam, 10) : null;
+    if (urlLesson != null && urlLesson >= 1 && currentLesson === 1 && urlLesson !== 1) {
+      return;
+    }
+    if (!currentLesson) return;
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const fetchedFor = currentLesson;
+
+    setLessonData(null);
+    setSectionData(null);
+    setTestData(null);
+
     const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
-        
-        // レッスンデータを取得
-        const lessonResponse = await fetch(`${API_BASE_URL}/api/learning/lesson/${currentLesson}/content`, {
+
+        const lessonResponse = await fetch(`${API_BASE_URL}/api/learning/lesson/${fetchedFor}/content`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
             'Content-Type': 'application/json'
-          }
+          },
+          signal: controller.signal
         });
 
         if (!lessonResponse.ok) {
@@ -56,36 +79,39 @@ const LessonTestPage = () => {
         }
 
         const lessonResult = await lessonResponse.json();
-        if (lessonResult.success) {
+        if (lessonResult.success && currentLessonRef.current === fetchedFor) {
           setLessonData(lessonResult.data);
         }
 
-        // セクションデータを取得
-        const sectionResponse = await fetch(`${API_BASE_URL}/api/lesson-text-video-links/lesson/${currentLesson}`, {
+        const sectionResponse = await fetch(`${API_BASE_URL}/api/lesson-text-video-links/lesson/${fetchedFor}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
             'Content-Type': 'application/json'
-          }
+          },
+          signal: controller.signal
         });
 
         if (sectionResponse.ok) {
           const sectionResult = await sectionResponse.json();
-          if (sectionResult.success) {
+          if (sectionResult.success && currentLessonRef.current === fetchedFor) {
             setSectionData(sectionResult.data);
           }
         }
-        
-      } catch (error) {
-        console.error('データ取得エラー:', error);
-        handleTestGenerationFailure(error);
+      } catch (err) {
+        if (err?.name === 'AbortError') return;
+        console.error('データ取得エラー:', err);
+        handleTestGenerationFailure(err);
         setLoading(false);
       }
     };
 
-    if (currentLesson) {
-      fetchData();
-    }
-  }, [currentLesson]);
+    fetchData();
+
+    return () => {
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+    };
+  }, [currentLesson, searchParams]);
 
   // セクションデータが取得された後にテストデータを生成
   // 修正: セクションデータが空（動画がない場合）でも、レッスンデータがあればテストを生成

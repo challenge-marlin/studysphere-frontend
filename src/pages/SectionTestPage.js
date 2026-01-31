@@ -10,7 +10,17 @@ const SectionTestPage = () => {
   const [currentLesson, setCurrentLesson] = useState(1);
   const [currentSection, setCurrentSection] = useState(0);
   const previousSectionRef = useRef(null); // 前回のセクション番号を記録
-  
+  const abortControllerRef = useRef(null);
+  const currentLessonRef = useRef(currentLesson);
+  const currentSectionRef = useRef(currentSection);
+
+  useEffect(() => {
+    currentLessonRef.current = currentLesson;
+  }, [currentLesson]);
+  useEffect(() => {
+    currentSectionRef.current = currentSection;
+  }, [currentSection]);
+
   // 初期化時のURLパラメータ確認（デバッグ時のみ）
   console.log('SectionTestPage初期化:', {
     url: window.location.href,
@@ -69,25 +79,27 @@ const SectionTestPage = () => {
   }, [searchParams]);
 
   // レッスンデータとセクションデータを取得
+  // 注意: URLとstateのずれによる二重fetch・後勝ち上書きを防ぐため、
+  // AbortControllerでキャンセルし、リクエスト一致時のみstateを更新する
   useEffect(() => {
-    // レッスン番号が設定されていない場合は実行しない
     if (!currentLesson) {
       console.log('レッスン番号が未設定のため、データ取得をスキップします');
       return;
     }
-    
-    // 既に実行中の場合は実行しない
-    if (isFetching) {
-      console.log('既にデータ取得中です。重複実行をスキップします');
+
+    const lessonParam = searchParams.get('lesson');
+    const sectionParam = searchParams.get('section');
+    const urlLesson = lessonParam ? parseInt(lessonParam, 10) : null;
+    const urlSection = sectionParam ? parseInt(sectionParam, 10) : null;
+    if (urlLesson != null && urlLesson >= 1 && urlSection != null && urlSection >= 0 &&
+        currentLesson === 1 && currentSection === 0 && (urlLesson !== 1 || urlSection !== 0)) {
       return;
     }
-    
-    // セクションが変更された場合は、テストデータをクリアして再生成する
+
     const testCacheKey = `test_data_${currentLesson}_${currentSection}`;
     const cachedTestData = sessionStorage.getItem(testCacheKey);
-    
-    // セクションが変更された場合は、テストデータをクリア
     const sectionChanged = previousSectionRef.current !== null && previousSectionRef.current !== currentSection;
+
     if (sectionChanged) {
       console.log('セクションが変更されたため、テストデータをクリアして再生成します:', {
         previousSection: previousSectionRef.current,
@@ -95,8 +107,7 @@ const SectionTestPage = () => {
       });
       setTestData(null);
     }
-    
-    // キャッシュされたテストデータが存在し、セクションが変更されていない場合はそれを使用
+
     if (!sectionChanged && cachedTestData) {
       try {
         const parsedCachedData = JSON.parse(cachedTestData);
@@ -108,37 +119,41 @@ const SectionTestPage = () => {
           });
           setTestData(parsedCachedData);
           setLoading(false);
-          previousSectionRef.current = currentSection; // 前回のセクション番号を更新
+          previousSectionRef.current = currentSection;
           return;
         }
       } catch (e) {
-        // パースエラーの場合は再生成する
         console.warn('キャッシュデータのパースに失敗しました。再生成します:', e);
       }
     }
-    
-    // 前回のセクション番号を更新
+
     previousSectionRef.current = currentSection;
-    
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const fetchedFor = { lesson: currentLesson, section: currentSection };
+
+    setLessonData(null);
+    setSectionData(null);
+    setTestData(null);
+
     const fetchData = async () => {
       try {
         setIsFetching(true);
         setLoading(true);
         setError(null);
-        
+
         console.log('データ取得開始:', {
-          currentLesson,
-          currentSection,
-          lessonData,
-          sectionData
+          currentLesson: fetchedFor.lesson,
+          currentSection: fetchedFor.section
         });
-        
-        // レッスンデータを取得
-        const lessonResponse = await fetch(`${API_BASE_URL}/api/learning/lesson/${currentLesson}/content`, {
+
+        const lessonResponse = await fetch(`${API_BASE_URL}/api/learning/lesson/${fetchedFor.lesson}/content`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
             'Content-Type': 'application/json'
-          }
+          },
+          signal: controller.signal
         });
 
         if (!lessonResponse.ok) {
@@ -146,16 +161,16 @@ const SectionTestPage = () => {
         }
 
         const lessonResult = await lessonResponse.json();
-        if (lessonResult.success) {
+        if (lessonResult.success && currentLessonRef.current === fetchedFor.lesson && currentSectionRef.current === fetchedFor.section) {
           setLessonData(lessonResult.data);
         }
 
-        // セクションデータを取得
-        const sectionResponse = await fetch(`${API_BASE_URL}/api/lesson-text-video-links/lesson/${currentLesson}`, {
+        const sectionResponse = await fetch(`${API_BASE_URL}/api/lesson-text-video-links/lesson/${fetchedFor.lesson}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
             'Content-Type': 'application/json'
-          }
+          },
+          signal: controller.signal
         });
 
         let fetchedSectionData = null;
@@ -163,27 +178,28 @@ const SectionTestPage = () => {
           const sectionResult = await sectionResponse.json();
           if (sectionResult.success && sectionResult.data) {
             fetchedSectionData = sectionResult.data;
-            setSectionData(fetchedSectionData);
-            
-            // セクションが指定されていない場合は最初のセクションを使用
-            if (fetchedSectionData.length > 0 && currentSection >= fetchedSectionData.length) {
-              setCurrentSection(0);
+            if (currentLessonRef.current === fetchedFor.lesson && currentSectionRef.current === fetchedFor.section) {
+              setSectionData(fetchedSectionData);
+              if (fetchedSectionData.length > 0 && fetchedFor.section >= fetchedSectionData.length) {
+                setCurrentSection(0);
+                return;
+              }
             }
           }
         }
-        
-        // セッションストレージから直接テストデータを生成
-        // fetchedSectionDataを直接渡すことで、state更新を待たずにテスト生成を実行
+
+        if (currentLessonRef.current !== fetchedFor.lesson || currentSectionRef.current !== fetchedFor.section) {
+          return;
+        }
         if (fetchedSectionData) {
           await generateTestDataFromSessionStorage(false, fetchedSectionData);
         } else {
-          console.warn('セクションデータが取得できませんでした。stateのsectionDataを使用します。');
           await generateTestDataFromSessionStorage(false, null);
         }
-        
-      } catch (error) {
-        console.error('データ取得エラー:', error);
-        handleTestGenerationFailure(error);
+      } catch (err) {
+        if (err?.name === 'AbortError') return;
+        console.error('データ取得エラー:', err);
+        handleTestGenerationFailure(err);
       } finally {
         setLoading(false);
         setIsFetching(false);
@@ -191,7 +207,12 @@ const SectionTestPage = () => {
     };
 
     fetchData();
-  }, [currentLesson, currentSection]);
+
+    return () => {
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+    };
+  }, [currentLesson, currentSection, searchParams]);
 
   // セッションストレージから直接コンテキストを取得してテスト生成
   const generateTestDataFromSessionStorage = async (forceRefresh = false, sectionDataOverride = null) => {

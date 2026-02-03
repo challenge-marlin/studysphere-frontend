@@ -7,6 +7,7 @@ import { API_BASE_URL } from '../config/apiConfig';
 const LessonTestPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const isPreview = searchParams.get('preview') === '1';
   const [currentLesson, setCurrentLesson] = useState(1);
   const [testData, setTestData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -722,6 +723,11 @@ const LessonTestPage = () => {
     setIsSubmitting(true);
     
     try {
+      if (isPreview) {
+        alert('プレビューでは提出/採点/結果表示はできません（問題画面の閲覧のみ可能です）。');
+        setIsSubmitting(false);
+        return;
+      }
       // 認証されたユーザーIDを使用するため、userIdはリクエストボディに含めない
       
       // テスト結果を提出

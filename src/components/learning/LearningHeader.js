@@ -14,7 +14,10 @@ const LearningHeader = ({
   isTestEnabled,
   testDisabledReason,
   hasAssignment,
-  assignmentSubmitted
+  assignmentSubmitted,
+  isPreview = false,
+  previewDisabledReason = 'プレビューでは利用できません',
+  previewQueryParams = ''
 }) => {
   const navigate = useNavigate();
   const [localSectionData, setLocalSectionData] = useState([]);
@@ -242,13 +245,20 @@ const LearningHeader = ({
             </div>
             
             {/* 成果物アップロードボタン（課題がある場合のみ表示） */}
-            {hasAssignment && !assignmentSubmitted && (
+            {hasAssignment && !assignmentSubmitted && !isPreview && (
               <button 
                 className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-all duration-200 hover:shadow-lg transform hover:-translate-y-0.5"
                 onClick={onUploadModalOpen}
               >
                 📁 成果物アップロード
               </button>
+            )}
+
+            {/* プレビュー時の課題操作不可表示 */}
+            {hasAssignment && !assignmentSubmitted && isPreview && (
+              <span className="px-4 py-2 bg-gray-200 text-gray-600 rounded-lg font-medium" title={previewDisabledReason}>
+                📁 成果物アップロード（無効）
+              </span>
             )}
             
             {/* 課題提出済み表示 */}
@@ -263,6 +273,7 @@ const LearningHeader = ({
               <button 
                 className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all duration-200 hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!isTestEnabled}
+                title={!isTestEnabled ? testDisabledReason : (isPreview ? 'プレビューでは提出/採点/結果は無効です（問題画面の閲覧のみ可能）' : undefined)}
               >
                 📝 学習効果テスト ▼
               </button>
@@ -277,7 +288,8 @@ const LearningHeader = ({
                         const sectionCacheKey = `test_data_${currentLesson}_${currentSection}`;
                         sessionStorage.removeItem(sectionCacheKey);
                         console.log('セクションテストのキャッシュをクリア:', sectionCacheKey);
-                        navigate(`/student/section-test?lesson=${currentLesson}&section=${currentSection}`);
+                        const suffix = previewQueryParams ? `&${previewQueryParams}` : '';
+                        navigate(`/student/section-test?lesson=${currentLesson}&section=${currentSection}${suffix}`);
                       }}
                       className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
                     >
@@ -290,7 +302,8 @@ const LearningHeader = ({
                         const lessonCacheKey = `test_data_lesson_${currentLesson}`;
                         sessionStorage.removeItem(lessonCacheKey);
                         console.log('レッスンテストのキャッシュをクリア:', lessonCacheKey);
-                        navigate(`/student/lesson-test?lesson=${currentLesson}`);
+                        const suffix = previewQueryParams ? `&${previewQueryParams}` : '';
+                        navigate(`/student/lesson-test?lesson=${currentLesson}${suffix}`);
                       }}
                       className="w-full px-4 py-3 text-left text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
                     >
@@ -301,7 +314,13 @@ const LearningHeader = ({
                 </div>
               )}
               
-              {!isTestEnabled && testDisabledReason && (
+              {isPreview && (
+                <p className="mt-2 text-xs text-yellow-100 max-w-xs leading-snug">
+                  プレビューでは提出/採点/結果表示はできません（問題画面の閲覧のみ可能）。
+                </p>
+              )}
+
+              {!isTestEnabled && !isPreview && testDisabledReason && (
                 <p className="mt-2 text-xs text-yellow-100 max-w-xs leading-snug">
                   {testDisabledReason}
                 </p>

@@ -416,7 +416,7 @@ const EvidenceRecordsTab = ({
                               })}
                               className="text-white text-sm px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
                             >
-                              詳細
+                              写真
                             </button>
                           </div>
                         </td>

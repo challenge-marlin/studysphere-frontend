@@ -5,6 +5,7 @@ import { API_BASE_URL } from '../config/apiConfig';
 const TestResultPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const isPreview = new URLSearchParams(window.location.search).get('preview') === '1' || location.state?.isPreview === true;
   const [resultData, setResultData] = useState(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -71,6 +72,11 @@ const TestResultPage = () => {
 
   useEffect(() => {
     const processTestResults = async () => {
+      if (isPreview) {
+        setLoading(false);
+        setError('プレビューでは採点結果は表示できません（提出/採点/結果表示は無効です）。');
+        return;
+      }
       if (location.state) {
         // LessonListから渡されるテスト結果データの場合
         if (location.state.testResult) {
@@ -325,7 +331,7 @@ const TestResultPage = () => {
     };
 
     processTestResults();
-  }, [location.state, navigate]);
+  }, [location.state, navigate, isPreview]);
 
   // レッスンまとめテスト（30問）合格時のみ「次のレッスン」を取得
   useEffect(() => {

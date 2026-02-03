@@ -17,6 +17,9 @@ const EnhancedLearningPageRefactored = () => {
   const navigate = useNavigate();
   const { currentUser } = useContext(AuthContext);
   const [searchParams] = useSearchParams();
+  const previewUserIdParam = searchParams.get('previewUserId');
+  const previewSatelliteIdParam = searchParams.get('previewSatelliteId');
+  const isPreview = searchParams.get('preview') === '1' && (currentUser?.role >= 4);
   const [currentLesson, setCurrentLesson] = useState(1);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
@@ -57,6 +60,11 @@ const EnhancedLearningPageRefactored = () => {
   const resumeSectionTextKeyRef = useRef(null);
 
   const getUserId = useCallback(() => {
+    // 指導員プレビュー（指導員/管理者のみ許可）
+    if (isPreview && previewUserIdParam) {
+      console.log('プレビューモード: previewUserId を使用します:', previewUserIdParam);
+      return String(previewUserIdParam);
+    }
     // 1. 認証コンテキストから取得
     if (currentUser && currentUser.id) {
       console.log('認証コンテキストからユーザーID取得:', currentUser.id);
@@ -87,7 +95,15 @@ const EnhancedLearningPageRefactored = () => {
     // 4. 最終フォールバック
     console.warn('ユーザーIDが取得できません。デフォルト値24を使用します。');
     return '24'; // 現在受講しているユーザーID
-  }, [currentUser]);
+  }, [currentUser, isPreview, previewUserIdParam]);
+
+  const buildPreviewQueryParams = useCallback((base) => {
+    const params = new URLSearchParams(base);
+    params.set('preview', '1');
+    if (previewSatelliteIdParam) params.set('previewSatelliteId', String(previewSatelliteIdParam));
+    if (previewUserIdParam) params.set('previewUserId', String(previewUserIdParam));
+    return params;
+  }, [previewSatelliteIdParam, previewUserIdParam]);
 
   const buildLayoutStorageKey = (userId) => `studysphere:workspaceLayouts:user:${userId}`;
 
@@ -172,6 +188,7 @@ const EnhancedLearningPageRefactored = () => {
 
   // 提出物確認ファイルを取得
   const fetchUploadedFiles = async (lessonId = null) => {
+    if (isPreview) return;
     const targetLessonId = lessonId || currentLesson;
     
     try {
@@ -208,6 +225,7 @@ const EnhancedLearningPageRefactored = () => {
 
   // 課題提出状況を確認
   const checkAssignmentStatus = async (lessonId = null) => {
+    if (isPreview) return;
     const targetLessonId = lessonId || currentLesson;
     
     // レースコンディション防止: リクエストIDを生成
@@ -392,12 +410,15 @@ const EnhancedLearningPageRefactored = () => {
           });
         }
         
-        // 課題提出状況を確認
-        console.log(`🔍 課題提出状況確認開始: レッスンID ${targetLessonId}`);
-        await checkAssignmentStatus(targetLessonId);
-        
-        // 提出物確認ファイルを取得
-        await fetchUploadedFiles(targetLessonId);
+        // 課題提出状況/提出物確認は、プレビューでは利用者データを書き換え/誤参照する可能性があるため無効化
+        if (!isPreview) {
+          console.log(`🔍 課題提出状況確認開始: レッスンID ${targetLessonId}`);
+          await checkAssignmentStatus(targetLessonId);
+          await fetchUploadedFiles(targetLessonId);
+        } else {
+          setAssignmentStatus({ hasAssignment: false, assignmentSubmitted: false });
+          setUploadedFiles([]);
+        }
         
         // レッスンデータ取得成功後、セクションデータを取得
         // currentLessonDataにはvideosを含めない（セクションデータで設定される）
@@ -468,7 +489,9 @@ const EnhancedLearningPageRefactored = () => {
       const targetLessonId = currentLesson; // 現在の値を保存
       console.log(`🚀 即座にレッスンデータ取得開始: レッスンID ${targetLessonId}`);
       fetchLessonData(0, targetLessonId);
-      checkAssignmentStatus(targetLessonId); // 課題提出状況も確認
+      if (!isPreview) {
+        checkAssignmentStatus(targetLessonId); // 課題提出状況も確認
+      }
     }
   }, [currentLesson]); // currentLessonのみに依存
 
@@ -577,7 +600,13 @@ const EnhancedLearningPageRefactored = () => {
     setAssignmentStatus({ hasAssignment: false, assignmentSubmitted: false }); // 課題状況をクリア
     
     if (courseData) {
-      navigate(`/student/enhanced-learning?course=${courseData.id}&lesson=${lessonId}`);
+      // プレビュー中はプレビューパラメータを引き継ぐ
+      if (isPreview) {
+        const params = buildPreviewQueryParams({ course: String(courseData.id), lesson: String(lessonId) });
+        navigate(`/student/enhanced-learning?${params.toString()}`);
+      } else {
+        navigate(`/student/enhanced-learning?course=${courseData.id}&lesson=${lessonId}`);
+      }
     }
     
     // 新しいレッスンデータの取得はuseEffectで自動実行される
@@ -615,29 +644,32 @@ const EnhancedLearningPageRefactored = () => {
      setCurrentSection(sectionIndex);
 
      // 最後に閲覧したセクションを保存（DB）
-     try {
-       if (sectionProgressUpdateTimeoutRef.current) {
-         clearTimeout(sectionProgressUpdateTimeoutRef.current);
+     // プレビューでは学習状況を変更しない（閲覧のみ）
+     if (!isPreview) {
+       try {
+         if (sectionProgressUpdateTimeoutRef.current) {
+           clearTimeout(sectionProgressUpdateTimeoutRef.current);
+         }
+         sectionProgressUpdateTimeoutRef.current = setTimeout(async () => {
+           const userId = getUserId();
+           await fetch(`${API_BASE_URL}/api/learning/progress/lesson`, {
+             method: 'PUT',
+             headers: {
+               'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+               'Content-Type': 'application/json'
+             },
+             body: JSON.stringify({
+               userId: parseInt(userId),
+               lessonId: parseInt(currentLesson),
+               status: 'in_progress',
+               lastViewedSectionIndex: sectionIndex,
+               lastViewedSectionTextKey: newSection?.text_file_key || null
+             })
+           });
+         }, 600);
+       } catch (e) {
+         console.warn('最後に閲覧したセクションの保存に失敗しました:', e);
        }
-       sectionProgressUpdateTimeoutRef.current = setTimeout(async () => {
-         const userId = getUserId();
-         await fetch(`${API_BASE_URL}/api/learning/progress/lesson`, {
-           method: 'PUT',
-           headers: {
-             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-             'Content-Type': 'application/json'
-           },
-           body: JSON.stringify({
-             userId: parseInt(userId),
-             lessonId: parseInt(currentLesson),
-             status: 'in_progress',
-             lastViewedSectionIndex: sectionIndex,
-             lastViewedSectionTextKey: newSection?.text_file_key || null
-           })
-         });
-       }, 600);
-     } catch (e) {
-       console.warn('最後に閲覧したセクションの保存に失敗しました:', e);
      }
      
      console.log('セクション変更:', {
@@ -1213,7 +1245,44 @@ const EnhancedLearningPageRefactored = () => {
   const fetchCourseData = async (courseId, retryCount = 0, searchParams = null) => {
     try {
       const userId = getUserId();
-      
+
+      if (isPreview) {
+        console.log(`（プレビュー）コースデータを取得中: コースID ${courseId} (試行回数: ${retryCount + 1})`);
+        const response = await fetch(`${API_BASE_URL}/api/courses/${courseId}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            // lessons を active のみに絞る（学習画面は active のみ閲覧対象）
+            const lessons = Array.isArray(data.data?.lessons) ? data.data.lessons : [];
+            const activeLessons = lessons.filter(l => l.status === 'active' || l.status === undefined);
+            setCourseData({ ...data.data, lessons: activeLessons });
+
+            const lessonParam = searchParams ? searchParams.get('lesson') : null;
+            if (!lessonParam && activeLessons.length > 0) {
+              setCurrentLesson(activeLessons[0].id);
+            }
+          }
+        } else {
+          const errorMessage = `（プレビュー）コースデータ取得失敗: ${response.status}`;
+          console.error(errorMessage);
+          const errorData = await response.json().catch(() => ({}));
+          console.error('エラー詳細:', errorData);
+
+          if (response.status >= 500 && retryCount < 2) {
+            setTimeout(() => {
+              fetchCourseData(courseId, retryCount + 1);
+            }, 2000 * (retryCount + 1));
+          }
+        }
+        return;
+      }
+
       console.log(`コースデータを取得中: コースID ${courseId}, 利用者ID ${userId} (試行回数: ${retryCount + 1})`);
       
       const response = await fetch(`${API_BASE_URL}/api/learning/progress/${userId}/course/${courseId}`, {
@@ -1507,6 +1576,10 @@ const EnhancedLearningPageRefactored = () => {
 
   // 成果物アップロード処理
   const handleFileUpload = async (event) => {
+    if (isPreview) {
+      alert('プレビューでは成果物アップロードはできません。');
+      return;
+    }
     const files = Array.from(event.target.files);
     
     // ZIPファイルのみ許可
@@ -1575,6 +1648,10 @@ const EnhancedLearningPageRefactored = () => {
 
   // ファイル削除処理
   const handleFileDelete = async (fileId) => {
+    if (isPreview) {
+      alert('プレビューでは提出物の削除はできません。');
+      return;
+    }
     try {
       console.log(`🗑️ ファイル削除開始: ファイルID ${fileId}, レッスンID ${currentLesson}`);
       
@@ -1682,13 +1759,23 @@ const EnhancedLearningPageRefactored = () => {
         isLastSection={!sectionData || sectionData.length === 0 || currentSection === sectionData.length - 1}
         onSectionTestClick={() => {
           sessionStorage.removeItem(`test_data_${currentLesson}_${currentSection}`);
-          navigate(`/student/section-test?lesson=${currentLesson}&section=${currentSection}`);
+          if (isPreview) {
+            const params = buildPreviewQueryParams({ lesson: String(currentLesson), section: String(currentSection) });
+            navigate(`/student/section-test?${params.toString()}`);
+          } else {
+            navigate(`/student/section-test?lesson=${currentLesson}&section=${currentSection}`);
+          }
         }}
         onNextSectionClick={() => {
           const lastSection = !sectionData || sectionData.length === 0 || currentSection === sectionData.length - 1;
           if (lastSection) {
             sessionStorage.removeItem(`test_data_lesson_${currentLesson}`);
-            navigate(`/student/lesson-test?lesson=${currentLesson}`);
+            if (isPreview) {
+              const params = buildPreviewQueryParams({ lesson: String(currentLesson) });
+              navigate(`/student/lesson-test?${params.toString()}`);
+            } else {
+              navigate(`/student/lesson-test?lesson=${currentLesson}`);
+            }
           } else {
             changeSection(currentSection + 1);
           }
@@ -1788,6 +1875,13 @@ const EnhancedLearningPageRefactored = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50">
+      {isPreview && (
+        <div className="w-full bg-yellow-50 border-b border-yellow-200 px-4 py-2 sticky top-0 z-[60]">
+          <div className="max-w-7xl mx-auto text-yellow-800 text-sm">
+            🎓 指導員プレビュー中（閲覧のみ）: 提出物/進捗更新は無効です。テストは「問題画面の閲覧のみ」可能（提出/採点/結果は無効）です（閲覧用ユーザ）
+          </div>
+        </div>
+      )}
       {/* ヘッダー＋ステータスバー（スクロール時も固定表示） */}
       <div className="sticky top-0 z-50 bg-gradient-to-br from-blue-50 to-cyan-50 shadow-md">
         <LearningHeader
@@ -1797,14 +1891,31 @@ const EnhancedLearningPageRefactored = () => {
           currentSection={currentSection}
           sectionData={sectionData}
           onSectionChange={changeSection}
-          onUploadModalOpen={() => setShowUploadModal(true)}
-          onTestNavigate={(lessonId) => navigate(`/student/test?lesson=${lessonId}`)}
+          onUploadModalOpen={() => {
+            if (isPreview) {
+              alert('プレビューでは成果物アップロードはできません。');
+              return;
+            }
+            setShowUploadModal(true);
+          }}
+          onTestNavigate={(lessonId) => {
+            if (isPreview) {
+              // プレビューでもテスト問題画面への遷移は許可（提出/採点はテスト側でブロック）
+              const params = buildPreviewQueryParams({ lesson: String(lessonId) });
+              navigate(`/student/test?${params.toString()}`);
+              return;
+            }
+            navigate(`/student/test?lesson=${lessonId}`);
+          }}
           isTestEnabled={
             pdfProcessingStatus === 'completed' || // PDF処理完了時
             (lessonData?.file_type !== 'pdf' && lessonData?.textContent) // テキストファイルの場合
           }
           hasAssignment={assignmentStatus.hasAssignment}
           assignmentSubmitted={assignmentStatus.assignmentSubmitted}
+          isPreview={isPreview}
+          previewDisabledReason="プレビューではテスト/提出物操作はできません"
+          previewQueryParams={isPreview ? buildPreviewQueryParams({}).toString() : ''}
         />
 
         {/* PDF処理状態表示 - PDFファイルの場合のみ表示 */}
@@ -1961,7 +2072,7 @@ const EnhancedLearningPageRefactored = () => {
       </div>
 
       {/* アップロードモーダル（課題がある場合のみ表示） */}
-      {assignmentStatus.hasAssignment && (
+      {assignmentStatus.hasAssignment && !isPreview && (
         <UploadModal
           isOpen={showUploadModal}
           onClose={() => setShowUploadModal(false)}

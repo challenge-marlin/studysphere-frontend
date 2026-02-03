@@ -7,6 +7,7 @@ import { API_BASE_URL } from '../config/apiConfig';
 const SectionTestPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const isPreview = searchParams.get('preview') === '1';
   const [currentLesson, setCurrentLesson] = useState(1);
   const [currentSection, setCurrentSection] = useState(0);
   const previousSectionRef = useRef(null); // 前回のセクション番号を記録
@@ -765,6 +766,11 @@ const SectionTestPage = () => {
     setIsSubmitting(true);
     
     try {
+      if (isPreview) {
+        alert('プレビューでは提出/採点/結果表示はできません（問題画面の閲覧のみ可能です）。');
+        setIsSubmitting(false);
+        return;
+      }
       // 認証されたユーザーIDを使用するため、userIdはリクエストボディに含めない
       
       // デバッグログ

@@ -160,11 +160,14 @@ const HomeSupportTab = () => {
         response.data.forEach(record => {
           const userId = record.id;
           if (!userMap.has(userId)) {
+            const recipientNum = record.recipient_number ?? record.recipientNumber ?? '';
             userMap.set(userId, {
               id: record.id,
               name: record.name,
               instructorName: record.instructor_name || '未設定',
               email: record.login_code || '未設定',
+              recipient_number: recipientNum,
+              recipientNumber: recipientNum,
               status: 'active', // 在宅支援利用者はアクティブ
               progress: 0,
               tags: ['在宅支援'],

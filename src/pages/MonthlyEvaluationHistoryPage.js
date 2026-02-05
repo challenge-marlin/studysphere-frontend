@@ -732,14 +732,14 @@ const MonthlyEvaluationHistoryPage = () => {
         updateCell('V6', formatTime(selectedEvaluation.endTime));
       }
 
-      // 実施方法
+      // 実施方法（通所→D列、訪問→G列、その他→J列にチェック）
       const methodValue = String(selectedEvaluation.method || '').trim();
       if (methodValue === '通所') {
         updateCell('D7', '✓');
       } else if (methodValue === '訪問') {
-        updateCell('F7', '✓');
+        updateCell('G7', '✓');
       } else if (methodValue === 'その他') {
-        updateCell('H7', '✓');
+        updateCell('J7', '✓');
         if (selectedEvaluation.methodOther) {
           updateCell('K7', selectedEvaluation.methodOther);
         }

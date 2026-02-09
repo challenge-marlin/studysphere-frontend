@@ -1168,6 +1168,7 @@ const TextSection = ({
                 <MarkdownRenderer 
                   content={displayTextContent()}
                   showToc={false}
+                  scrollContainerRef={textContainerRef}
                 />
               ) : (
                 /* RTFファイルやその他のテキストファイルはプレーンテキストとして表示 */

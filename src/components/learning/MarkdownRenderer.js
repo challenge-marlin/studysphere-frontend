@@ -25,7 +25,7 @@ const codeBlockStyle = {
   fontSize: '0.875rem'
 };
 
-const MarkdownRenderer = ({ content, showToc = true }) => {
+const MarkdownRenderer = ({ content, showToc = true, scrollContainerRef }) => {
   const [headings, setHeadings] = useState([]);
   const [activeHeading, setActiveHeading] = useState('');
 
@@ -89,60 +89,77 @@ const MarkdownRenderer = ({ content, showToc = true }) => {
   }, [content]);
 
   // 見出しのIDを生成する関数
+  // 目次リンク（例: #第1章-日常でのai活用例, #第2章aiツールの体験）と一致する形式で生成
   const generateId = (text) => {
     if (!text) return '';
     
-    const textStr = text.toString();
+    // childrenが配列の場合（例: ["第1章 ", "日常でのAI活用例"]）は結合
+    const textStr = Array.isArray(text)
+      ? text.map(t => (typeof t === 'string' ? t : '')).join('')
+      : text.toString();
     
-    // Markdownの {#id} 形式をチェック
+    // Markdownの {#id} 形式をチェック（明示指定があればそれを優先）
     const idMatch = textStr.match(/\{#([^}]+)\}$/);
     if (idMatch) {
       return idMatch[1];
     }
     
-    // 日本語の見出しを英数字に変換するマッピング
-    const japaneseToEnglish = {
-      '第1章': 'chapter-1',
-      '第2章': 'chapter-2', 
-      '第3章': 'chapter-3',
-      '第4章': 'chapter-4',
-      '第5章': 'chapter-5',
-      'コンピュータの基本構造と役割': 'computer-basics',
-      'Windows 11の基本操作': 'windows-11-basics',
-      'ソフトウェアの基本操作': 'software-basics',
-      '外付けハードウェアデバイスの使用方法': 'external-devices',
-      'Q&Aセッション': 'qa-session',
-      'はじめに': 'introduction',
-      'まとめ': 'summary',
-      '総論': 'conclusion'
-    };
-    
-    // マッピングに一致する場合は変換
-    for (const [japanese, english] of Object.entries(japaneseToEnglish)) {
-      if (textStr.includes(japanese)) {
-        return english;
-      }
-    }
-    
-    // マッピングにない場合は、英数字のみを抽出してIDを生成
+    // 目次リンク形式に合わせる: スペース→ハイフン、英大文字→小文字、区切り記号を除去
     return textStr
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, '') // 特殊文字を削除
+      .trim()
+      .replace(/[・．。、]/g, '') // 中黒・句読点を除去（リンク形式に合わせる）
+      .replace(/\s*[：:]\s*/g, '') // 全角・半角コロンを除去
       .replace(/\s+/g, '-') // スペースをハイフンに変換
-      .replace(/-+/g, '-') // 連続するハイフンを1つに
-      .replace(/^-|-$/g, '') // 先頭と末尾のハイフンを削除
-      .replace(/[^\w-]/g, '') // 英数字とハイフン以外を削除
+      .replace(/[Ａ-Ｚ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)) // 全角→半角
+      .replace(/[ａ-ｚ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+      .toLowerCase() // 英字を小文字に
+      .replace(/-+/g, '-') // 連続ハイフンを1つに
+      .replace(/^-|-$/g, '') // 先頭・末尾のハイフンを削除
       || 'section-' + Math.random().toString(36).substr(2, 9); // フォールバック
   };
 
-  // スムーススクロール関数
+  // 要素からスクロール可能な親を探索
+  const findScrollParent = (el) => {
+    let parent = el?.parentElement;
+    while (parent && parent !== document.body) {
+      const style = window.getComputedStyle(parent);
+      const overflowY = style.overflowY;
+      const overflow = style.overflow;
+      if (overflowY === 'auto' || overflowY === 'scroll' || overflow === 'auto' || overflow === 'scroll') {
+        return parent;
+      }
+      parent = parent.parentElement;
+    }
+    return null;
+  };
+
+  // スムーススクロール関数（スクロールコンテナ内の場合はそのコンテナをスクロール）
   const scrollToHeading = (id) => {
-    const element = document.getElementById(id);
-    if (element) {
-      element.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start'
+    const rawId = typeof id === 'string' ? id : '';
+    const decodedId = (() => {
+      try {
+        return decodeURIComponent(rawId);
+      } catch {
+        return rawId;
+      }
+    })();
+    const element = document.getElementById(decodedId) || document.getElementById(rawId);
+    if (!element) return;
+
+    const container = scrollContainerRef?.current ?? findScrollParent(element);
+    if (container && container.contains(element)) {
+      requestAnimationFrame(() => {
+        const rect = element.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const relativeTop = rect.top - containerRect.top + container.scrollTop;
+        const scrollMargin = 80;
+        container.scrollTo({
+          top: Math.max(0, relativeTop - scrollMargin),
+          behavior: 'smooth'
+        });
       });
+    } else {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
 
@@ -361,26 +378,31 @@ const MarkdownRenderer = ({ content, showToc = true }) => {
         ),
         a: ({ children, href, ...props }) => {
           // ページ内アンカーリンクかどうかを判定
-          const isInternalAnchor = href && href.startsWith('#');
+          const isInternalAnchor = href && (href.startsWith('#') || href.includes('#'));
+          let displayHref = href;
+          let anchorId = '';
+          if (isInternalAnchor) {
+            const hashPart = href.includes('#') ? href.split('#')[1] || '' : href.replace(/^#/, '');
+            try {
+              anchorId = decodeURIComponent(hashPart);
+              displayHref = '#' + anchorId;
+            } catch {
+              anchorId = hashPart;
+            }
+          }
           
           return (
             <a 
-              href={href} 
+              {...props}
+              href={isInternalAnchor ? displayHref : href}
               className="text-blue-600 hover:text-blue-800 underline" 
               target={isInternalAnchor ? undefined : "_blank"}
               rel={isInternalAnchor ? undefined : "noopener noreferrer"}
               onClick={isInternalAnchor ? (e) => {
                 e.preventDefault();
-                const targetId = href.substring(1);
-                const element = document.getElementById(targetId);
-                if (element) {
-                  element.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start'
-                  });
-                }
+                e.stopPropagation();
+                scrollToHeading(anchorId || displayHref.replace(/^#/, ''));
               } : undefined}
-              {...props}
             >
               {children}
             </a>

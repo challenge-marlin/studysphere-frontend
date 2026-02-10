@@ -1312,7 +1312,7 @@ const MonthlyEvaluationHistoryPage = () => {
               <section className="pt-6 border-t-2 border-gray-300 print:break-inside-avoid">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 rounded-lg p-4">
                   <div>
-                    <div className="text-sm text-gray-600 mb-1">評価作成日</div>
+                    <div className="text-sm text-gray-600 mb-1">評価作成日 <span className="text-red-500">*</span></div>
                     {isEditing ? (
                       <input
                         type="date"

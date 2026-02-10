@@ -69,8 +69,8 @@ const AddInstructorForm = ({ onSubmit, onCancel, loading }) => {
           
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                名前 *
+              <label className="block text-sm font-medium text-gray-700 mb-1 required-asterisk">
+                名前
               </label>
               <SanitizedInput
                 type="text"
@@ -87,8 +87,8 @@ const AddInstructorForm = ({ onSubmit, onCancel, loading }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                ユーザー名 *
+              <label className="block text-sm font-medium text-gray-700 mb-1 required-asterisk">
+                ユーザー名
               </label>
               <SanitizedInput
                 type="text"
@@ -136,8 +136,8 @@ const AddInstructorForm = ({ onSubmit, onCancel, loading }) => {
              </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                パスワード *
+              <label className="block text-sm font-medium text-gray-700 mb-1 required-asterisk">
+                パスワード
               </label>
               <input
                 type="password"

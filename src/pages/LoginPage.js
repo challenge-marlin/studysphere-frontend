@@ -906,7 +906,7 @@ const LoginPage = () => {
         <form onSubmit={handleSubmit} className="mb-8">
           <div className="mb-4">
             <label htmlFor="id" className="block text-sm font-medium text-gray-700 mb-2">
-              ユーザーID
+              ユーザーID <span className="text-red-500">*</span>
             </label>
             <SanitizedInput
               type="text"
@@ -923,7 +923,7 @@ const LoginPage = () => {
 
           <div className="mb-6">
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              パスワード
+              パスワード <span className="text-red-500">*</span>
             </label>
             <SanitizedInput
               type="password"

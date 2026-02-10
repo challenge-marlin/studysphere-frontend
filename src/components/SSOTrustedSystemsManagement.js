@@ -347,20 +347,24 @@ const SSOTrustedSystemsManagement = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => handleEdit(system)}
-                        className="text-blue-600 hover:text-blue-900 mr-3"
-                      >
-                        編集
-                      </button>
-                      {system.enabled && (
+                      <div className="flex gap-2">
                         <button
-                          onClick={() => handleDelete(system.id)}
-                          className="text-red-600 hover:text-red-900"
+                          onClick={() => handleEdit(system)}
+                          className="bg-blue-500 text-white px-3 py-1 rounded text-sm font-medium transition-colors duration-300 hover:bg-blue-600"
+                          title="編集"
                         >
-                          無効化
+                          ✏️ 編集
                         </button>
-                      )}
+                        {system.enabled && (
+                          <button
+                            onClick={() => handleDelete(system.id)}
+                            className="bg-red-500 text-white px-3 py-1 rounded text-sm font-medium transition-colors duration-300 hover:bg-red-600"
+                            title="無効化"
+                          >
+                            🗑️ 無効化
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

@@ -98,8 +98,8 @@ const AnnouncementCreator = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
                 {/* タイトル */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        タイトル *
+                    <label className="block text-sm font-medium text-gray-700 mb-2 required-asterisk">
+                        タイトル
                     </label>
                     <input
                         type="text"
@@ -113,8 +113,8 @@ const AnnouncementCreator = () => {
 
                 {/* メッセージ */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        メッセージ *
+                    <label className="block text-sm font-medium text-gray-700 mb-2 required-asterisk">
+                        メッセージ
                     </label>
                     <textarea
                         value={message}
@@ -128,8 +128,8 @@ const AnnouncementCreator = () => {
                 {/* 受信者選択 */}
                 <div>
                     <div className="flex justify-between items-center mb-2">
-                        <label className="block text-sm font-medium text-gray-700">
-                            受信者選択 *
+                        <label className="block text-sm font-medium text-gray-700 required-asterisk">
+                            受信者選択
                         </label>
                         <button
                             type="button"

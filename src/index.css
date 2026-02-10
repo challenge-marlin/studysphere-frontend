@@ -111,6 +111,12 @@ h1, h2, h3, h4, h5, h6 {
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
 }
 
+/* 必須項目のアスタリスクを赤で統一（labelに required-asterisk クラスを付与） */
+label.required-asterisk::after {
+  content: ' *';
+  color: #ef4444;
+}
+
 /* 印刷用スタイル */
 @media print {
   /* ページ設定 */

@@ -1276,7 +1276,7 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
                   <form onSubmit={studentAdder.handleAddStudent} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">利用者名</label>
+                        <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">利用者名 <span className="text-red-500">*</span></label>
                         <input
                           type="text"
                           id="name"
@@ -1439,7 +1439,7 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
                 <form onSubmit={(e) => { e.preventDefault(); studentEditor.handleUpdateStudent(); }} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label htmlFor="edit_name" className="block text-sm font-semibold text-gray-700 mb-2">利用者名</label>
+                      <label htmlFor="edit_name" className="block text-sm font-semibold text-gray-700 mb-2">利用者名 <span className="text-red-500">*</span></label>
                       <input
                         type="text"
                         id="edit_name"

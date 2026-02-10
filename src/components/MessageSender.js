@@ -85,8 +85,8 @@ const MessageSender = () => {
                 {/* 利用者選択 */}
                 <div>
                     <div className="flex justify-between items-center mb-2">
-                        <label className="block text-sm font-medium text-gray-700">
-                            送信先利用者 *
+                        <label className="block text-sm font-medium text-gray-700 required-asterisk">
+                            送信先利用者
                         </label>
                         <button
                             type="button"
@@ -163,8 +163,8 @@ const MessageSender = () => {
 
                 {/* メッセージ入力 */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        メッセージ *
+                    <label className="block text-sm font-medium text-gray-700 mb-2 required-asterisk">
+                        メッセージ
                     </label>
                     <textarea
                         value={message}

@@ -223,7 +223,7 @@ const StudentAdder = ({ onStudentAdded, instructors }) => {
       console.log('送信データ:', { users: students });
              console.log('送信データの詳細:');
        students.forEach((student, index) => {
-         console.log(`学生${index + 1}:`, {
+         console.log(`利用者${index + 1}:`, {
            name: student.name,
            email: student.email,
            instructor_id: student.instructor_id,

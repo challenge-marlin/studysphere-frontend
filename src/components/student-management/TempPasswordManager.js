@@ -89,7 +89,7 @@ const TempPasswordManager = ({ students, onStudentsUpdate }) => {
             : student
         );
         console.log('=== ローカル状態更新完了 ===');
-        console.log('更新された学生:', updatedStudents.find(s => s.id === userId));
+        console.log('更新された利用者:', updatedStudents.find(s => s.id === userId));
         return updatedStudents;
       });
       

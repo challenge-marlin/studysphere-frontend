@@ -22,7 +22,7 @@ const SubmissionApprovalModal = ({
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [comment, setComment] = useState('');
 
-  // 学生の提出物一覧を取得
+  // 利用者の提出物一覧を取得
   const fetchSubmissions = async () => {
     if (!student) return;
     

@@ -100,7 +100,7 @@ function App() {
             <Route path="/student/certificate" element={<CertificatePage />} />
             {/* 指導員用利用者詳細画面 */}
             <Route path="/instructor/student/:studentId" element={<HomeSupportUserDetailPage />} />
-            {/* 指導員用学生詳細画面（学習進捗・合否確認） */}
+            {/* 指導員用利用者詳細画面（学習進捗・合否確認） */}
             <Route path="/instructor/student-detail/:studentId" element={<InstructorStudentDetail />} />
             {/* 在宅支援：日々の記録ページ */}
             <Route path="/instructor/student/:studentId/daily-records" element={<DailyRecordsPage />} />

@@ -33,7 +33,7 @@ const TestApprovalModal = ({
       const response = await getPendingApprovals(satelliteId);
       console.log('TestApprovalModal: getPendingApprovalsレスポンス:', response);
       if (response.success) {
-        // 選択された学生のテストのみをフィルタリング
+        // 選択された利用者のテストのみをフィルタリング
         const studentTests = response.data.filter(test => test.user_id === student.id);
         setPendingTests(studentTests);
       } else {

@@ -86,7 +86,7 @@ const StudentManagementRefactored = ({ teacherId, onTestApproval, onSubmissionAp
     }
   };
 
-  // 学生の行にスクロールする機能
+  // 利用者の行にスクロールする機能
   const scrollToStudent = (studentId) => {
     const element = document.getElementById(`student-row-${studentId}`);
     if (element) {

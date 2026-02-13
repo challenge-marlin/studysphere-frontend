@@ -553,7 +553,7 @@ const InstructorDashboard = () => {
       }
     }
     
-    // 学生のsatellite_idまたは現在選択されている拠点IDを使用
+    // 利用者のsatellite_idまたは現在選択されている拠点IDを使用
     setSelectedSatelliteId(student.satellite_id || currentSatelliteId || 1); // デフォルトは1
     setShowTestApprovalModal(true);
   };
@@ -566,7 +566,7 @@ const InstructorDashboard = () => {
 
   // 承認成功時のコールバック
   const handleApprovalSuccess = () => {
-    // 学生リストを更新するためのイベントを発火
+    // 利用者リストを更新するためのイベントを発火
     window.dispatchEvent(new CustomEvent('studentListUpdated'));
   };
 

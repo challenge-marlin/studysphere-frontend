@@ -1273,7 +1273,7 @@ const LessonManagement = () => {
                               onClick={() => handleDownloadFolder(lesson.id)}
                               className="text-green-600 hover:text-green-800 font-medium whitespace-nowrap text-left px-2 py-1 rounded hover:bg-green-50 transition-colors"
                             >
-                              📁 フォルダ
+                              テキスト一括DL
                             </button>
                           </div>
                         ) : (

@@ -544,7 +544,7 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
   if (!isOpen || !selectedUser) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* ヘッダー */}
         <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6">
@@ -757,7 +757,7 @@ const UserInputModal = ({ isOpen, onClose, selectedUser }) => {
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none"
                         />
                       ) : (
-                        <p className="text-gray-800">
+                        <p className="text-gray-800 whitespace-pre-wrap break-words">
                           {healthData.condition_note || '体調の詳細が記録されていません。'}
                         </p>
                       )}

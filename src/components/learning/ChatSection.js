@@ -11,7 +11,8 @@ const ChatSection = ({
   currentLessonData,
   currentSectionText, // 現在のセクションのテキスト内容
   isAILoading, // AI応答の読み込み状態
-  isAIEnabled = true // AI機能が有効かどうか
+  isAIEnabled = true, // AI機能が有効かどうか
+  showAIError = false // 準備中エラー（PDF処理失敗など）を表示するか
 }) => {
   const [isTyping, setIsTyping] = useState(false);
   const chatContainerRef = useRef(null);
@@ -46,8 +47,8 @@ const ChatSection = ({
         </div>
       )}
       
-      {/* AI機能エラー状態表示 */}
-      {!isAIEnabled && (
+      {/* AI機能エラー状態表示（PDF処理失敗など実際にエラーが発生した場合のみ） */}
+      {showAIError && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
           <div className="flex items-center gap-2 text-red-700 text-sm">
             <span className="text-red-500">⚠️</span>

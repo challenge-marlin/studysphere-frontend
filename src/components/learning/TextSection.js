@@ -156,11 +156,19 @@ const TextSection = ({
         hasStoredContext: lessonData?.s3_key ? SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type) : false
       });
       
-      // 既存のtextContentが存在するか、セッションストレージにコンテキストが存在する場合は、空で上書きしない
+      // 既存のtextContentが存在する場合
       if (textContent && textContent.length > 0) {
         console.log('✅ 既存のtextContentが存在するため、空で上書きしません:', {
           textContentLength: textContent.length
         });
+        // PDFレッスンの場合は親に通知して「完了」状態にしないとAI・テストがロックされたままになる
+        const isPdfWithContent = isPdfFile(lessonData?.file_type, lessonData?.s3_key);
+        if (isPdfWithContent && lessonData?.s3_key && onTextContentUpdate) {
+          const isError = textContent.startsWith('エラー:') || textContent.startsWith('PDFファイルが見つかりません') || textContent.startsWith('テキスト抽出に失敗');
+          if (!isError) {
+            onTextContentUpdate(textContent, { s3Key: lessonData.s3_key, fileType: lessonData.file_type });
+          }
+        }
         return; // 既存のtextContentを保持するため、何もしない
       }
       
@@ -173,13 +181,20 @@ const TextSection = ({
             contextLength: storedContext.context.length
           });
           if (onTextContentUpdate) {
-            onTextContentUpdate(storedContext.context);
+            onTextContentUpdate(storedContext.context, { s3Key: lessonData.s3_key, fileType: lessonData.file_type });
           }
           return; // セッションストレージから取得したコンテキストを使用
         }
       }
       
-      // 既存のtextContentもセッションストレージのコンテキストも存在しない場合のみ、空を通知
+      // 既存のtextContentもセッションストレージのコンテキストも存在しない場合
+      // PDFの場合は lessonData.s3_key でテキスト抽出を実行（セクションデータが空でもPDFは読み込む）
+      const isPdfWhenEmpty = isPdfFile(lessonData?.file_type, lessonData?.s3_key);
+      if (isPdfWhenEmpty && lessonData?.s3_key && !pdfTextContent && processedS3KeyRef.current !== lessonData.s3_key) {
+        console.log('セクションデータが空ですがPDFのためテキスト抽出を開始します:', { s3Key: lessonData.s3_key });
+        extractPdfText(lessonData.s3_key);
+        return;
+      }
       if (onTextContentUpdate) {
         console.log('⚠️ 既存のtextContentもセッションストレージのコンテキストも存在しないため、空を通知します');
         onTextContentUpdate('');
@@ -299,6 +314,14 @@ const TextSection = ({
         console.log('✅ 既存のtextContentが存在するため、空で上書きしません（二重チェック）:', {
           textContentLength: textContent.length
         });
+        // PDFレッスンの場合は親に通知して「完了」状態にする
+        const isPdfWithContent2 = isPdfFile(lessonData?.file_type, lessonData?.s3_key);
+        if (isPdfWithContent2 && lessonData?.s3_key && onTextContentUpdate) {
+          const isError2 = textContent.startsWith('エラー:') || textContent.startsWith('PDFファイルが見つかりません') || textContent.startsWith('テキスト抽出に失敗');
+          if (!isError2) {
+            onTextContentUpdate(textContent, { s3Key: lessonData.s3_key, fileType: lessonData.file_type });
+          }
+        }
         return; // 既存のtextContentを保持するため、何もしない
       }
       
@@ -311,13 +334,20 @@ const TextSection = ({
             contextLength: storedContext.context.length
           });
           if (onTextContentUpdate) {
-            onTextContentUpdate(storedContext.context);
+            onTextContentUpdate(storedContext.context, { s3Key: lessonData.s3_key, fileType: lessonData.file_type });
           }
           return; // セッションストレージから取得したコンテキストを使用
         }
       }
       
-      // 既存のtextContentもセッションストレージのコンテキストも存在しない場合のみ、空を通知
+      // 既存のtextContentもセッションストレージのコンテキストも存在しない場合
+      // PDFの場合は lessonData.s3_key でテキスト抽出を実行（二重チェック）
+      const isPdfWhenEmpty2 = isPdfFile(lessonData?.file_type, lessonData?.s3_key);
+      if (isPdfWhenEmpty2 && lessonData?.s3_key && !pdfTextContent && processedS3KeyRef.current !== lessonData.s3_key) {
+        console.log('セクションデータが空ですがPDFのためテキスト抽出を開始します（二重チェック）:', { s3Key: lessonData.s3_key });
+        extractPdfText(lessonData.s3_key);
+        return;
+      }
       if (onTextContentUpdate) {
         console.log('⚠️ 既存のtextContentもセッションストレージのコンテキストも存在しないため、空を通知します（二重チェック）');
         onTextContentUpdate('');
@@ -1021,7 +1051,7 @@ const TextSection = ({
 
   if (textLoading) {
     return (
-      <div className="bg-white rounded-2xl shadow-xl p-6 h-full flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-xl p-6 h-full min-w-0 flex flex-col overflow-hidden">
         <div className="flex items-center gap-3 mb-4 workspace-widget-handle cursor-move select-none">
           <span className="text-2xl">📄</span>
           <h3 className="text-xl font-bold text-gray-800">テキスト内容</h3>
@@ -1037,8 +1067,8 @@ const TextSection = ({
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl p-6 h-full flex flex-col overflow-hidden">
-      <div className="flex items-center gap-3 mb-4 workspace-widget-handle cursor-move select-none">
+    <div className="bg-white rounded-2xl shadow-xl p-6 h-full min-w-0 flex flex-col overflow-hidden">
+      <div className="flex items-center gap-3 mb-4 flex-none workspace-widget-handle cursor-move select-none">
         <span className="text-2xl">📄</span>
         <h3 className="text-xl font-bold text-gray-800">テキスト内容</h3>
         {(() => {
@@ -1087,10 +1117,10 @@ const TextSection = ({
         </div>
       )}
       
-      {/* テキスト内容表示 */}
+      {/* テキスト内容表示（min-w-0 でリサイズ時に幅に追従） */}
       <div 
         ref={textContainerRef}
-        className="flex-1 overflow-y-auto custom-scrollbar border border-gray-200 rounded-lg p-2 bg-gray-50 max-h-[1000px]"
+        className="flex-1 min-w-0 w-full min-h-0 overflow-y-auto custom-scrollbar border border-gray-200 rounded-lg p-2 bg-gray-50"
       >
         {(() => {
           const { activeS3Key, activeFileType } = getActiveTextMeta();
@@ -1140,7 +1170,7 @@ const TextSection = ({
             </div>
           </div>
         ) : (
-          <div className="prose prose-sm max-w-none">
+          <div className="prose prose-sm max-w-none w-full min-w-0">
             {/* MDファイルの場合はMarkdownとしてレンダリング */}
             {/* 再レンダリング時にlessonData.file_typeやlessonData.s3_keyがnullになる可能性があるため、refからも判定 */}
             {(() => {
@@ -1183,7 +1213,7 @@ const TextSection = ({
 
       {/* テキスト末尾ボタン（10問テストに挑戦・次のセクションへ／レッスン総合テスト） */}
       {onSectionTestClick && onNextSectionClick && (
-        <div className="mt-4 flex flex-wrap gap-3">
+        <div className="mt-4 flex flex-wrap gap-3 w-full min-w-0">
           <button
             type="button"
             onClick={onSectionTestClick}
@@ -1208,7 +1238,7 @@ const TextSection = ({
        (lessonData?.file_type === 'text/markdown' && textContent) ||
        (lessonData?.file_type === 'application/rtf' && textContent) ||
        (lessonData?.file_type === 'text/plain' && textContent) ? (
-        <div className="mt-3 text-xs text-gray-500">
+        <div className="mt-3 text-xs text-gray-500 w-full min-w-0">
           <span className="text-blue-600">
             ✓ AIアシスタントで利用可能
           </span>

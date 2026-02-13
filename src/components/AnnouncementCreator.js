@@ -123,6 +123,9 @@ const AnnouncementCreator = () => {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                         placeholder="アナウンスの内容を入力"
                     />
+                    <p className="mt-1 text-xs text-gray-500">
+                        ※アナウンスメッセージは送信当日のみ表示されます
+                    </p>
                 </div>
 
                 {/* 受信者選択 */}

@@ -105,13 +105,15 @@ const MarkdownRenderer = ({ content, showToc = true, scrollContainerRef }) => {
     }
     
     // 目次リンク形式に合わせる: スペース→ハイフン、英大文字→小文字、区切り記号を除去
+    // 数字は半角に統一（全角数字があるとアンカーが効かない場合がある）
     return textStr
       .trim()
+      .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)) // 全角数字→半角
       .replace(/[・．。、]/g, '') // 中黒・句読点を除去（リンク形式に合わせる）
       .replace(/\s*[：:]\s*/g, '') // 全角・半角コロンを除去
       .replace(/\s+/g, '-') // スペースをハイフンに変換
-      .replace(/[Ａ-Ｚ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)) // 全角→半角
-      .replace(/[ａ-ｚ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+      .replace(/[Ａ-Ｚ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)) // 全角英字→半角
+      .replace(/[ａ-ｚ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
       .toLowerCase() // 英字を小文字に
       .replace(/-+/g, '-') // 連続ハイフンを1つに
       .replace(/^-|-$/g, '') // 先頭・末尾のハイフンを削除
@@ -134,6 +136,10 @@ const MarkdownRenderer = ({ content, showToc = true, scrollContainerRef }) => {
   };
 
   // スムーススクロール関数（スクロールコンテナ内の場合はそのコンテナをスクロール）
+  // アンカーIDの全角数字を半角に正規化（リンク先と見出しIDの一致用）
+  const normalizeAnchorId = (str) =>
+    String(str).replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+
   const scrollToHeading = (id) => {
     const rawId = typeof id === 'string' ? id : '';
     const decodedId = (() => {
@@ -143,7 +149,11 @@ const MarkdownRenderer = ({ content, showToc = true, scrollContainerRef }) => {
         return rawId;
       }
     })();
-    const element = document.getElementById(decodedId) || document.getElementById(rawId);
+    const normalizedId = normalizeAnchorId(decodedId);
+    const element =
+      document.getElementById(decodedId) ||
+      document.getElementById(normalizedId) ||
+      document.getElementById(rawId);
     if (!element) return;
 
     const container = scrollContainerRef?.current ?? findScrollParent(element);

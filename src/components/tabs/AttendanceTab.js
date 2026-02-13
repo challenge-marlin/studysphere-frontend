@@ -49,10 +49,11 @@ const AttendanceTab = () => {
 
     loadSatellite();
 
-    // 拠点変更イベントを監視
+    // 拠点変更イベントを監視（newLocation と satellite の両方に対応）
     const handleSatelliteChanged = (e) => {
-      if (e.detail && e.detail.satellite) {
-        setCurrentSatellite(e.detail.satellite);
+      const newLocation = e.detail?.newLocation || e.detail?.satellite;
+      if (newLocation) {
+        setCurrentSatellite(newLocation);
       }
     };
 

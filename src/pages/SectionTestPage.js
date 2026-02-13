@@ -166,13 +166,16 @@ const SectionTestPage = () => {
           setLessonData(lessonResult.data);
         }
 
-        const sectionResponse = await fetch(`${API_BASE_URL}/api/lesson-text-video-links/lesson/${fetchedFor.lesson}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-            'Content-Type': 'application/json'
-          },
-          signal: controller.signal
-        });
+        const sectionResponse = await fetch(
+          `${API_BASE_URL}/api/lesson-text-video-links/lesson/${fetchedFor.lesson}?includeNoVideo=true`,
+          {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+              'Content-Type': 'application/json'
+            },
+            signal: controller.signal
+          }
+        );
 
         let fetchedSectionData = null;
         if (sectionResponse.ok) {
@@ -189,13 +192,35 @@ const SectionTestPage = () => {
           }
         }
 
+        // セクションが0件の場合（動画未紐づけのPDFのみレッスン等）、レッスン本文をセクション0としてフォールバック
+        const lessonContent = lessonResult?.data;
+        if ((!fetchedSectionData || fetchedSectionData.length === 0) && lessonContent?.s3_key) {
+          const key = (lessonContent.s3_key || '').toLowerCase();
+          const fileType = lessonContent.file_type ||
+            (key.endsWith('.pdf') ? 'application/pdf' : key.endsWith('.md') ? 'text/markdown' : 'text/plain');
+          fetchedSectionData = [{
+            text_file_key: lessonContent.s3_key,
+            file_type: fileType,
+            section_title: lessonContent.title || '本文',
+            video_title: lessonContent.title || '本文',
+            link_order: 0,
+            source: 'lesson_main'
+          }];
+          if (currentLessonRef.current === fetchedFor.lesson && currentSectionRef.current === fetchedFor.section) {
+            setSectionData(fetchedSectionData);
+          }
+          console.log('セクションが空のためレッスン本文でフォールバック:', { s3_key: lessonContent.s3_key, title: lessonContent.title });
+        }
+
         if (currentLessonRef.current !== fetchedFor.lesson || currentSectionRef.current !== fetchedFor.section) {
           return;
         }
-        if (fetchedSectionData) {
-          await generateTestDataFromSessionStorage(false, fetchedSectionData);
+        // 取得直後のレッスンデータ（textContent含む）を渡す。stateは非同期のため渡さないとフォールバックで使えない
+        const lessonContentForTest = lessonResult?.success ? lessonResult.data : null;
+        if (fetchedSectionData && fetchedSectionData.length > 0) {
+          await generateTestDataFromSessionStorage(false, fetchedSectionData, lessonContentForTest);
         } else {
-          await generateTestDataFromSessionStorage(false, null);
+          await generateTestDataFromSessionStorage(false, null, lessonContentForTest);
         }
       } catch (err) {
         if (err?.name === 'AbortError') return;
@@ -216,7 +241,8 @@ const SectionTestPage = () => {
   }, [currentLesson, currentSection, searchParams]);
 
   // セッションストレージから直接コンテキストを取得してテスト生成
-  const generateTestDataFromSessionStorage = async (forceRefresh = false, sectionDataOverride = null) => {
+  // lessonContentOverride: 取得直後のレッスンAPI応答（textContent含む）。state更新前でもフォールバックに使う
+  const generateTestDataFromSessionStorage = async (forceRefresh = false, sectionDataOverride = null, lessonContentOverride = null) => {
     try {
       console.log('セッションストレージから直接テスト生成開始:', {
         currentLesson,
@@ -424,13 +450,14 @@ const SectionTestPage = () => {
           
           console.warn(`レッスン${currentLesson}に対応するコンテキストが見つかりません。利用可能なコンテキスト:`, availableContexts);
           
-          // フォールバック: レッスンデータから直接テキストコンテンツを取得
-          if (lessonData && lessonData.textContent) {
+          // フォールバック: レッスンデータから直接テキストコンテンツを取得（渡されたAPI応答を優先・stateは非同期で未反映のため）
+          const lessonForFallback = lessonContentOverride || lessonData;
+          if (lessonForFallback && lessonForFallback.textContent) {
             console.log('セッションストレージにコンテキストがないため、レッスンデータから直接テキストコンテンツを取得します');
-            const fallbackTextContent = lessonData.textContent;
+            const fallbackTextContent = lessonForFallback.textContent;
           
-          const sectionTitle = sectionData?.[currentSection]?.section_title || `セクション${currentSection + 1}`;
-          const sectionDescription = sectionData?.[currentSection]?.section_description || 'セクションの説明';
+          const sectionTitle = effectiveSectionData?.[currentSection]?.section_title || effectiveSectionData?.[currentSection]?.video_title || `セクション${currentSection + 1}`;
+          const sectionDescription = effectiveSectionData?.[currentSection]?.section_description || 'セクションの説明';
           
             const requestBody = {
               type: 'section',
@@ -439,8 +466,8 @@ const SectionTestPage = () => {
               sectionTitle: sectionTitle,
               sectionDescription: sectionDescription,
               textContent: fallbackTextContent,
-              fileType: lessonData.file_type || 'text/plain',
-              fileName: lessonData.s3_key || `lesson_${currentLesson}_section_${currentSection}`,
+              fileType: lessonForFallback.file_type || 'text/plain',
+              fileName: lessonForFallback.s3_key || `lesson_${currentLesson}_section_${currentSection}`,
               questionCount: 10
             };
             
@@ -572,9 +599,10 @@ const SectionTestPage = () => {
                                  currentSectionData?.video_description || 
                                  'セクションの説明';
       
-      // セクションに応じたfile_typeを取得（既に取得されているsectionFileTypeを使用）
+      // セクションに応じたfile_typeを取得（渡されたレッスンAPI応答を優先・state未反映時用）
+      const lessonForMeta = lessonContentOverride || lessonData;
       const fileType = sectionFileType || 
-                       lessonData?.file_type || 
+                       lessonForMeta?.file_type || 
                        'text/plain';
       
       console.log('テスト生成用データ:', {
@@ -606,7 +634,7 @@ const SectionTestPage = () => {
         sectionDescription: sectionDescription,
         textContent: textContent,
         fileType: fileType,
-        fileName: sectionTextFileKey || lessonData?.s3_key || `lesson_${currentLesson}_section_${currentSection}`,
+        fileName: sectionTextFileKey || lessonForMeta?.s3_key || `lesson_${currentLesson}_section_${currentSection}`,
         questionCount: 10
       };
       

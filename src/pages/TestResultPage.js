@@ -56,18 +56,44 @@ const TestResultPage = () => {
       console.error('フィードバック生成エラー:', error);
     }
     
-    // フォールバック: より詳細なデフォルトフィードバック
+    // フォールバック: 学習者向けの解説型フィードバック（API未使用時）
     const userAnswerText = question.options[userAnswerIndex];
     const correctAnswerText = question.options[correctAnswerIndex];
-    
-    const fallbackFeedbacks = [
-      `残念ながら不正解でした。選択肢「${userAnswerText}」は正しくありません。正解は「${correctAnswerText}」です。\n\nこの問題では、学習内容の重要なポイントを理解することが求められています。正しい答えの理由を考えてみて、なぜ他の選択肢が間違っているのかも確認してみましょう。\n\n次回は必ず正解できるよう、学習内容を復習して理解を深めてください。頑張りましょう！`,
-      `間違えてしまいましたね。あなたの回答「${userAnswerText}」は正解ではありません。正しい答えは「${correctAnswerText}」です。\n\nこの問題を通じて、学習した内容の理解度を確認できました。間違いは学習の機会です。正解の理由をしっかりと理解し、関連する知識も一緒に復習してみてください。\n\n継続的な学習で必ずスキルアップできます。応援しています！`,
-      `正解ではありませんでした。選択肢「${userAnswerText}」ではなく、「${correctAnswerText}」が正解です。\n\nこの問題のポイントを再度確認してみてください。学習内容のどの部分が関連しているか、なぜその答えが正しいのかを考えてみましょう。\n\n間違いから学ぶことで、より深い理解が得られます。次回は正解できるよう、頑張ってください！`,
-      `不正解でした。あなたの選択「${userAnswerText}」は正しくありません。正解は「${correctAnswerText}」です。\n\nこの問題は学習内容の重要な概念を問うています。正しい答えの理由を理解し、なぜ他の選択肢が適切でないのかも考えてみてください。\n\n学習は継続が大切です。この経験を活かして、より確実な知識を身につけていきましょう。`
-    ];
-    
-    return fallbackFeedbacks[Math.floor(Math.random() * fallbackFeedbacks.length)];
+    const questionSummary = question.question.length > 60
+      ? question.question.substring(0, 60) + "…"
+      : question.question;
+
+    // 「正解への道標」と、次に正答できるような具体的な復習のポイントを表示
+    const q = question.question;
+    let pathBlock;
+    let reviewBlock;
+    if (/順番|順序|手順|ステップ|流れ|ステップ\d/.test(q)) {
+      pathBlock = `この問題では「正しい順序」や「最初のステップ」が問われています。あなたの選択「${userAnswerText}」は、プロセスの中では別の段階に当たるため、設問で求められている「最初にやるべきこと」とは異なります。正解「${correctAnswerText}」がなぜ最初のステップなのかを、手順の流れで押さえると正解に近づけます。`;
+      reviewBlock = `「最初のステップ」「正しい順序」とあれば、正解は手順の最初に来る「${correctAnswerText}」。「${userAnswerText}」は別の段階なので誤りです。教材で手順の流れと各段階の役割を確認し、なぜ「${correctAnswerText}」が最初なのかを押さえておくと、同種問題で正解できます。`;
+    } else if (/定義|意味|とは/.test(q)) {
+      pathBlock = `この問題では用語の意味・定義が問われています。あなたの選択「${userAnswerText}」は、正解「${correctAnswerText}」とは別の概念や用法を指しているため、この設問の問いには当てはまりません。正解の用語がこの問題の文脈でどう定義されているかを押さえると正解への道標が見えます。`;
+      reviewBlock = `この設問で問われている用語の定義に対応するのは「${correctAnswerText}」です。「${userAnswerText}」は別の概念なので誤り。同種問題では、問いの用語の「定義・意味」にぴったり当てはまる選択肢を選ぶと正解できます。教材で「${correctAnswerText}」と「${userAnswerText}」の違いを一文で言えるようにまとめておきましょう。`;
+    } else if (/含まない|含まれない|適切でない/.test(q)) {
+      pathBlock = `この問題は「当てはまらないもの」を選ぶ設問です。あなたの選択「${userAnswerText}」は条件に当てはまってしまうため誤りです。正解「${correctAnswerText}」がなぜ条件に当てはまらないかを、設問の条件と照らして押さえると正解への道標が分かります。`;
+      reviewBlock = `「当てはまらない」「含まれない」とあれば、条件に当てはまるものを除いた残りが正解。あなたの選択「${userAnswerText}」は条件に当てはまるため誤りで、正解は「${correctAnswerText}」です。設問の条件を一文で言い換え、どれが当てはまらないかを判別できるようにしておくと次回正解できます。`;
+    } else if (/暗号化|HTTPS|HTTP/.test(q) && /HTTPS/.test(correctAnswerText) && /HTTP/.test(userAnswerText)) {
+      pathBlock = `この問題では「暗号化された通信」が問われています。あなたの選択「${userAnswerText}」は暗号化されていない通信のプロトコルであるため誤りです。正解「${correctAnswerText}」は通信を暗号化するプロトコルなので、設問の条件に当てはまります。`;
+      reviewBlock = `設問に「暗号化された通信」とあれば正解は「${correctAnswerText}」です。HTTPは暗号化されていないため誤り。逆に、暗号化されていない通信を聞かれればHTTPが正解になります。この区別（暗号化＝HTTPS、非暗号化＝HTTP）を押さえれば同種問題で正解できます。`;
+    } else if (/目的|正しいもの|どれですか/.test(q)) {
+      pathBlock = `この問題では「${questionSummary}」が問われています。あなたの選択「${userAnswerText}」は、この問いが求めている内容（正解「${correctAnswerText}」が表すポイント）とは別の観点や役割にあたるため、設問の条件に合いません。問いのキーワードに対して、正解が「主な目的・正しい説明」としてどう当てはまるかを押さえると正解への道標が見えます。`;
+      reviewBlock = `この設問で問われているキーワード（問いの中心）に対応する正しい説明は「${correctAnswerText}」です。「${userAnswerText}」は別の観点や副次的な効果なので誤り。次回同じような「目的は？」「正しいものは？」という問いでは、問いのキーワードに直接対応している選択肢「${correctAnswerText}」を選ぶと正解できます。`;
+    } else {
+      pathBlock = `この問題では「${questionSummary}」が問われています。あなたの選択「${userAnswerText}」は、この問いが求めている内容（正解「${correctAnswerText}」がカバーしているポイント）とは異なるため、設問の条件に合いません。正解がこの設問の問いに対してどう答えているかを押さえると正解への道標が分かります。`;
+      reviewBlock = `この設問（「${questionSummary}」）で正解となるのは「${correctAnswerText}」です。「${userAnswerText}」は問いが求めている内容とずれているため誤り。次回同じような問い方では、問いの中心に直接答えている選択肢「${correctAnswerText}」を選ぶと正解できます。教材の該当テーマで、正解と誤答の違いを一文で言えるようにまとめておきましょう。`;
+    }
+
+    return `この問題では「${questionSummary}」について問われています。\n\n` +
+      `正解は「${correctAnswerText}」です。\n\n` +
+      `【正解への道標】\n` +
+      pathBlock + "\n\n" +
+      `【復習のポイント】\n` +
+      reviewBlock + "\n\n" +
+      `この機会に押さえ直して、次回に活かしましょう。`;
   };
 
   useEffect(() => {
@@ -106,18 +132,27 @@ const TestResultPage = () => {
                 for (let index = 0; index < questionsToUse.length; index++) {
                   const question = questionsToUse[index];
                   const userAnswerIndex = answers[question.id];
-                  const userAnswer = userAnswerIndex !== undefined ? 
-                    `${userAnswerIndex + 1}. ${question.options[userAnswerIndex]}` : 
+                  const userAnswer = userAnswerIndex !== undefined ?
+                    `${userAnswerIndex + 1}. ${question.options[userAnswerIndex]}` :
                     "未回答";
                   const correctAnswer = `${question.correctAnswer + 1}. ${question.options[question.correctAnswer]}`;
                   const isCorrect = userAnswerIndex === question.correctAnswer;
-                  
+
+                  let feedback = "";
+                  if (isCorrect) {
+                    feedback = "正解です！よく理解できています。";
+                  } else if (userAnswerIndex !== undefined) {
+                    feedback = await generateDynamicFeedback(question, userAnswerIndex, question.correctAnswer);
+                  } else {
+                    feedback = "未回答です。学習内容を確認して再受験してください。";
+                  }
+
                   results.push({
                     questionId: index + 1,
                     question: question.question,
                     userAnswer,
                     correctAnswer,
-                    feedback: isCorrect ? "正解です！よく理解できています。" : "不正解でした。",
+                    feedback,
                     isCorrect,
                     score: isCorrect ? 1 : 0
                   });
@@ -498,6 +533,34 @@ const TestResultPage = () => {
     navigate('/student/dashboard');
   };
 
+  const handleBackToLearning = async () => {
+    const lessonId = resultData?.lessonId ?? resultData?.lessonNumber;
+    if (!lessonId) {
+      navigate('/student/dashboard');
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/learning/lesson/${lessonId}/course`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success || data.courseId == null) {
+        alert('学習画面への遷移情報を取得できませんでした。ダッシュボードに戻ります。');
+        navigate('/student/dashboard');
+        return;
+      }
+      const params = new URLSearchParams({ course: String(data.courseId), lesson: String(lessonId) });
+      if (resultData.testType === 'section' && resultData.sectionIndex != null) {
+        params.set('section', String(resultData.sectionIndex));
+      }
+      navigate(`/student/enhanced-learning?${params.toString()}`);
+    } catch (err) {
+      console.error('学習画面への遷移エラー:', err);
+      alert('学習画面への遷移に失敗しました。ダッシュボードに戻ります。');
+      navigate('/student/dashboard');
+    }
+  };
+
   const handleGoToNextLesson = () => {
     if (!nextLesson || nextLesson.courseId == null || nextLesson.id == null) return;
     const hasAssignment = nextLesson.hasAssignment === true;
@@ -690,7 +753,7 @@ const TestResultPage = () => {
                       <span className="text-yellow-600">💡</span>
                       <h4 className="font-semibold text-yellow-800">フィードバック</h4>
                     </div>
-                    <p className="text-yellow-700">{resultData.results[currentQuestion].feedback}</p>
+                    <p className="text-yellow-700 whitespace-pre-line">{resultData.results[currentQuestion].feedback}</p>
                   </div>
                 </div>
               )}
@@ -733,6 +796,14 @@ const TestResultPage = () => {
                 🏆 修了証を確認
               </button>
             </>
+          )}
+          {resultData.lessonId != null && (
+            <button
+              className="px-8 py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
+              onClick={handleBackToLearning}
+            >
+              📖 学習画面に戻る
+            </button>
           )}
           <button
             className="px-8 py-4 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-xl font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"

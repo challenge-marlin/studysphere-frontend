@@ -148,6 +148,35 @@ export const filterVisibleLayouts = (layouts, widgetVisibility, includeAssignmen
 export const createDefaultLayouts = (includeAssignment = false) =>
   normalizeLayouts(undefined, includeAssignment);
 
+const COMMON_KEYS = ['video', 'text', 'chat'];
+
+/** 2つのレイアウトで video / text / chat の位置を揃える（提出物の有無でレイアウトが変わらないようにする） */
+export const syncCommonLayoutItems = (withLayout, withoutLayout) => {
+  if (!withLayout || !withoutLayout) return { withLayout, withoutLayout };
+  const result = {};
+  Object.keys(withoutLayout).forEach(breakpoint => {
+    const withArr = withLayout[breakpoint] || [];
+    const withoutArr = withoutLayout[breakpoint] || [];
+    result[breakpoint] = withoutArr.map(withoutItem => {
+      if (!COMMON_KEYS.includes(withoutItem.i)) return withoutItem;
+      const fromWith = withArr.find(w => w.i === withoutItem.i);
+      if (!fromWith) return withoutItem;
+      return { ...withoutItem, x: fromWith.x, y: fromWith.y, w: fromWith.w, h: fromWith.h };
+    });
+  });
+  return { withLayout, withoutLayout: result };
+};
+
+/** 4項目レイアウトから assignment を除いた3項目レイアウトを返す（位置はそのまま） */
+export const layoutWithoutAssignment = (fullLayout) => {
+  if (!fullLayout) return fullLayout;
+  const result = {};
+  Object.keys(fullLayout).forEach(breakpoint => {
+    result[breakpoint] = (fullLayout[breakpoint] || []).filter(item => item.i !== 'assignment');
+  });
+  return result;
+};
+
 const LearningWorkspaceLayout = ({
   widgets,
   layouts,
@@ -184,10 +213,11 @@ const LearningWorkspaceLayout = ({
         rowHeight={rowHeight}
         margin={margin}
         containerPadding={containerPadding}
-        compactType={null}
+        compactType="vertical"
         draggableHandle=".workspace-widget-handle"
         preventCollision={false}
         allowOverlap={false}
+        useCSSTransforms={true}
         resizeHandles={['s', 'w', 'e', 'n', 'sw', 'se', 'nw', 'ne']}
         onLayoutChange={(_, allLayouts) => {
           if (onLayoutsChange) {
@@ -218,7 +248,7 @@ const LearningWorkspaceLayout = ({
         }}
       >
         {activeWidgetKeys.map(key => (
-          <div key={key} className="workspace-grid-item h-full">
+          <div key={key} className="workspace-grid-item h-full min-h-0 flex flex-col">
             {widgets[key]}
           </div>
         ))}

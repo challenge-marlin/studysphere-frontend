@@ -11,7 +11,12 @@ import UploadModal from './UploadModal';
 import AIAssistantService from './AIAssistantService';
 import { SessionStorageManager } from '../../utils/sessionStorage';
 import { API_BASE_URL } from '../../config/apiConfig';
-import LearningWorkspaceLayout, { createDefaultLayouts, normalizeLayouts } from './LearningWorkspaceLayout';
+import LearningWorkspaceLayout, {
+  createDefaultLayouts,
+  normalizeLayouts,
+  syncCommonLayoutItems,
+  layoutWithoutAssignment
+} from './LearningWorkspaceLayout';
 
 const EnhancedLearningPageRefactored = () => {
   const navigate = useNavigate();
@@ -117,15 +122,37 @@ const EnhancedLearningPageRefactored = () => {
     return storageKey;
   }, [getUserId]);
 
-  const persistWorkspaceLayouts = useCallback((layouts) => {
-    try {
-      const storageKey = getLayoutStorageKey();
-      localStorage.setItem(storageKey, JSON.stringify(layouts));
-      console.log('学習ワークスペースレイアウトを保存しました:', storageKey);
-    } catch (error) {
-      console.error('学習ワークスペースレイアウトの保存に失敗しました:', error);
+  const persistWorkspaceLayouts = useCallback(async (layouts) => {
+    const storageKey = getLayoutStorageKey();
+    // プレビューでない場合はDB（API）に保存
+    if (!isPreview) {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const response = await fetch(`${API_BASE_URL}/api/learning/workspace-layout`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { Authorization: `Bearer ${token}` })
+          },
+          body: JSON.stringify({ layouts })
+        });
+        if (response.ok) {
+          console.log('学習ワークスペースレイアウトをDBに保存しました');
+        } else {
+          console.warn('レイアウトのDB保存に失敗しました。ローカルに保存します。', response.status);
+        }
+      } catch (err) {
+        console.warn('レイアウトのAPI保存に失敗しました。ローカルに保存します。', err);
+      }
     }
-  }, [getLayoutStorageKey]);
+    // 常にローカルストレージにも保存（キャッシュ・プレビュー・オフライン用）
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(layouts));
+      console.log('学習ワークスペースレイアウトをローカルに保存しました:', storageKey);
+    } catch (error) {
+      console.error('学習ワークスペースレイアウトのローカル保存に失敗しました:', error);
+    }
+  }, [getLayoutStorageKey, isPreview]);
 
   // 学習進捗管理フックを使用
   const {
@@ -495,24 +522,42 @@ const EnhancedLearningPageRefactored = () => {
     }
   }, [currentLesson]); // currentLessonのみに依存
 
-  // レッスンデータが設定された時点で、セッションストレージにコンテキストがある場合は完了状態に設定
+  // レッスンデータ・セクションが設定された時点で、セッションストレージにコンテキストがあれば完了状態に復元
+  // （複数キーを試行し、TextSection と同一の「アクティブキー」で保存されていれば確実に復元する）
   useEffect(() => {
-    if (lessonData && lessonData.file_type === 'pdf' && lessonData.s3_key) {
-      const hasContext = SessionStorageManager.hasContext(lessonData.id, lessonData.s3_key, lessonData.file_type);
-      if (hasContext) {
-        console.log('セッションストレージにコンテキストが存在するため、PDF処理状態を完了に設定');
-        setPdfProcessingStatus('completed');
-        setPdfTextExtracted(true);
-      } else {
-        console.log('セッションストレージにコンテキストが存在しないため、PDF処理状態をidleに設定');
-        setPdfProcessingStatus('idle');
+    if (!lessonData || lessonData.file_type !== 'pdf') return;
+    const lessonId = lessonData.id;
+    const fileType = lessonData.file_type;
+    const keysToTry = [
+      lessonData.s3_key,
+      sectionData?.[currentSection]?.text_file_key,
+      ...(Array.isArray(sectionData) ? sectionData.map(s => s.text_file_key).filter(Boolean) : [])
+    ].filter(Boolean);
+    const uniqueKeys = [...new Set(keysToTry)];
+    for (const s3Key of uniqueKeys) {
+      const stored = SessionStorageManager.getContext(lessonId, s3Key, fileType);
+      if (stored && stored.context && typeof stored.context === 'string' && stored.context.length > 0) {
+        const isError = stored.context.startsWith('エラー:') ||
+          stored.context.startsWith('PDFファイルが見つかりません') ||
+          stored.context.startsWith('テキスト抽出に失敗');
+        if (!isError) {
+          console.log('セッションストレージからPDFコンテキストを復元:', { s3Key, contextLength: stored.context.length });
+          setPdfProcessingStatus('completed');
+          setPdfTextExtracted(true);
+          setPdfTextContent(stored.context);
+          setTextContentS3Key(s3Key);
+          setTextLoading(false);
+          return;
+        }
       }
     }
-  }, [lessonData]);
+    // コンテキストが見つからなくても 'idle' に戻さない（handlePdfTextUpdate で既に 'completed' になっている可能性があるため上書きしない）
+  }, [lessonData, sectionData, currentSection]);
 
   useEffect(() => {
     const userId = getUserId();
     if (!userId) {
+      layoutInitializedRef.current = true;
       return;
     }
 
@@ -521,34 +566,83 @@ const EnhancedLearningPageRefactored = () => {
     if (layoutStorageKeyRef.current !== storageKey) {
       layoutStorageKeyRef.current = storageKey;
       layoutInitializedRef.current = false;
+      // ユーザーが切り替わったらいったんデフォルトに戻す（前のユーザーのレイアウトを表示しない）
+      setWorkspaceLayouts({
+        withAssignment: createDefaultLayouts(true),
+        withoutAssignment: createDefaultLayouts(false)
+      });
     }
 
     if (layoutInitializedRef.current) {
       return;
     }
 
-    try {
-      const storedLayouts = localStorage.getItem(storageKey);
-      if (storedLayouts) {
-        const parsedLayouts = JSON.parse(storedLayouts);
-        console.log('保存済みワークスペースレイアウトを読み込みます:', parsedLayouts);
-        setWorkspaceLayouts(prevLayouts => ({
-          withAssignment: parsedLayouts.withAssignment
-            ? normalizeLayouts(parsedLayouts.withAssignment, true, null)
-            : prevLayouts.withAssignment,
-          withoutAssignment: parsedLayouts.withoutAssignment
-            ? normalizeLayouts(parsedLayouts.withoutAssignment, false, null)
-            : prevLayouts.withoutAssignment
-        }));
-      }
-    } catch (error) {
-      console.error('学習ワークスペースレイアウトの読み込みに失敗しました:', error);
-    } finally {
-      layoutInitializedRef.current = true;
-    }
-  }, [currentUser, getUserId]);
+    let cancelled = false;
+    const loadingForUserId = userId;
 
-  // ウィジェット表示状態をlocalStorageから読み込み
+    const applyLayouts = (parsedLayouts) => {
+      if (!parsedLayouts || cancelled) return;
+      let withA = parsedLayouts.withAssignment
+        ? normalizeLayouts(parsedLayouts.withAssignment, true, null)
+        : undefined;
+      let withoutA = parsedLayouts.withoutAssignment
+        ? normalizeLayouts(parsedLayouts.withoutAssignment, false, null)
+        : undefined;
+      if (withA && !withoutA) withoutA = layoutWithoutAssignment(withA);
+      if (withA && withoutA) {
+        const synced = syncCommonLayoutItems(withA, withoutA);
+        withA = synced.withLayout;
+        withoutA = synced.withoutLayout;
+      }
+      setWorkspaceLayouts(prevLayouts => ({
+        withAssignment: withA || prevLayouts.withAssignment,
+        withoutAssignment: withoutA || prevLayouts.withoutAssignment
+      }));
+    };
+
+    (async () => {
+      // プレビューでない場合は先にAPIから取得（APIは常にログインユーザー分を返すため安全）
+      if (!isPreview) {
+        try {
+          const token = localStorage.getItem('accessToken');
+          const response = await fetch(`${API_BASE_URL}/api/learning/workspace-layout`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {}
+          });
+          if (cancelled) return;
+          if (response.ok) {
+            const json = await response.json();
+            if (json.success && json.data) {
+              console.log('保存済みワークスペースレイアウトをDBから読み込みました:', json.data);
+              applyLayouts(json.data);
+              layoutInitializedRef.current = true;
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn('レイアウトのAPI取得に失敗しました。ローカルを参照します。', err);
+        }
+      }
+      // フォールバック: ローカルストレージ（読み出し時点のユーザーと一致する場合のみ適用）
+      try {
+        const storedLayouts = localStorage.getItem(storageKey);
+        if (storedLayouts) {
+          const parsedLayouts = JSON.parse(storedLayouts);
+          if (!cancelled && getUserId() === loadingForUserId) {
+            console.log('保存済みワークスペースレイアウトをローカルから読み込みます:', parsedLayouts);
+            applyLayouts(parsedLayouts);
+          }
+        }
+      } catch (error) {
+        if (!cancelled) console.error('学習ワークスペースレイアウトの読み込みに失敗しました:', error);
+      } finally {
+        if (!cancelled) layoutInitializedRef.current = true;
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [currentUser, getUserId, isPreview]);
+
+  // ウィジェット表示状態をDB主・ローカル補助で読み込み
   useEffect(() => {
     const userId = getUserId();
     if (!userId) {
@@ -556,16 +650,52 @@ const EnhancedLearningPageRefactored = () => {
     }
 
     const storageKey = `studysphere:widgetVisibility:user:${userId}`;
-    try {
-      const stored = localStorage.getItem(storageKey);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setWidgetVisibility(parsed);
+    let cancelled = false;
+
+    const applyVisibility = (visibility) => {
+      if (!visibility || typeof visibility !== 'object' || cancelled) return;
+      setWidgetVisibility(prev => ({
+        ...prev,
+        video: visibility.video !== false,
+        text: visibility.text !== false,
+        chat: visibility.chat !== false,
+        assignment: visibility.assignment !== false
+      }));
+    };
+
+    (async () => {
+      if (!isPreview) {
+        try {
+          const token = localStorage.getItem('accessToken');
+          const response = await fetch(`${API_BASE_URL}/api/learning/widget-visibility`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {}
+          });
+          if (cancelled) return;
+          if (response.ok) {
+            const json = await response.json();
+            if (json.success && json.data) {
+              console.log('ウィジェット表示設定をDBから読み込みました:', json.data);
+              applyVisibility(json.data);
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn('ウィジェット表示設定のAPI取得に失敗しました。ローカルを参照します。', err);
+        }
       }
-    } catch (error) {
-      console.error('ウィジェット表示状態の読み込みに失敗しました:', error);
-    }
-  }, [currentUser, getUserId]);
+      try {
+        const stored = localStorage.getItem(storageKey);
+        if (stored && getUserId() === userId) {
+          const parsed = JSON.parse(stored);
+          applyVisibility(parsed);
+        }
+      } catch (error) {
+        if (!cancelled) console.error('ウィジェット表示状態の読み込みに失敗しました:', error);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [currentUser, getUserId, isPreview]);
 
   // コンポーネントのアンマウント時にセッションストレージをクリーンアップ
   useEffect(() => {
@@ -1043,15 +1173,37 @@ const EnhancedLearningPageRefactored = () => {
                };
              });
              
-             // s3_key を切り替える場合は常にテキストをリセットして再読み込み
-             // （同名ファイルでもパス違い等で内容が異なるケースがあり、保持すると誤表示の原因になる）
-             console.log('🔄 テキストコンテンツをリセットして再読み込みします（初期セクション適用）');
-             setTextContent('');
-             setTextContentS3Key(null);
-             setPdfTextContent('');
-             setTextLoading(true);
-             setPdfTextExtracted(false);
-             setPdfProcessingStatus('idle');
+            // s3_key を切り替える場合: PDFでセッションにコンテキストがあれば復元、なければリセット
+            const isPdfSection = (fileType || '').toLowerCase().includes('pdf');
+            const lessonIdForRestore = currentLessonData?.id ?? lessonData?.id;
+            let restoredPdfFromStorage = false;
+            if (isPdfSection && lessonIdForRestore) {
+              const sectionsFromFetch = Array.isArray(data.data) ? data.data : [];
+            const keysToTryRestore = [sectionTextFileKey, lessonS3Key, ...sectionsFromFetch.map(s => s.text_file_key).filter(Boolean)];
+              for (const k of [...new Set(keysToTryRestore)]) {
+                const stored = SessionStorageManager.getContext(lessonIdForRestore, k, fileType);
+                if (stored?.context && typeof stored.context === 'string' && stored.context.length > 0 &&
+                    !stored.context.startsWith('エラー') && !stored.context.startsWith('PDFファイルが見つかりません') && !stored.context.startsWith('テキスト抽出に失敗')) {
+                  setPdfTextContent(stored.context);
+                  setTextContentS3Key(sectionTextFileKey);
+                  setPdfTextExtracted(true);
+                  setPdfProcessingStatus('completed');
+                  setTextLoading(false);
+                  restoredPdfFromStorage = true;
+                  console.log('初期セクション適用: セッションストレージからPDFコンテキストを復元（リセット省略）');
+                  break;
+                }
+              }
+            }
+            if (!restoredPdfFromStorage) {
+              console.log('🔄 テキストコンテンツをリセットして再読み込みします（初期セクション適用）');
+              setTextContent('');
+              setTextContentS3Key(null);
+              setPdfTextContent('');
+              setTextLoading(true);
+              setPdfTextExtracted(false);
+              setPdfProcessingStatus('idle');
+            }
            }
            
            // 動画がある場合のみ更新（既存の動画をクリアしてから新しい動画を設定）
@@ -1530,7 +1682,10 @@ const EnhancedLearningPageRefactored = () => {
                  lowerS3Key.endsWith('.pdf');
         };
         
-        const isPdf = isPdfFile(lessonData?.file_type, lessonData?.s3_key);
+        // meta があればそれで判定（TextSection から渡るため確実）、なければ lessonData を使用
+        const fileTypeForCheck = meta?.fileType ?? lessonData?.file_type;
+        const s3KeyForCheck = meta?.s3Key ?? lessonData?.s3_key;
+        const isPdf = isPdfFile(fileTypeForCheck, s3KeyForCheck);
         
         if (isPdf) {
           // PDFファイルの場合
@@ -1694,40 +1849,70 @@ const EnhancedLearningPageRefactored = () => {
   const handleWorkspaceLayoutChange = useCallback((newLayouts) => {
     setWorkspaceLayouts(prevLayouts => {
       if (assignmentStatus.hasAssignment) {
-        const updatedLayouts = {
-          ...prevLayouts,
-          withAssignment: normalizeLayouts(newLayouts, true, widgetVisibility)
-        };
+        const withAssignment = normalizeLayouts(newLayouts, true, widgetVisibility);
+        const withoutAssignment = layoutWithoutAssignment(withAssignment);
+        const updatedLayouts = { withAssignment, withoutAssignment };
         persistWorkspaceLayouts(updatedLayouts);
         return updatedLayouts;
       }
-      const updatedLayouts = {
-        ...prevLayouts,
-        withoutAssignment: normalizeLayouts(newLayouts, false, widgetVisibility)
-      };
+      const withoutAssignment = normalizeLayouts(newLayouts, false, widgetVisibility);
+      const withAssignment = prevLayouts.withAssignment;
+      const mergedWith = { ...withAssignment };
+      Object.keys(mergedWith).forEach(bp => {
+        const arr = (mergedWith[bp] || []).map(item => {
+          if (item.i === 'assignment') return item;
+          const fromNew = (withoutAssignment[bp] || []).find(n => n.i === item.i);
+          return fromNew ? { ...item, x: fromNew.x, y: fromNew.y, w: fromNew.w, h: fromNew.h } : item;
+        });
+        mergedWith[bp] = arr;
+      });
+      const updatedLayouts = { withAssignment: mergedWith, withoutAssignment };
       persistWorkspaceLayouts(updatedLayouts);
       return updatedLayouts;
     });
   }, [assignmentStatus.hasAssignment, persistWorkspaceLayouts, widgetVisibility]);
 
   // ウィジェットの表示/非表示を切り替え
+  const persistWidgetVisibility = useCallback(async (visibility) => {
+    const userId = getUserId();
+    const storageKey = `studysphere:widgetVisibility:user:${userId}`;
+    if (!isPreview) {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const response = await fetch(`${API_BASE_URL}/api/learning/widget-visibility`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { Authorization: `Bearer ${token}` })
+          },
+          body: JSON.stringify({ visibility })
+        });
+        if (response.ok) {
+          console.log('ウィジェット表示設定をDBに保存しました');
+        } else {
+          console.warn('ウィジェット表示設定のDB保存に失敗しました。ローカルに保存します。', response.status);
+        }
+      } catch (err) {
+        console.warn('ウィジェット表示設定のAPI保存に失敗しました。ローカルに保存します。', err);
+      }
+    }
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(visibility));
+    } catch (error) {
+      console.error('ウィジェット表示状態のローカル保存に失敗しました:', error);
+    }
+  }, [getUserId, isPreview]);
+
   const toggleWidgetVisibility = useCallback((widgetKey) => {
     setWidgetVisibility(prev => {
       const newVisibility = {
         ...prev,
         [widgetKey]: !prev[widgetKey]
       };
-      // localStorageに保存
-      const userId = getUserId();
-      const storageKey = `studysphere:widgetVisibility:user:${userId}`;
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(newVisibility));
-      } catch (error) {
-        console.error('ウィジェット表示状態の保存に失敗しました:', error);
-      }
+      persistWidgetVisibility(newVisibility);
       return newVisibility;
     });
-  }, [getUserId]);
+  }, [persistWidgetVisibility]);
 
   // テスト完了時の処理
   const handleTestCompletedLocal = async (testScore) => {
@@ -1791,6 +1976,7 @@ const EnhancedLearningPageRefactored = () => {
         currentLessonData={currentLessonData}
         currentSectionText={getCurrentSectionText()}
         isAILoading={isAILoading}
+        showAIError={lessonData?.file_type === 'pdf' && pdfProcessingStatus === 'error'}
         isAIEnabled={(() => {
           // PDF判定関数（TextSectionと同じロジック）
           const isPdfFile = (fileType, s3Key) => {
@@ -1813,10 +1999,15 @@ const EnhancedLearningPageRefactored = () => {
           
           const isPdf = isPdfFile(lessonData?.file_type, lessonData?.s3_key);
           
-          // PDFファイルの場合
+          // PDFファイルの場合: 処理完了 or セッションにコンテキストあり or 既にテキスト取得済み
           if (isPdf) {
-            return pdfProcessingStatus === 'completed' || 
-                   SessionStorageManager.hasContext(lessonData?.id, lessonData?.s3_key, lessonData?.file_type);
+            const hasPdfContext = !!(pdfTextContent && pdfTextContent.length > 0 &&
+              !pdfTextContent.startsWith('エラー') &&
+              !pdfTextContent.startsWith('PDFファイルが見つかりません') &&
+              !pdfTextContent.startsWith('テキスト抽出に失敗'));
+            return pdfProcessingStatus === 'completed' ||
+                   SessionStorageManager.hasContext(lessonData?.id, lessonData?.s3_key, lessonData?.file_type) ||
+                   hasPdfContext;
           }
           
           // テキストファイル（MD、TXT、RTF）の場合
@@ -1909,6 +2100,13 @@ const EnhancedLearningPageRefactored = () => {
           }}
           isTestEnabled={
             pdfProcessingStatus === 'completed' || // PDF処理完了時
+            (lessonData?.file_type === 'pdf' && (
+              SessionStorageManager.hasContext(lessonData?.id, lessonData?.s3_key, lessonData?.file_type) ||
+              (pdfTextContent && pdfTextContent.length > 0 &&
+                !pdfTextContent.startsWith('エラー') &&
+                !pdfTextContent.startsWith('PDFファイルが見つかりません') &&
+                !pdfTextContent.startsWith('テキスト抽出に失敗'))
+            )) || // PDFでコンテキストあり or テキスト取得済み
             (lessonData?.file_type !== 'pdf' && lessonData?.textContent) // テキストファイルの場合
           }
           hasAssignment={assignmentStatus.hasAssignment}
@@ -1973,12 +2171,10 @@ const EnhancedLearningPageRefactored = () => {
       )}
       </div>
 
-      {/* ウィジェット表示切り替えバー - 一時的に無効化（将来的には戻す予定） */}
-      {/* TODO: 表示切替機能を再度有効化する場合は、以下のコメントを解除してください */}
-      {/*
+      {/* ウィジェット表示 on/off 切り替えバー */}
       <div className="w-full bg-white border-b border-gray-200 px-4 py-2 shadow-sm">
         <div className="flex flex-wrap items-center gap-3 justify-center">
-          <span className="text-sm font-medium text-gray-700">表示切替:</span>
+          <span className="text-sm font-medium text-gray-700">表示:</span>
           <button
             onClick={() => toggleWidgetVisibility('video')}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
@@ -1987,7 +2183,7 @@ const EnhancedLearningPageRefactored = () => {
                 : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
             }`}
           >
-            🎥 動画学習 {widgetVisibility.video ? '✓' : '✗'}
+            🎥 動画学習 {widgetVisibility.video ? 'ON' : 'OFF'}
           </button>
           <button
             onClick={() => toggleWidgetVisibility('text')}
@@ -1997,7 +2193,7 @@ const EnhancedLearningPageRefactored = () => {
                 : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
             }`}
           >
-            📄 テキスト教材 {widgetVisibility.text ? '✓' : '✗'}
+            📄 テキスト教材 {widgetVisibility.text ? 'ON' : 'OFF'}
           </button>
           <button
             onClick={() => toggleWidgetVisibility('chat')}
@@ -2007,7 +2203,7 @@ const EnhancedLearningPageRefactored = () => {
                 : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
             }`}
           >
-            🤖 AIアシスタント {widgetVisibility.chat ? '✓' : '✗'}
+            🤖 AIアシスタント {widgetVisibility.chat ? 'ON' : 'OFF'}
           </button>
           {assignmentStatus.hasAssignment && (
             <button
@@ -2018,40 +2214,33 @@ const EnhancedLearningPageRefactored = () => {
                   : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
               }`}
             >
-              📁 課題提出 {widgetVisibility.assignment ? '✓' : '✗'}
+              📁 課題提出 {widgetVisibility.assignment ? 'ON' : 'OFF'}
             </button>
           )}
         </div>
       </div>
-      */}
 
-      {/* メインコンテンツ - 固定レイアウト（フリーレイアウト機能は一時的に無効化） */}
-      {/* TODO: フリーレイアウト機能を再度有効化する場合は、以下の固定レイアウトをコメントアウトし、
-          元のLearningWorkspaceLayoutコンポーネントのコメントを解除してください */}
+      {/* メインコンテンツ - フリーレイアウト（ドラッグ＆リサイズ可能） */}
       <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
-        {/* 固定レイアウト（3列グリッド） */}
+        {/* 固定レイアウト（3列グリッド）- フリーレイアウトに切り替えたため無効化 */}
+        {/*
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* 左列：動画学習 */}
           {workspaceWidgets.video && (
             <div className="lg:col-span-1 self-start w-full min-h-[500px]">
               {workspaceWidgets.video}
             </div>
           )}
-          {/* 中央列：テキスト教材（セクション変更時にここへスクロール） */}
           {workspaceWidgets.text && (
             <div ref={textSectionContainerRef} className="lg:col-span-1 min-h-[800px]">
               {workspaceWidgets.text}
             </div>
           )}
-          {/* 右列：AIアシスタント＆提出物確認 */}
           <div className="lg:col-span-1 flex flex-col gap-6">
-            {/* AIアシスタント */}
             {workspaceWidgets.chat && (
               <div className="min-h-[800px]">
                 {workspaceWidgets.chat}
               </div>
             )}
-            {/* 提出物確認 */}
             {workspaceWidgets.assignment && (
               <div>
                 {workspaceWidgets.assignment}
@@ -2059,8 +2248,7 @@ const EnhancedLearningPageRefactored = () => {
             )}
           </div>
         </div>
-        {/* 元のフリーレイアウト（一時的に無効化） */}
-        {/*
+        */}
         <LearningWorkspaceLayout
           widgets={workspaceWidgets}
           layouts={assignmentStatus.hasAssignment ? workspaceLayouts.withAssignment : workspaceLayouts.withoutAssignment}
@@ -2068,7 +2256,6 @@ const EnhancedLearningPageRefactored = () => {
           widgetVisibility={widgetVisibility}
           onLayoutsChange={handleWorkspaceLayoutChange}
         />
-        */}
       </div>
 
       {/* アップロードモーダル（課題がある場合のみ表示） */}

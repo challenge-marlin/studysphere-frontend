@@ -155,15 +155,15 @@ const VideoSection = ({ lessonData }) => {
   });
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl p-6 min-h-[500px] flex flex-col">
-      <div className="flex items-center gap-3 mb-4 workspace-widget-handle cursor-move select-none">
+    <div className="bg-white rounded-2xl shadow-xl p-6 h-full min-h-0 flex flex-col">
+      <div className="flex items-center gap-3 mb-4 flex-none workspace-widget-handle cursor-move select-none">
         <span className="text-2xl">🎥</span>
         <h3 className="text-xl font-bold text-gray-800">動画学習</h3>
       </div>
       
       {hasVideos ? (
         <div
-          className={`flex-1 flex flex-col ${
+          className={`flex-1 min-h-0 flex flex-col ${
             isSingleVideo ? '' : 'space-y-6 overflow-y-auto custom-scrollbar pr-1'
           }`}
         >

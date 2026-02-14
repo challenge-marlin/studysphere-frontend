@@ -1174,20 +1174,27 @@ const TextSection = ({
             {/* MDファイルの場合はMarkdownとしてレンダリング */}
             {/* 再レンダリング時にlessonData.file_typeやlessonData.s3_keyがnullになる可能性があるため、refからも判定 */}
             {(() => {
+              const rawContent = displayTextContent();
               // 現在のfile_typeとs3_keyを取得（lessonDataから、またはrefから）
               const currentFileType = lessonData?.file_type || fileTypeRef.current;
               const currentS3Key = lessonData?.s3_key || s3KeyRef.current;
               
-              // Markdown判定
+              // 内容に見出し(#)や太字(**)があればMarkdownとして扱う（file_typeが誤っていても表示を救う）
+              const looksLikeMarkdown = rawContent && (
+                /(^|\n)#{1,6}\s/m.test(rawContent) ||
+                /\*\*[^*]+\*\*/.test(rawContent)
+              );
               const isMarkdown = 
                 currentFileType === 'md' || 
                 currentFileType === 'text/markdown' || 
-                (currentS3Key && currentS3Key.toLowerCase().endsWith('.md'));
+                (currentS3Key && currentS3Key.toLowerCase().endsWith('.md')) ||
+                looksLikeMarkdown;
               
               console.log('Markdown判定:', {
                 currentFileType,
                 currentS3Key,
                 isMarkdown,
+                looksLikeMarkdown,
                 lessonDataFileType: lessonData?.file_type,
                 lessonDataS3Key: lessonData?.s3_key,
                 refFileType: fileTypeRef.current,
@@ -1196,14 +1203,14 @@ const TextSection = ({
               
               return isMarkdown ? (
                 <MarkdownRenderer 
-                  content={displayTextContent()}
+                  content={rawContent}
                   showToc={false}
                   scrollContainerRef={textContainerRef}
                 />
               ) : (
                 /* RTFファイルやその他のテキストファイルはプレーンテキストとして表示 */
                 <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
-                  {displayTextContent()}
+                  {rawContent}
                 </div>
               );
             })()}

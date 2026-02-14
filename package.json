@@ -24,12 +24,13 @@
     "react-syntax-highlighter": "^16.1.0",
     "remark-gfm": "^4.0.1",
     "tailwindcss": "^3.4.0",
+    "unist-util-visit": "^5.1.0",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
-    "build:prod": "PUBLIC_URL=/ react-scripts build",
+    "build": "npx cross-env NODE_OPTIONS=--max-old-space-size=4096 react-scripts build",
+    "build:prod": "npx cross-env NODE_OPTIONS=--max-old-space-size=4096 PUBLIC_URL=/ react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "predeploy": "npm run build",
@@ -54,6 +55,7 @@
     ]
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "gh-pages": "^6.3.0"
   }
 }

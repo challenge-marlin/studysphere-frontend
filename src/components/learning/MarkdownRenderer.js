@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { visit } from 'unist-util-visit';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
@@ -25,9 +26,127 @@ const codeBlockStyle = {
   fontSize: '0.875rem'
 };
 
+/** 全角アスタリスク（＊ U+FF0A）を半角（*）に変換。パーサーは半角の ** しか strong として解釈しない */
+const normalizeAsterisks = (text) => {
+  if (!text || typeof text !== 'string') return text;
+  return String(text).replace(/\uFF0A/g, '*');
+};
+
+/** 全角シャープ（＃ U+FF03）を半角（#）に変換。見出しは半角 # でないとパーサーが認識しない */
+const normalizeHashes = (text) => {
+  if (!text || typeof text !== 'string') return text;
+  return String(text).replace(/\uFF03/g, '#');
+};
+
+/** CommonMarkでは ** と文字の間にスペースがあると太字にならないため、前処理で正規化する */
+const normalizeBoldDelimiters = (text) => {
+  if (!text || typeof text !== 'string') return text;
+  let t = normalizeAsterisks(text);
+  // 半角・全角スペースのみ削除（改行は残す。\s だと \n も消えて段落が繋がる）
+  t = t.replace(/\*\*[ \t\u3000]+/g, '**').replace(/[ \t\u3000]+\*\*/g, '**');
+  return t;
+};
+
+/**
+ * コードブロックのフェンスが '''（シングルクォート3つ）で書かれているとパーサーが認識しないため、
+ * 行頭の ''' を ```（バッククォート3つ）に置き換える。
+ */
+const normalizeCodeFences = (text) => {
+  if (!text || typeof text !== 'string') return text;
+  let t = text;
+  // 閉じフェンス：行が ''' だけ（＋任意の空白）→ ```
+  t = t.replace(/(^|\n)'''\s*(\n|$)/g, '$1```\n$2');
+  // 開きフェンス：行頭の '''（例: '''html）→ ```
+  t = t.replace(/(^|\n)'''/g, '$1```');
+  return t;
+};
+
+/**
+ * 閉じ忘れた ``` や ```html の直後から見出し・表までがコード扱いになるのを防ぐ。
+ * 見出し（行頭の #{1,6}）または表の行（行頭の |）の直前に閉じフェンスを挿入する。
+ */
+const closeUnclosedFencedBlocks = (text) => {
+  if (!text || typeof text !== 'string') return text;
+  let t = text;
+  // 開きフェンス → 何か → 見出し行（行全体）のパターンで、見出しの直前に ``` を挿入
+  // $3 は見出し行全体（\n### 5. button：...）を保持するため [^\n]* で行末までキャプチャ
+  t = t.replace(/(```(?:html)?\s*\r?\n)([\s\S]*?)(\r?\n\s*#{1,6}\s[^\n]*)/g, '$1$2\n```\n$3');
+  // 開きフェンス → 何か → 表の行（| で始まる）のパターンでも同様に閉じる
+  t = t.replace(/(```(?:html)?\s*\r?\n)([\s\S]*?)(\r?\n\s*\|[^\n]+)/g, '$1$2\n```\n$3');
+  // すでに閉じられていた場合に ``` が連続するので、連続を1つに
+  t = t.replace(/\n```\s*\n```\n/g, '\n```\n');
+  return t;
+};
+
+/**
+ * 表の行が改行なしで連結されている（|...||...|）場合に改行を挿入し、GFM表としてパースされるようにする。
+ * パイプが6本以上ある行（＝2行分以上）かつ || を含む場合のみ置換し、通常のセル区切りは触らない。
+ */
+const ensureTableLineBreaks = (text) => {
+  if (!text || typeof text !== 'string') return text;
+  return String(text).split('\n').map((line) => {
+    const pipeCount = (line.match(/\|/g) || []).length;
+    if (pipeCount >= 6 && line.includes('||')) {
+      return line.replace(/\|\s*\|/g, '|\n|');
+    }
+    return line;
+  }).join('\n');
+};
+
+/** 見出し・太字・表・コードブロックが正しくパースされるよう正規化する */
+const normalizeMarkdownDelimiters = (text) => {
+  if (!text || typeof text !== 'string') return text;
+  let t = String(text);
+  t = normalizeCodeFences(t);  // ''' → ``` を先に（コードブロック認識のため）
+  t = normalizeHashes(normalizeBoldDelimiters(t));
+  t = closeUnclosedFencedBlocks(t);
+  t = ensureTableLineBreaks(t);
+  return t;
+};
+
+/**
+ * 文字列中の **...** を strong と text のノード配列に展開する（再帰で複数 ** に対応）
+ */
+function expandTextWithStrong(value) {
+  if (typeof value !== 'string') return [];
+  if (!value.includes('**')) return value === '' ? [] : [{ type: 'text', value }];
+  const parts = value.split('**');
+  const nodes = [];
+  for (let i = 0; i < parts.length; i++) {
+    if (i % 2 === 0) {
+      if (parts[i] !== '') nodes.push(...expandTextWithStrong(parts[i]));
+    } else {
+      nodes.push({ type: 'strong', children: [{ type: 'text', value: parts[i] }] });
+    }
+  }
+  return nodes;
+}
+
+/**
+ * パース後も ** がそのまま残っているテキストを <strong> に変換する remark プラグイン。
+ * パーサーが ** を解釈しない場合（全角・エスケープ等）のフォールバック。
+ */
+function remarkStrongFallback() {
+  return (tree) => {
+    visit(tree, (node) => {
+      if (!node.children) return;
+      const newChildren = [];
+      for (const child of node.children) {
+        if (child.type !== 'text' || typeof child.value !== 'string' || !child.value.includes('**')) {
+          newChildren.push(child);
+          continue;
+        }
+        newChildren.push(...expandTextWithStrong(child.value));
+      }
+      node.children = newChildren;
+    });
+  };
+}
+
 const MarkdownRenderer = ({ content, showToc = true, scrollContainerRef }) => {
   const [headings, setHeadings] = useState([]);
   const [activeHeading, setActiveHeading] = useState('');
+  const normalizedContent = normalizeMarkdownDelimiters(content);
 
   // 見出しを抽出する関数
   const extractHeadings = (markdownContent) => {
@@ -80,13 +199,13 @@ const MarkdownRenderer = ({ content, showToc = true, scrollContainerRef }) => {
     return () => observer.disconnect();
   }, [headings, showToc]);
 
-  // コンテンツが変更されたときに見出しを抽出
+  // コンテンツが変更されたときに見出しを抽出（正規化後のテキストを使用）
   useEffect(() => {
-    if (content) {
-      const extractedHeadings = extractHeadings(content);
+    if (normalizedContent) {
+      const extractedHeadings = extractHeadings(normalizedContent);
       setHeadings(extractedHeadings);
     }
-  }, [content]);
+  }, [normalizedContent]);
 
   // 見出しのIDを生成する関数
   // 目次リンク（例: #第1章-日常でのai活用例, #第2章aiツールの体験）と一致する形式で生成
@@ -209,7 +328,7 @@ const MarkdownRenderer = ({ content, showToc = true, scrollContainerRef }) => {
     <div className="markdown-content">
       <TableOfContents />
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkStrongFallback]}
       components={{
         h1: ({ children, ...props }) => {
           const id = generateId(children);
@@ -307,6 +426,11 @@ const MarkdownRenderer = ({ content, showToc = true, scrollContainerRef }) => {
             </h3>
           );
         },
+        strong: ({ children, ...props }) => (
+          <strong className="font-bold" style={{ fontWeight: 700 }} {...props}>
+            {children}
+          </strong>
+        ),
         p: ({ children, ...props }) => (
           <p className="text-gray-700 leading-relaxed mb-4" {...props}>
             {children}
@@ -428,7 +552,7 @@ const MarkdownRenderer = ({ content, showToc = true, scrollContainerRef }) => {
         )
       }}
     >
-      {content}
+      {normalizedContent}
     </ReactMarkdown>
     </div>
   );

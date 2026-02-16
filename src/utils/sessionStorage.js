@@ -187,6 +187,37 @@
     console.log('全コンテキストをクリア');
   },
   
+  // 最後に開いたセクションの保存（レッスンごと・ユーザーごと・学習再開用）
+  LAST_SECTION_KEY_PREFIX: 'studysphere:lastSection:',
+
+  getLastSectionKey: (userId, lessonId) =>
+    `${SessionStorageManager.LAST_SECTION_KEY_PREFIX}user:${userId}:lesson:${lessonId}`,
+
+  saveLastSection: (userId, lessonId, sectionIndex, textKey = null) => {
+    try {
+      const key = SessionStorageManager.getLastSectionKey(userId, lessonId);
+      const value = { index: sectionIndex, textKey: textKey || null };
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (e) {
+      console.warn('最後に開いたセクションのローカル保存に失敗しました:', e);
+      return false;
+    }
+  },
+
+  getLastSection: (userId, lessonId) => {
+    try {
+      const key = SessionStorageManager.getLastSectionKey(userId, lessonId);
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const value = JSON.parse(raw);
+      if (typeof value?.index !== 'number') return null;
+      return { index: value.index, textKey: value.textKey || null };
+    } catch (e) {
+      return null;
+    }
+  },
+
   // 保存されているコンテキストの一覧を取得
   getStoredContexts: () => {
     const contexts = [];

@@ -773,15 +773,17 @@ const EnhancedLearningPageRefactored = () => {
      
      setCurrentSection(sectionIndex);
 
-     // 最後に閲覧したセクションを保存（DB）
-     // プレビューでは学習状況を変更しない（閲覧のみ）
+     // 最後に閲覧したセクションを保存（localStorageはプレビュー含む・リロードで復元するため）
+     const userId = getUserId();
+     SessionStorageManager.saveLastSection(userId, currentLesson, sectionIndex, newSection?.text_file_key || null);
+
+     // DBへはプレビューでは保存しない（閲覧のみ）
      if (!isPreview) {
        try {
          if (sectionProgressUpdateTimeoutRef.current) {
            clearTimeout(sectionProgressUpdateTimeoutRef.current);
          }
          sectionProgressUpdateTimeoutRef.current = setTimeout(async () => {
-           const userId = getUserId();
            await fetch(`${API_BASE_URL}/api/learning/progress/lesson`, {
              method: 'PUT',
              headers: {
@@ -1014,7 +1016,7 @@ const EnhancedLearningPageRefactored = () => {
           
          // セクションデータが空の場合（動画がない場合）でも処理を続行
          if (sortedSections.length > 0) {
-          // 初期表示セクション（優先順位: URLのsection → DB保存のテキストキー → DB保存のindex → 0）
+          // 初期表示セクション（優先順位: URLのsection → プレビュー時はlocalStorage → DB保存のテキストキー → DB保存のindex → localStorage → 0）
            const sectionParam = searchParams.get('section');
            let initialSectionIndex = 0;
            if (sectionParam != null) {
@@ -1022,6 +1024,13 @@ const EnhancedLearningPageRefactored = () => {
              if (!isNaN(idx) && idx >= 0 && idx < sortedSections.length) {
                initialSectionIndex = idx;
              }
+          } else if (isPreview) {
+            // プレビュー時: リロードで同じセクションに戻るよう、localStorageを優先
+            const lastSection = SessionStorageManager.getLastSection(getUserId(), lessonId);
+            if (lastSection && typeof lastSection.index === 'number' && lastSection.index >= 0 && lastSection.index < sortedSections.length) {
+              initialSectionIndex = lastSection.index;
+              console.log('プレビュー: 最後に開いたセクションをローカルから復元:', { lessonId, initialSectionIndex });
+            }
           } else if (typeof resumeSectionTextKeyRef.current === 'string' && resumeSectionTextKeyRef.current.trim().length > 0) {
             const targetKey = resumeSectionTextKeyRef.current.trim();
             const normalize = (key) => String(key || '').trim();
@@ -1042,6 +1051,14 @@ const EnhancedLearningPageRefactored = () => {
             }
            } else if (typeof resumeSectionIndexRef.current === 'number' && resumeSectionIndexRef.current >= 0 && resumeSectionIndexRef.current < sortedSections.length) {
              initialSectionIndex = resumeSectionIndexRef.current;
+           } else {
+             // APIに保存が無い場合: 最後に開いたセクションをlocalStorageから復元（学習再開）
+             const userId = getUserId();
+             const lastSection = SessionStorageManager.getLastSection(userId, lessonId);
+             if (lastSection && typeof lastSection.index === 'number' && lastSection.index >= 0 && lastSection.index < sortedSections.length) {
+               initialSectionIndex = lastSection.index;
+               console.log('最後に開いたセクションをローカルから復元:', { lessonId, initialSectionIndex });
+             }
            }
 
            setCurrentSection(initialSectionIndex);

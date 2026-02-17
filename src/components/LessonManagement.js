@@ -1606,15 +1606,15 @@ const LessonManagement = () => {
                   {/* 左カラム: 基本情報 */}
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2 required-asterisk">
+                      <label className="block text-sm font-medium text-gray-500 mb-2">
                         コース
                       </label>
                       <select
                         name="course_id"
                         value={formData.course_id}
-                        onChange={handleInputChange}
+                        disabled
                         required
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
                       >
                         {courses.map(course => (
                           <option key={course.id} value={course.id}>
@@ -1622,6 +1622,7 @@ const LessonManagement = () => {
                           </option>
                         ))}
                       </select>
+                      <p className="text-xs text-gray-500 mt-1">編集時はコースの変更はできません</p>
                     </div>
                     
                     <div>

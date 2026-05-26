@@ -30,11 +30,8 @@ const resolveApiBaseUrl = () => {
   const envUrl = (process.env.REACT_APP_API_URL || '').trim();
 
   if (envUrl) {
-    if (isLocalhost && envUrl === DEFAULT_PROD_API_URL) {
-      console.warn('[apiConfig] ローカル環境で本番API URLが検出されたため、開発用APIに切り替えます。');
-    } else {
-      return envUrl;
-    }
+    // .env で指定されたURLを最優先（環境判定で上書きしない）
+    return envUrl;
   }
 
   if (isLocalhost) {
